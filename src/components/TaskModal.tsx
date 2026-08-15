@@ -53,21 +53,21 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
       onClick={onClose}
     >
       <form
         onSubmit={handleSubmit}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl dark:bg-neutral-900"
+        className="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--sidebar)] p-5 shadow-xl"
       >
-        <h2 className="mb-4 text-base font-semibold">
+        <h2 className="mb-4 text-base font-semibold text-[var(--foreground)]">
           {task ? "Editar tarefa" : "Nova tarefa"}
         </h2>
 
         <div className="space-y-3">
           <div>
-            <label className="mb-1 block text-xs font-medium text-black/60 dark:text-white/60">
+            <label className="mb-1 block text-xs font-medium text-[var(--muted)]">
               Título
             </label>
             <input
@@ -75,42 +75,42 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               required
-              className="w-full rounded-md border border-black/15 bg-transparent px-2.5 py-1.5 text-sm outline-none focus:border-black/40 dark:border-white/15 dark:focus:border-white/40"
+              className="w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-sm text-[var(--foreground)] outline-none focus:border-[var(--focus)]"
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-medium text-black/60 dark:text-white/60">
+            <label className="mb-1 block text-xs font-medium text-[var(--muted)]">
               Descrição
             </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              className="w-full resize-none rounded-md border border-black/15 bg-transparent px-2.5 py-1.5 text-sm outline-none focus:border-black/40 dark:border-white/15 dark:focus:border-white/40"
+              className="w-full resize-none rounded-md border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-sm text-[var(--foreground)] outline-none focus:border-[var(--focus)]"
             />
           </div>
 
           <div className="flex gap-3">
             <div className="flex-1">
-              <label className="mb-1 block text-xs font-medium text-black/60 dark:text-white/60">
+              <label className="mb-1 block text-xs font-medium text-[var(--muted)]">
                 Data
               </label>
               <input
                 type="date"
                 value={date ?? ""}
                 onChange={(e) => setDate(e.target.value)}
-                className="w-full rounded-md border border-black/15 bg-transparent px-2.5 py-1.5 text-sm outline-none focus:border-black/40 dark:border-white/15 dark:focus:border-white/40"
+                className="w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-sm text-[var(--foreground)] outline-none focus:border-[var(--focus)] [color-scheme:dark]"
               />
             </div>
             <div className="flex-1">
-              <label className="mb-1 block text-xs font-medium text-black/60 dark:text-white/60">
+              <label className="mb-1 block text-xs font-medium text-[var(--muted)]">
                 Status
               </label>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as TaskStatus)}
-                className="w-full rounded-md border border-black/15 bg-transparent px-2.5 py-1.5 text-sm outline-none focus:border-black/40 dark:border-white/15 dark:focus:border-white/40"
+                className="w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-sm text-[var(--foreground)] outline-none focus:border-[var(--focus)] [color-scheme:dark]"
               >
                 <option value="todo">A fazer</option>
                 <option value="doing">Fazendo</option>
@@ -120,14 +120,14 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-medium text-black/60 dark:text-white/60">
+            <label className="mb-1 block text-xs font-medium text-[var(--muted)]">
               Tópico
             </label>
             <select
               value={topicId}
               onChange={(e) => setTopicId(e.target.value)}
               required
-              className="w-full rounded-md border border-black/15 bg-transparent px-2.5 py-1.5 text-sm outline-none focus:border-black/40 dark:border-white/15 dark:focus:border-white/40"
+              className="w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-sm text-[var(--foreground)] outline-none focus:border-[var(--focus)] [color-scheme:dark]"
             >
               {topics.length === 0 && <option value="">Crie um tópico primeiro</option>}
               {topics.map((t) => (
@@ -145,7 +145,7 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
               <button
                 type="button"
                 onClick={handleDelete}
-                className="text-sm font-medium text-red-500 hover:text-red-600"
+                className="text-sm font-medium text-[var(--danger)] hover:opacity-80"
               >
                 Excluir
               </button>
@@ -155,14 +155,14 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
             <button
               type="button"
               onClick={onClose}
-              className="rounded-md px-3 py-1.5 text-sm font-medium text-black/60 hover:bg-black/5 dark:text-white/60 dark:hover:bg-white/10"
+              className="rounded-md px-3 py-1.5 text-sm font-medium text-[var(--muted)] hover:bg-[var(--surface)]"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={!topicId}
-              className="rounded-md bg-black px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40 dark:bg-white dark:text-black"
+              className="rounded-md bg-[var(--brand)] px-3 py-1.5 text-sm font-medium text-[var(--accent-ink)] hover:bg-[var(--accent-hover)] disabled:opacity-40"
             >
               Salvar
             </button>

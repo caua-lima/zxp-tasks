@@ -84,37 +84,37 @@ export function MindMap({ topicId }: MindMapProps) {
   }
 
   const statusColor: Record<string, string> = {
-    todo: "#94a3b8",
+    todo: "#8a8672",
     doing: "#eab308",
-    done: "#22c55e",
+    done: "#36b37e",
   };
 
   if (topics.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center text-center text-sm text-black/50 dark:text-white/50">
+      <div className="flex h-full items-center justify-center text-center text-sm text-[var(--muted)]">
         Crie um tópico e algumas tarefas pra ver o mapa mental.
       </div>
     );
   }
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-[radial-gradient(circle,_rgba(0,0,0,0.04)_1px,_transparent_1px)] bg-[length:20px_20px] dark:bg-[radial-gradient(circle,_rgba(255,255,255,0.06)_1px,_transparent_1px)]">
+    <div className="relative h-full w-full overflow-hidden bg-[radial-gradient(circle,_rgba(246,243,232,0.07)_1px,_transparent_1px)] bg-[length:20px_20px]">
       <div className="absolute right-3 top-3 z-10 flex gap-1">
         <button
           onClick={() => setTransform((t) => ({ ...t, scale: Math.min(2.5, t.scale + 0.15) }))}
-          className="rounded-md bg-white px-2 py-1 text-sm font-medium shadow hover:bg-black/5 dark:bg-neutral-800 dark:hover:bg-white/10"
+          className="rounded-md bg-[var(--surface)] px-2 py-1 text-sm font-medium text-[var(--foreground)] shadow hover:bg-[var(--surface2)]"
         >
           +
         </button>
         <button
           onClick={() => setTransform((t) => ({ ...t, scale: Math.max(0.4, t.scale - 0.15) }))}
-          className="rounded-md bg-white px-2 py-1 text-sm font-medium shadow hover:bg-black/5 dark:bg-neutral-800 dark:hover:bg-white/10"
+          className="rounded-md bg-[var(--surface)] px-2 py-1 text-sm font-medium text-[var(--foreground)] shadow hover:bg-[var(--surface2)]"
         >
           −
         </button>
         <button
           onClick={() => setTransform({ x: 0, y: 0, scale: 1 })}
-          className="rounded-md bg-white px-2 py-1 text-sm font-medium shadow hover:bg-black/5 dark:bg-neutral-800 dark:hover:bg-white/10"
+          className="rounded-md bg-[var(--surface)] px-2 py-1 text-sm font-medium text-[var(--foreground)] shadow hover:bg-[var(--surface2)]"
         >
           reset
         </button>
@@ -134,15 +134,15 @@ export function MindMap({ topicId }: MindMapProps) {
           <g transform="translate(600, 400)">
             {!topicId && (
               <>
-                <circle r={44} fill="var(--foreground)" opacity={0.9} />
+                <circle r={44} fill="var(--brand)" />
                 <text
                   textAnchor="middle"
                   dy="5"
                   fontSize={13}
                   fontWeight={600}
-                  fill="var(--background)"
+                  fill="var(--accent-ink)"
                 >
-                  Tarefas
+                  ZXP
                 </text>
               </>
             )}
@@ -200,9 +200,9 @@ export function MindMap({ topicId }: MindMapProps) {
                         className="cursor-pointer"
                         onClick={() => setModalTask(task)}
                       >
-                        <circle r={7} fill={statusColor[task.status]} stroke="white" strokeWidth={1.5} />
+                        <circle r={7} fill={statusColor[task.status]} stroke="var(--color-ivory)" strokeWidth={1.5} />
                         <foreignObject x={-70} y={10} width={140} height={40}>
-                          <div className="pointer-events-none rounded bg-white/90 px-1.5 py-0.5 text-center text-[10px] font-medium leading-tight text-black shadow-sm dark:bg-neutral-800/90 dark:text-white">
+                          <div className="pointer-events-none rounded bg-[var(--surface2)]/95 px-1.5 py-0.5 text-center text-[10px] font-medium leading-tight text-[var(--foreground)] shadow-sm">
                             {task.title}
                           </div>
                         </foreignObject>
@@ -216,7 +216,7 @@ export function MindMap({ topicId }: MindMapProps) {
         </g>
       </svg>
 
-      <div className="absolute bottom-3 left-3 flex gap-3 rounded-md bg-white/80 px-3 py-1.5 text-[11px] font-medium shadow backdrop-blur dark:bg-neutral-800/80">
+      <div className="absolute bottom-3 left-3 flex gap-3 rounded-md bg-[var(--surface)]/90 px-3 py-1.5 text-[11px] font-medium text-[var(--foreground)] shadow backdrop-blur">
         {Object.entries(STATUS_LABEL).map(([key, label]) => (
           <div key={key} className="flex items-center gap-1">
             <span

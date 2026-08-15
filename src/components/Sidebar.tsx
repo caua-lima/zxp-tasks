@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useApp } from "@/context/AppContext";
+import { ZxpMark } from "./ZxpMark";
 
 interface SidebarProps {
   selectedTopicId: string | null;
@@ -68,22 +69,25 @@ export function Sidebar({
       {open && (
         <div
           onClick={onClose}
-          className="fixed inset-0 z-30 bg-black/40 md:hidden"
+          className="fixed inset-0 z-30 bg-black/60 md:hidden"
         />
       )}
       <aside
-        className={`${open ? "flex" : "hidden"} fixed inset-y-0 left-0 z-40 h-full w-72 shrink-0 flex-col border-r border-black/10 bg-[var(--background)] dark:border-white/10 md:static md:flex md:w-64 md:bg-black/[0.02] md:dark:bg-white/[0.03]`}
+        className={`${open ? "flex" : "hidden"} fixed inset-y-0 left-0 z-40 h-full w-72 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--sidebar)] md:static md:flex md:w-64`}
       >
       <div className="flex items-start justify-between p-4">
-        <div>
-          <h1 className="text-lg font-semibold tracking-tight">Tarefas ZXP</h1>
-          <p className="text-xs text-black/50 dark:text-white/50">
-            Kanban pessoal por tópicos
-          </p>
+        <div className="flex items-center gap-2.5">
+          <ZxpMark size={30} radius={7} />
+          <div>
+            <h1 className="text-base font-semibold tracking-tight text-[var(--foreground)]">
+              ZXP Tasks
+            </h1>
+            <p className="text-xs text-[var(--muted)]">Kanban pessoal por tópicos</p>
+          </div>
         </div>
         <button
           onClick={onClose}
-          className="rounded-md p-1 text-black/50 hover:bg-black/5 dark:text-white/50 dark:hover:bg-white/10 md:hidden"
+          className="rounded-md p-1 text-[var(--muted)] hover:bg-[var(--surface2)] md:hidden"
           aria-label="Fechar menu"
         >
           ×
@@ -95,8 +99,8 @@ export function Sidebar({
           onClick={() => changeView("kanban")}
           className={`flex-1 rounded-md px-2 py-1.5 text-sm font-medium transition ${
             view === "kanban"
-              ? "bg-black text-white dark:bg-white dark:text-black"
-              : "bg-black/5 text-black/70 hover:bg-black/10 dark:bg-white/5 dark:text-white/70 dark:hover:bg-white/10"
+              ? "bg-[var(--brand)] text-[var(--accent-ink)]"
+              : "bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface2)]"
           }`}
         >
           Kanban
@@ -105,8 +109,8 @@ export function Sidebar({
           onClick={() => changeView("mindmap")}
           className={`flex-1 rounded-md px-2 py-1.5 text-sm font-medium transition ${
             view === "mindmap"
-              ? "bg-black text-white dark:bg-white dark:text-black"
-              : "bg-black/5 text-black/70 hover:bg-black/10 dark:bg-white/5 dark:text-white/70 dark:hover:bg-white/10"
+              ? "bg-[var(--brand)] text-[var(--accent-ink)]"
+              : "bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface2)]"
           }`}
         >
           Mapa mental
@@ -118,14 +122,12 @@ export function Sidebar({
           onClick={() => selectTopic(null)}
           className={`mb-1 flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm transition ${
             selectedTopicId === null
-              ? "bg-black/10 dark:bg-white/10"
-              : "hover:bg-black/5 dark:hover:bg-white/5"
+              ? "bg-[var(--surface2)] text-[var(--foreground)]"
+              : "text-[var(--muted)] hover:bg-[var(--surface)]"
           }`}
         >
           <span className="font-medium">Todos os tópicos</span>
-          <span className="text-xs text-black/40 dark:text-white/40">
-            {tasks.length}
-          </span>
+          <span className="text-xs text-[var(--muted)]">{tasks.length}</span>
         </button>
 
         <div className="mt-2 space-y-0.5">
@@ -136,8 +138,8 @@ export function Sidebar({
                 key={topic.id}
                 className={`group flex items-center gap-2 rounded-md px-2 py-2 text-sm transition ${
                   selectedTopicId === topic.id
-                    ? "bg-black/10 dark:bg-white/10"
-                    : "hover:bg-black/5 dark:hover:bg-white/5"
+                    ? "bg-[var(--surface2)] text-[var(--foreground)]"
+                    : "text-[var(--muted)] hover:bg-[var(--surface)]"
                 }`}
               >
                 <span
@@ -154,7 +156,7 @@ export function Sidebar({
                       if (e.key === "Enter") commitEdit();
                       if (e.key === "Escape") setEditingId(null);
                     }}
-                    className="min-w-0 flex-1 rounded border border-black/20 bg-transparent px-1 py-0.5 text-sm outline-none dark:border-white/20"
+                    className="min-w-0 flex-1 rounded border border-[var(--border)] bg-transparent px-1 py-0.5 text-sm text-[var(--foreground)] outline-none focus:border-[var(--focus)]"
                   />
                 ) : (
                   <button
@@ -166,12 +168,10 @@ export function Sidebar({
                     {topic.name}
                   </button>
                 )}
-                <span className="text-xs text-black/40 dark:text-white/40">
-                  {count}
-                </span>
+                <span className="text-xs text-[var(--muted)]">{count}</span>
                 <button
                   onClick={() => handleDelete(topic.id)}
-                  className="hidden shrink-0 text-black/30 hover:text-red-500 group-hover:block dark:text-white/30"
+                  className="hidden shrink-0 text-[var(--muted)] hover:text-[var(--danger)] group-hover:block"
                   title="Excluir tópico"
                 >
                   ×
@@ -182,17 +182,17 @@ export function Sidebar({
         </div>
       </div>
 
-      <form onSubmit={handleAddTopic} className="border-t border-black/10 p-3 dark:border-white/10">
+      <form onSubmit={handleAddTopic} className="border-t border-[var(--border)] p-3">
         <div className="flex gap-1.5">
           <input
             value={newTopic}
             onChange={(e) => setNewTopic(e.target.value)}
             placeholder="Novo tópico..."
-            className="min-w-0 flex-1 rounded-md border border-black/15 bg-white px-2 py-1.5 text-sm outline-none focus:border-black/40 dark:border-white/15 dark:bg-black/20 dark:focus:border-white/40"
+            className="min-w-0 flex-1 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-sm text-[var(--foreground)] outline-none placeholder:text-[var(--muted)] focus:border-[var(--focus)]"
           />
           <button
             type="submit"
-            className="shrink-0 rounded-md bg-black px-2.5 py-1.5 text-sm font-medium text-white dark:bg-white dark:text-black"
+            className="shrink-0 rounded-md bg-[var(--brand)] px-2.5 py-1.5 text-sm font-medium text-[var(--accent-ink)] hover:bg-[var(--accent-hover)]"
           >
             +
           </button>

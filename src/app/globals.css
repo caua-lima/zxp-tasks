@@ -1,8 +1,33 @@
 @import "tailwindcss";
 
+/* ── Identidade ZXP Solutions — Onyx Gold ─────────────────────────────
+   Mesma paleta do ZXP Market (briefing-master/app/globals.css): preto
+   carvão + dourado assinatura + marfim quente. Tema único (sem light
+   mode) — a marca não alterna, ela é. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --color-onyx: #10100e;
+  --color-gold: #f4b942;
+  --color-ivory: #f6f3e8;
+
+  --background: var(--color-onyx);
+  --foreground: var(--color-ivory);
+
+  --sidebar: #181814;
+  --surface: #22221c;
+  --surface2: #2d2c22;
+  --surface3: #38372a;
+  --border: #3b392a;
+  --muted: #b9b5a6;
+
+  --brand: var(--color-gold);
+  --accent: var(--color-gold);
+  --accent-hover: #c98218;
+  --accent-ink: var(--color-onyx);
+  --focus: #ffd76a;
+  --focus-bg: rgba(255, 215, 106, 0.14);
+
+  --danger: #d65a4a;
+  --danger-bg: rgba(214, 90, 74, 0.12);
 }
 
 @theme inline {
@@ -10,13 +35,6 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {

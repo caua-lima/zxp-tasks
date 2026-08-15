@@ -30,7 +30,7 @@ export function TaskCard({ task, topic, showTopic, onClick, onDragStart }: TaskC
       draggable
       onDragStart={onDragStart}
       onClick={onClick}
-      className="cursor-pointer rounded-lg border border-black/10 bg-white p-3 shadow-sm transition hover:shadow-md active:cursor-grabbing dark:border-white/10 dark:bg-white/[0.04]"
+      className="cursor-pointer rounded-lg border border-[var(--border)] bg-[var(--surface2)] p-3 shadow-sm transition hover:border-[var(--brand)] active:cursor-grabbing"
     >
       {showTopic && topic && (
         <div className="mb-1.5 flex items-center gap-1.5">
@@ -38,14 +38,14 @@ export function TaskCard({ task, topic, showTopic, onClick, onDragStart }: TaskC
             className="h-1.5 w-1.5 rounded-full"
             style={{ backgroundColor: topic.color }}
           />
-          <span className="text-[11px] font-medium text-black/50 dark:text-white/50">
+          <span className="text-[11px] font-medium text-[var(--muted)]">
             {topic.name}
           </span>
         </div>
       )}
-      <p className="text-sm font-medium leading-snug">{task.title}</p>
+      <p className="text-sm font-medium leading-snug text-[var(--foreground)]">{task.title}</p>
       {task.description && (
-        <p className="mt-1 line-clamp-2 text-xs text-black/50 dark:text-white/50">
+        <p className="mt-1 line-clamp-2 text-xs text-[var(--muted)]">
           {task.description}
         </p>
       )}
@@ -53,8 +53,8 @@ export function TaskCard({ task, topic, showTopic, onClick, onDragStart }: TaskC
         <div
           className={`mt-2 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium ${
             overdue
-              ? "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400"
-              : "bg-black/5 text-black/60 dark:bg-white/10 dark:text-white/60"
+              ? "bg-[var(--danger-bg)] text-[var(--danger)]"
+              : "bg-[var(--surface3)] text-[var(--muted)]"
           }`}
         >
           {formatDate(task.date)}

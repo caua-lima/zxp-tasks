@@ -1,5 +1,5 @@
-const CACHE = "tarefas-zxp-v1";
-const SHELL = ["/", "/manifest.json"];
+const CACHE = "zxp-tasks-v2";
+const SHELL = ["/", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));

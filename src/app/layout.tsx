@@ -14,22 +14,17 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Tarefas ZXP",
-  description: "Kanban pessoal por tópicos, com mapa mental das tarefas",
-  manifest: "/manifest.json",
+  title: "ZXP Tasks",
+  description: "Kanban pessoal por tópicos, com mapa mental das tarefas. Um produto ZXP Solutions.",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Tarefas ZXP",
-  },
-  icons: {
-    icon: "/icons/icon-192.png",
-    apple: "/icons/apple-touch-icon.png",
+    title: "ZXP Tasks",
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#111111",
+  themeColor: "#10100E",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,

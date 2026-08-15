@@ -59,7 +59,7 @@ export function KanbanBoard({ topicId }: KanbanBoardProps) {
   return (
     <div className="flex h-full flex-col">
       {noTopics ? (
-        <div className="flex flex-1 items-center justify-center text-center text-sm text-black/50 dark:text-white/50">
+        <div className="flex flex-1 items-center justify-center text-center text-sm text-[var(--muted)]">
           Crie um tópico na barra lateral pra começar a adicionar tarefas.
         </div>
       ) : (
@@ -75,22 +75,20 @@ export function KanbanBoard({ topicId }: KanbanBoardProps) {
                 }}
                 onDragLeave={() => setDragOverCol((c) => (c === col.status ? null : c))}
                 onDrop={(e) => handleDrop(e, col.status)}
-                className={`flex min-h-[200px] flex-col rounded-xl border p-2 transition ${
+                className={`flex min-h-[200px] flex-col rounded-xl border bg-[var(--surface)] p-2 transition ${
                   dragOverCol === col.status
-                    ? "border-black/30 bg-black/[0.03] dark:border-white/30 dark:bg-white/[0.05]"
-                    : "border-black/5 dark:border-white/5"
+                    ? "border-[var(--brand)]"
+                    : "border-[var(--border)]"
                 }`}
               >
                 <div className="mb-2 flex items-center justify-between px-1.5 pt-1">
-                  <h3 className="text-sm font-semibold">
+                  <h3 className="text-sm font-semibold text-[var(--foreground)]">
                     {col.label}{" "}
-                    <span className="text-black/40 dark:text-white/40">
-                      {colTasks.length}
-                    </span>
+                    <span className="text-[var(--muted)]">{colTasks.length}</span>
                   </h3>
                   <button
                     onClick={() => openNew(col.status)}
-                    className="rounded px-1.5 text-lg leading-none text-black/40 hover:bg-black/5 hover:text-black dark:text-white/40 dark:hover:bg-white/10 dark:hover:text-white"
+                    className="rounded px-1.5 text-lg leading-none text-[var(--muted)] hover:bg-[var(--surface2)] hover:text-[var(--foreground)]"
                     title="Adicionar tarefa"
                   >
                     +

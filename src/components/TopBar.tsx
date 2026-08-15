@@ -17,7 +17,7 @@ export function TopBar({ title, onMenuClick }: TopBarProps) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `tarefas-zxp-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `zxp-tasks-backup-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -36,16 +36,16 @@ export function TopBar({ title, onMenuClick }: TopBarProps) {
   }
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b border-black/10 px-4 dark:border-white/10">
+    <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--border)] px-4">
       <div className="flex items-center gap-2">
         <button
           onClick={onMenuClick}
-          className="-ml-1.5 rounded-md p-1.5 text-black/60 hover:bg-black/5 dark:text-white/60 dark:hover:bg-white/10 md:hidden"
+          className="-ml-1.5 rounded-md p-1.5 text-[var(--muted)] hover:bg-[var(--surface)] md:hidden"
           aria-label="Abrir menu"
         >
           ☰
         </button>
-        <h2 className="text-sm font-semibold">{title}</h2>
+        <h2 className="text-sm font-semibold text-[var(--foreground)]">{title}</h2>
       </div>
       <div className="flex gap-2">
         <input
@@ -57,13 +57,13 @@ export function TopBar({ title, onMenuClick }: TopBarProps) {
         />
         <button
           onClick={handleImportClick}
-          className="rounded-md px-2.5 py-1.5 text-xs font-medium text-black/60 hover:bg-black/5 dark:text-white/60 dark:hover:bg-white/10"
+          className="rounded-md px-2.5 py-1.5 text-xs font-medium text-[var(--muted)] hover:bg-[var(--surface)]"
         >
           Importar
         </button>
         <button
           onClick={handleExport}
-          className="rounded-md px-2.5 py-1.5 text-xs font-medium text-black/60 hover:bg-black/5 dark:text-white/60 dark:hover:bg-white/10"
+          className="rounded-md px-2.5 py-1.5 text-xs font-medium text-[var(--muted)] hover:bg-[var(--surface)]"
         >
           Exportar backup
         </button>
