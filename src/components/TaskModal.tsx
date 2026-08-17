@@ -1,9 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { v4 as uuid } from "uuid";
 import { useApp } from "@/context/AppContext";
-import { ChecklistItem, Task, TaskEnergy, TaskPriority, TaskStatus } from "@/lib/types";
+import {
+  ChecklistItem,
+  Recurrence,
+  Task,
+  TaskEnergy,
+  TaskPriority,
+  TaskStatus,
+} from "@/lib/types";
+import { describeRecurrence } from "@/lib/recurrence";
 import {
   ENERGY_LABEL,
   ENERGY_ORDER,
@@ -36,8 +44,15 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
     trashTask,
     archiveTask,
     duplicateTask,
+    rememberOpenedTask,
   } = useApp();
   const { showToast } = useToast();
+
+  // Registra aqui (e não em cada tela) pra que os atalhos E/D funcionem
+  // independente de onde a tarefa foi aberta: Kanban, Hoje, mapa ou projeto.
+  useEffect(() => {
+    if (task) rememberOpenedTask(task.id);
+  }, [task, rememberOpenedTask]);
 
   const [title, setTitle] = useState(task?.title ?? "");
   const [description, setDescription] = useState(task?.description ?? "");
@@ -48,6 +63,7 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
   const [energy, setEnergy] = useState<TaskEnergy | "">(task?.energy ?? "");
   const [estimate, setEstimate] = useState<number | "">(task?.estimatedMinutes ?? "");
   const [tagsText, setTagsText] = useState((task?.tags ?? []).join(", "));
+  const [recurrence, setRecurrence] = useState<Recurrence | null>(task?.recurrence ?? null);
   const [checklist, setChecklist] = useState<ChecklistItem[]>(task?.checklist ?? []);
   const [newItem, setNewItem] = useState("");
   const [confirmTrash, setConfirmTrash] = useState(false);
@@ -76,13 +92,14 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
       estimatedMinutes: estimate === "" ? undefined : Number(estimate),
       tags,
       checklist,
+      recurrence: recurrence ?? undefined,
     };
     if (task) {
       updateTask(task.id, patch);
       if (status !== task.status) setTaskStatus(task.id, status);
     } else {
       const created = addTask({ ...patch, status, dueDate: dueDate || null });
-      updateTask(created.id, { checklist });
+      updateTask(created.id, { checklist, recurrence: recurrence ?? undefined });
     }
     onClose();
   }
@@ -329,6 +346,92 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
               onChange={(e) => setTagsText(e.target.value)}
               className={field}
             />
+          </div>
+
+          <div>
+            <label htmlFor="task-recurrence" className={label}>
+              Recorrência
+            </label>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <select
+                id="task-recurrence"
+                value={recurrence?.frequency ?? "none"}
+                onChange={(e) =>
+                  setRecurrence(
+                    e.target.value === "none"
+                      ? null
+                      : {
+                          frequency: e.target.value as Recurrence["frequency"],
+                          interval: recurrence?.interval ?? 1,
+                          weekdays: recurrence?.weekdays,
+                        }
+                  )
+                }
+                className={`${field} w-auto`}
+              >
+                <option value="none">Não repete</option>
+                <option value="daily">Diária</option>
+                <option value="weekly">Semanal</option>
+                <option value="monthly">Mensal</option>
+              </select>
+              {recurrence && (
+                <label className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
+                  a cada
+                  <input
+                    type="number"
+                    min={1}
+                    value={recurrence.interval ?? 1}
+                    onChange={(e) =>
+                      setRecurrence({
+                        ...recurrence,
+                        interval: Math.max(1, Number(e.target.value) || 1),
+                      })
+                    }
+                    aria-label="Intervalo da recorrência"
+                    className={`${field} w-16 tabular-nums`}
+                  />
+                </label>
+              )}
+            </div>
+
+            {recurrence?.frequency === "weekly" && (
+              <div className="mt-2 flex flex-wrap gap-1">
+                {["dom", "seg", "ter", "qua", "qui", "sex", "sáb"].map((name, day) => {
+                  const active = recurrence.weekdays?.includes(day) ?? false;
+                  return (
+                    <button
+                      key={name}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => {
+                        const current = recurrence.weekdays ?? [];
+                        const next = active
+                          ? current.filter((d) => d !== day)
+                          : [...current, day];
+                        setRecurrence({
+                          ...recurrence,
+                          weekdays: next.length > 0 ? next : undefined,
+                        });
+                      }}
+                      className={`min-h-[32px] rounded-md border px-2 text-xs font-medium transition ${
+                        active
+                          ? "border-[var(--brand)] bg-[var(--brand)] text-[var(--accent-ink)]"
+                          : "border-[var(--border)] text-[var(--muted)] hover:bg-[var(--surface)]"
+                      }`}
+                    >
+                      {name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {recurrence && (
+              <p className="mt-1.5 text-[11px] text-[var(--muted)]">
+                {describeRecurrence(recurrence)}. A próxima ocorrência é criada quando você
+                concluir esta.
+              </p>
+            )}
           </div>
 
           <div>

@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { v4 as uuid } from "uuid";
@@ -23,6 +24,7 @@ import { loadBoard, pushBackup, saveBoard } from "@/lib/storage";
 import { nextTopicColor } from "@/lib/colors";
 import { migrateBoard } from "@/lib/task-migrations";
 import { mergeImportedData, MergeReport, validateBackup } from "@/lib/task-backup";
+import { createRecurringTask } from "@/lib/recurrence";
 import { todayISO } from "@/lib/date-utils";
 
 export interface NewTaskInput {
@@ -45,6 +47,7 @@ interface AppContextValue {
   addTopic: (name: string) => Topic;
   updateTopic: (id: string, patch: Partial<Omit<Topic, "id" | "createdAt">>) => void;
   archiveTopic: (id: string) => void;
+  restoreTopic: (id: string) => void;
   deleteTopic: (id: string) => void;
   addTask: (input: NewTaskInput) => Task;
   updateTask: (id: string, patch: Partial<Omit<Task, "id" | "createdAt">>) => void;
@@ -58,6 +61,9 @@ interface AppContextValue {
   focusToday: string[];
   toggleFocus: (id: string) => void;
   saveWeeklyReview: (note: Omit<WeeklyReviewNote, "id" | "createdAt">) => void;
+  /** Última tarefa aberta em qualquer tela — alvo dos atalhos E e D. */
+  rememberOpenedTask: (id: string) => void;
+  getLastOpenedTaskId: () => string | null;
   exportData: () => string;
   importData: (json: string, mode: "merge" | "replace") => MergeReport | null;
 }
@@ -113,6 +119,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
+  const restoreTopic = useCallback((id: string) => {
+    setBoard((b) => ({
+      ...b,
+      topics: b.topics.map((t) => (t.id === id ? { ...t, archivedAt: undefined } : t)),
+    }));
+  }, []);
+
   const deleteTopic = useCallback((id: string) => {
     const now = new Date().toISOString();
     setBoard((b) => ({
@@ -156,19 +169,41 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
-  /** Concluir carimba completedAt uma vez; reabrir remove. */
+  /**
+   * Concluir carimba completedAt uma vez; reabrir remove.
+   *
+   * Se a tarefa é recorrente, a próxima ocorrência nasce aqui — uma única
+   * vez. A trava é `recurrenceSpawned`, não o `completedAt`: reabrir limpa
+   * o completedAt, então usá-lo como trava deixaria "reabrir e concluir de
+   * novo" criar uma ocorrência duplicada.
+   */
   const setTaskStatus = useCallback((id: string, status: TaskStatus) => {
     const now = new Date().toISOString();
-    setBoard((b) => ({
-      ...b,
-      tasks: b.tasks.map((t) => {
+    setBoard((b) => {
+      const target = b.tasks.find((t) => t.id === id);
+      const shouldSpawn =
+        status === "done" && !!target?.recurrence && !target.recurrenceSpawned;
+
+      const tasks = b.tasks.map((t) => {
         if (t.id !== id) return t;
         if (status === "done") {
-          return { ...t, status, completedAt: t.completedAt ?? now, updatedAt: now };
+          return {
+            ...t,
+            status,
+            completedAt: t.completedAt ?? now,
+            recurrenceSpawned: t.recurrenceSpawned || shouldSpawn,
+            updatedAt: now,
+          };
         }
         return { ...t, status, completedAt: undefined, updatedAt: now };
-      }),
-    }));
+      });
+
+      if (shouldSpawn && target) {
+        const next = createRecurringTask(target, uuid(), now);
+        if (next) tasks.push(next);
+      }
+      return { ...b, tasks };
+    });
   }, []);
 
   const trashTask = useCallback((id: string) => {
@@ -265,6 +300,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
+  // Ref, não state: os atalhos só precisam ler o valor atual no momento da
+  // tecla — guardar em state re-renderizaria o app a cada tarefa aberta.
+  const lastOpenedTask = useRef<string | null>(null);
+  const rememberOpenedTask = useCallback((id: string) => {
+    lastOpenedTask.current = id;
+  }, []);
+  const getLastOpenedTaskId = useCallback(() => lastOpenedTask.current, []);
+
   const exportData = useCallback(() => JSON.stringify(board, null, 2), [board]);
 
   const importData = useCallback(
@@ -301,6 +344,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       addTopic,
       updateTopic,
       archiveTopic,
+      restoreTopic,
       deleteTopic,
       addTask,
       updateTask,
@@ -314,6 +358,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       focusToday,
       toggleFocus,
       saveWeeklyReview,
+      rememberOpenedTask,
+      getLastOpenedTaskId,
       exportData,
       importData,
     }),
@@ -323,6 +369,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       addTopic,
       updateTopic,
       archiveTopic,
+      restoreTopic,
       deleteTopic,
       addTask,
       updateTask,
@@ -336,6 +383,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       focusToday,
       toggleFocus,
       saveWeeklyReview,
+      rememberOpenedTask,
+      getLastOpenedTaskId,
       exportData,
       importData,
     ]

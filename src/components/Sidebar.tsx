@@ -7,7 +7,7 @@ import { calculateTopicProgress } from "@/lib/task-utils";
 import { ConfirmDialog } from "./shared/ConfirmDialog";
 import { useToast } from "./shared/Toast";
 
-export type ViewKey = "today" | "kanban" | "mindmap" | "review";
+export type ViewKey = "today" | "kanban" | "mindmap" | "review" | "project";
 
 const VIEWS: { key: ViewKey; label: string }[] = [
   { key: "today", label: "Hoje" },
@@ -41,6 +41,7 @@ export function Sidebar({
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const activeTopics = topics.filter((t) => !t.archivedAt);
+  const archivedTopics = topics.filter((t) => t.archivedAt);
 
   function handleAddTopic(e: React.FormEvent) {
     e.preventDefault();
@@ -221,6 +222,28 @@ export function Sidebar({
               );
             })}
           </div>
+
+          {archivedTopics.length > 0 && (
+            <div className="pb-3">
+              <p className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                Arquivados
+              </p>
+              {archivedTopics.map((topic) => (
+                <button
+                  key={topic.id}
+                  onClick={() => selectTopic(topic.id)}
+                  className="flex min-h-[36px] w-full items-center gap-2 rounded-md px-2 text-left text-sm text-[var(--muted)] opacity-70 hover:bg-[var(--surface)] hover:opacity-100"
+                >
+                  <span
+                    className="h-2 w-2 shrink-0 rounded-full"
+                    style={{ backgroundColor: topic.color }}
+                    aria-hidden="true"
+                  />
+                  <span className="min-w-0 flex-1 truncate">{topic.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <form onSubmit={handleAddTopic} className="border-t border-[var(--border)] p-3">

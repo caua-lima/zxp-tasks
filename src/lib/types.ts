@@ -32,6 +32,12 @@ export interface Task {
   checklist: ChecklistItem[];
 
   recurrence?: Recurrence | null;
+  /**
+   * Marca que a próxima ocorrência desta tarefa recorrente já foi criada.
+   * Sobrevive a reabrir/concluir de novo — sem isso, reabrir limpa o
+   * `completedAt` e a segunda conclusão geraria uma ocorrência duplicada.
+   */
+  recurrenceSpawned?: boolean;
 
   createdAt: string;
   updatedAt: string;

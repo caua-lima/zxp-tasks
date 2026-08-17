@@ -17,6 +17,8 @@ import { filterTasks, sortTasks } from "./task-filters";
 import { validateBackup, mergeImportedData } from "./task-backup";
 import { calculateWeeklyMetrics } from "./weekly-review";
 import { addDaysISO, startOfWeekISO } from "./date-utils";
+import { createRecurringTask, nextOccurrence, describeRecurrence } from "./recurrence";
+import { getNextAction, getRecentlyCompleted, topicStats } from "./project-utils";
 
 const HOJE = "2026-08-16";
 
@@ -383,5 +385,188 @@ describe("métricas semanais", () => {
   test("semana sem tarefa criada não divide por zero", () => {
     const m = calculateWeeklyMetrics([], [], HOJE);
     assert.equal(m.completionRate, 0);
+  });
+});
+
+describe("recorrência — próxima data", () => {
+  test("diária respeita o intervalo", () => {
+    assert.equal(nextOccurrence({ frequency: "daily" }, "2026-08-16"), "2026-08-17");
+    assert.equal(
+      nextOccurrence({ frequency: "daily", interval: 3 }, "2026-08-16"),
+      "2026-08-19"
+    );
+  });
+
+  test("semanal sem dias marcados pula 7 dias", () => {
+    assert.equal(nextOccurrence({ frequency: "weekly" }, "2026-08-16"), "2026-08-23");
+  });
+
+  test("semanal com dias marcados vai pro próximo dia da semana, não +7", () => {
+    // 2026-08-17 é segunda (1). Marcado seg(1) e qui(4) → próxima é quinta.
+    assert.equal(
+      nextOccurrence({ frequency: "weekly", weekdays: [1, 4] }, "2026-08-17"),
+      "2026-08-20"
+    );
+  });
+
+  test("semanal vira a semana quando não sobra dia marcado à frente", () => {
+    // 2026-08-20 é quinta (4); marcado seg(1) e qui(4) → volta pra segunda.
+    assert.equal(
+      nextOccurrence({ frequency: "weekly", weekdays: [1, 4] }, "2026-08-20"),
+      "2026-08-24"
+    );
+  });
+
+  test("mensal mantém o dia do mês", () => {
+    assert.equal(nextOccurrence({ frequency: "monthly" }, "2026-08-16"), "2026-09-16");
+  });
+
+  test("mensal não vaza pro mês seguinte quando o dia não existe (31 → fevereiro)", () => {
+    assert.equal(nextOccurrence({ frequency: "monthly" }, "2026-01-31"), "2026-02-28");
+  });
+
+  test("mensal atravessa a virada de ano", () => {
+    assert.equal(
+      nextOccurrence({ frequency: "monthly", interval: 2 }, "2026-12-10"),
+      "2027-02-10"
+    );
+  });
+
+  test("intervalo inválido (0) não trava em loop nem repete a mesma data", () => {
+    assert.equal(
+      nextOccurrence({ frequency: "daily", interval: 0 }, "2026-08-16"),
+      "2026-08-17"
+    );
+  });
+});
+
+describe("recorrência — nova ocorrência", () => {
+  test("tarefa sem recorrência não gera ocorrência nenhuma", () => {
+    assert.equal(createRecurringTask(task({}), "novo"), null);
+  });
+
+  test("nova ocorrência nasce aberta, com prazo à frente e sem completedAt", () => {
+    const original = task({
+      status: "done",
+      completedAt: "2026-08-16T10:00:00.000Z",
+      dueDate: "2026-08-16",
+      recurrence: { frequency: "daily" },
+    });
+    const proxima = createRecurringTask(original, "novo-id", "2026-08-16T10:00:00.000Z");
+    assert.equal(proxima!.id, "novo-id");
+    assert.equal(proxima!.status, "todo");
+    assert.equal(proxima!.completedAt, undefined);
+    assert.equal(proxima!.dueDate, "2026-08-17");
+  });
+
+  test("checklist volta desmarcado na nova ocorrência", () => {
+    const original = task({
+      recurrence: { frequency: "weekly" },
+      dueDate: "2026-08-16",
+      checklist: [
+        { id: "1", label: "a", completed: true },
+        { id: "2", label: "b", completed: true },
+      ],
+    });
+    const proxima = createRecurringTask(original, "novo-id");
+    assert.deepEqual(
+      proxima!.checklist.map((c) => c.completed),
+      [false, false]
+    );
+  });
+
+  test("recorrente sem prazo usa a data de conclusão como base", () => {
+    const original = task({ recurrence: { frequency: "daily" }, dueDate: undefined });
+    const proxima = createRecurringTask(original, "novo-id", "2026-08-16T10:00:00.000Z");
+    assert.equal(proxima!.dueDate, "2026-08-17");
+  });
+
+  test("nova ocorrência nasce sem a marca de já ter gerado — a corrente continua", () => {
+    const original = task({
+      recurrence: { frequency: "daily" },
+      dueDate: "2026-08-16",
+      recurrenceSpawned: true,
+    });
+    const proxima = createRecurringTask(original, "novo-id");
+    assert.equal(proxima!.recurrenceSpawned, false);
+  });
+
+  test("descrição legível cobre os três tipos", () => {
+    assert.equal(describeRecurrence({ frequency: "daily" }), "Todo dia");
+    assert.equal(describeRecurrence({ frequency: "daily", interval: 2 }), "A cada 2 dias");
+    assert.equal(
+      describeRecurrence({ frequency: "weekly", weekdays: [1, 4] }),
+      "Toda semana (seg, qui)"
+    );
+    assert.equal(describeRecurrence({ frequency: "monthly" }), "Todo mês");
+  });
+});
+
+describe("visão de projeto", () => {
+  test("próxima ação prefere o que já está em andamento", () => {
+    const fazendo = task({ id: "fazendo", status: "doing", priority: "low" });
+    const criticaParada = task({ id: "critica", status: "todo", priority: "critical" });
+    assert.equal(getNextAction([criticaParada, fazendo], "t1", HOJE)!.id, "fazendo");
+  });
+
+  test("sem nada em andamento, atrasada ganha da prioridade alta em dia", () => {
+    const atrasada = task({ id: "atrasada", priority: "medium", dueDate: "2026-08-01" });
+    const alta = task({ id: "alta", priority: "high" });
+    assert.equal(getNextAction([alta, atrasada], "t1", HOJE)!.id, "atrasada");
+  });
+
+  test("empate de prioridade decide pelo prazo mais próximo", () => {
+    const longe = task({ id: "longe", priority: "high", dueDate: "2026-09-30" });
+    const perto = task({ id: "perto", priority: "high", dueDate: "2026-08-20" });
+    assert.equal(getNextAction([longe, perto], "t1", HOJE)!.id, "perto");
+  });
+
+  test("tópico só com tarefas concluídas não tem próxima ação", () => {
+    assert.equal(getNextAction([task({ status: "done" })], "t1", HOJE), null);
+  });
+
+  test("próxima ação ignora tarefa de outro tópico", () => {
+    const outra = task({ topicId: "outro", priority: "critical" });
+    assert.equal(getNextAction([outra], "t1", HOJE), null);
+  });
+
+  test("concluídas recentemente vêm da mais nova pra mais antiga", () => {
+    const antiga = task({ id: "antiga", status: "done", completedAt: "2026-08-10T10:00:00Z" });
+    const nova = task({ id: "nova", status: "done", completedAt: "2026-08-15T10:00:00Z" });
+    assert.deepEqual(
+      getRecentlyCompleted([antiga, nova], "t1").map((t) => t.id),
+      ["nova", "antiga"]
+    );
+  });
+
+  test("estatísticas do tópico somam por status e só estimativa preenchida", () => {
+    const stats = topicStats(
+      [
+        task({ status: "done" }),
+        task({ status: "doing", estimatedMinutes: 30 }),
+        task({ status: "todo" }),
+        task({ status: "todo", dueDate: "2026-08-01" }),
+        task({ deletedAt: "2026-08-10T00:00:00Z" }),
+      ],
+      "t1",
+      HOJE
+    );
+    assert.deepEqual(
+      {
+        total: stats.total,
+        done: stats.done,
+        doing: stats.doing,
+        todo: stats.todo,
+        overdue: stats.overdue,
+        estimado: stats.estimatedMinutesPending,
+      },
+      { total: 4, done: 1, doing: 1, todo: 2, overdue: 1, estimado: 30 }
+    );
+  });
+
+  test("tópico vazio devolve zeros sem quebrar", () => {
+    const stats = topicStats([], "t1", HOJE);
+    assert.equal(stats.percent, 0);
+    assert.equal(stats.lastActivity, null);
   });
 });

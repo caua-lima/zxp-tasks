@@ -48,7 +48,19 @@ export function MindMap({ topicId, filters }: MindMapProps) {
 
   const visibleTopics = topicId ? topics.filter((t) => t.id === topicId) : topics;
   const tooMany = tasks.length > MAX_NODES;
-  const rendered = tooMany ? tasks.slice(0, MAX_NODES) : tasks;
+
+  /**
+   * Nós saem agrupados por status: as tarefas de um mesmo status ficam em
+   * arcos vizinhos ao redor do tópico, em vez de espalhadas na ordem de
+   * criação. Com muitas tarefas, ler o mapa vira ler blocos.
+   */
+  const rendered = useMemo(() => {
+    const order: Record<string, number> = { todo: 0, doing: 1, done: 2 };
+    const grouped = [...tasks].sort(
+      (a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9)
+    );
+    return tooMany ? grouped.slice(0, MAX_NODES) : grouped;
+  }, [tasks, tooMany]);
 
   const layout = useMemo(() => {
     const R1 = 260;
@@ -136,7 +148,8 @@ export function MindMap({ topicId, filters }: MindMapProps) {
 
       {tooMany && !asList && (
         <p className="absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-md bg-[var(--surface)] px-3 py-1.5 text-center text-[11px] text-[var(--warning)] shadow">
-          Este tópico tem muitas tarefas. Use filtros para explorar.
+          Este tópico tem muitas tarefas. Mostrando {MAX_NODES} de {tasks.length} — use
+          filtros para explorar.
         </p>
       )}
 

@@ -101,6 +101,7 @@ function migrateTask(raw: unknown): Task | null {
     tags: migrateTags(r.tags),
     checklist: migrateChecklist(r.checklist),
     recurrence: migrateRecurrence(r.recurrence) ?? undefined,
+    recurrenceSpawned: r.recurrenceSpawned === true,
     createdAt,
     updatedAt,
     archivedAt: asString(r.archivedAt) ?? undefined,
