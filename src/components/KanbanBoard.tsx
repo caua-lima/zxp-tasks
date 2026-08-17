@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
-import { Task, TaskStatus } from "@/lib/types";
+import { Task, TaskPriority, TaskStatus } from "@/lib/types";
 import { TaskCard } from "./TaskCard";
 import { TaskModal } from "./TaskModal";
 
@@ -14,9 +14,10 @@ const COLUMNS: { status: TaskStatus; label: string }[] = [
 
 interface KanbanBoardProps {
   topicId: string | null;
+  priorityFilter: TaskPriority | null;
 }
 
-export function KanbanBoard({ topicId }: KanbanBoardProps) {
+export function KanbanBoard({ topicId, priorityFilter }: KanbanBoardProps) {
   const { topics, tasks, moveTask } = useApp();
   const [modalTask, setModalTask] = useState<Task | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -30,10 +31,10 @@ export function KanbanBoard({ topicId }: KanbanBoardProps) {
 
   const visibleTasks = useMemo(
     () =>
-      topicId
-        ? tasks.filter((t) => t.topicId === topicId)
-        : tasks,
-    [tasks, topicId]
+      tasks
+        .filter((t) => !topicId || t.topicId === topicId)
+        .filter((t) => !priorityFilter || t.priority === priorityFilter),
+    [tasks, topicId, priorityFilter]
   );
 
   function openNew(status: TaskStatus) {

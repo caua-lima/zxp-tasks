@@ -1,6 +1,7 @@
 "use client";
 
 import { Task, Topic } from "@/lib/types";
+import { PRIORITY_COLOR, PRIORITY_LABEL } from "@/lib/priority";
 
 interface TaskCardProps {
   task: Task;
@@ -31,6 +32,7 @@ export function TaskCard({ task, topic, showTopic, onClick, onDragStart }: TaskC
       onDragStart={onDragStart}
       onClick={onClick}
       className="cursor-pointer rounded-lg border border-[var(--border)] bg-[var(--surface2)] p-3 shadow-sm transition hover:border-[var(--brand)] active:cursor-grabbing"
+      style={{ borderLeft: `3px solid ${PRIORITY_COLOR[task.priority]}` }}
     >
       {showTopic && topic && (
         <div className="mb-1.5 flex items-center gap-1.5">
@@ -49,15 +51,30 @@ export function TaskCard({ task, topic, showTopic, onClick, onDragStart }: TaskC
           {task.description}
         </p>
       )}
-      {task.date && (
-        <div
-          className={`mt-2 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium ${
-            overdue
-              ? "bg-[var(--danger-bg)] text-[var(--danger)]"
-              : "bg-[var(--surface3)] text-[var(--muted)]"
-          }`}
-        >
-          {formatDate(task.date)}
+      {(task.date || task.priority !== "low") && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {task.date && (
+            <span
+              className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium ${
+                overdue
+                  ? "bg-[var(--danger-bg)] text-[var(--danger)]"
+                  : "bg-[var(--surface3)] text-[var(--muted)]"
+              }`}
+            >
+              {formatDate(task.date)}
+            </span>
+          )}
+          {task.priority !== "low" && (
+            <span
+              className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium"
+              style={{
+                color: PRIORITY_COLOR[task.priority],
+                backgroundColor: `${PRIORITY_COLOR[task.priority]}22`,
+              }}
+            >
+              {PRIORITY_LABEL[task.priority]}
+            </span>
+          )}
         </div>
       )}
     </div>

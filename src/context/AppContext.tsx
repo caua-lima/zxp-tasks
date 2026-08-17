@@ -9,7 +9,7 @@ import {
   useState,
 } from "react";
 import { v4 as uuid } from "uuid";
-import { Board, Task, TaskStatus, Topic } from "@/lib/types";
+import { Board, Task, TaskPriority, TaskStatus, Topic } from "@/lib/types";
 import { loadBoard, saveBoard } from "@/lib/storage";
 import { nextTopicColor } from "@/lib/colors";
 
@@ -26,6 +26,7 @@ interface AppContextValue {
     description?: string;
     date?: string | null;
     status?: TaskStatus;
+    priority?: TaskPriority;
   }) => Task;
   updateTask: (id: string, patch: Partial<Omit<Task, "id" | "createdAt">>) => void;
   deleteTask: (id: string) => void;
@@ -87,6 +88,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       description?: string;
       date?: string | null;
       status?: TaskStatus;
+      priority?: TaskPriority;
     }) => {
       const now = new Date().toISOString();
       const task: Task = {
@@ -96,6 +98,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         description: input.description?.trim() ?? "",
         date: input.date ?? null,
         status: input.status ?? "todo",
+        priority: input.priority ?? "medium",
         createdAt: now,
         updatedAt: now,
       };

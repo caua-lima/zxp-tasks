@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useApp } from "@/context/AppContext";
-import { Task, TaskStatus } from "@/lib/types";
+import { Task, TaskPriority, TaskStatus } from "@/lib/types";
+import { PRIORITY_LABEL, PRIORITY_ORDER } from "@/lib/priority";
 
 interface TaskModalProps {
   task: Task | null;
@@ -18,6 +19,7 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
   const [date, setDate] = useState(task?.date ?? "");
   const [topicId, setTopicId] = useState(task?.topicId ?? defaultTopicId ?? topics[0]?.id ?? "");
   const [status, setStatus] = useState<TaskStatus>(task?.status ?? defaultStatus);
+  const [priority, setPriority] = useState<TaskPriority>(task?.priority ?? "medium");
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -37,9 +39,10 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
         date: date || null,
         topicId,
         status,
+        priority,
       });
     } else {
-      addTask({ topicId, title, description, date: date || null, status });
+      addTask({ topicId, title, description, date: date || null, status, priority });
     }
     onClose();
   }
@@ -117,6 +120,23 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
                 <option value="done">Feito</option>
               </select>
             </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[var(--muted)]">
+              Prioridade
+            </label>
+            <select
+              value={priority}
+              onChange={(e) => setPriority(e.target.value as TaskPriority)}
+              className="w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-sm text-[var(--foreground)] outline-none focus:border-[var(--focus)] [color-scheme:dark]"
+            >
+              {PRIORITY_ORDER.map((p) => (
+                <option key={p} value={p}>
+                  {PRIORITY_LABEL[p]}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>

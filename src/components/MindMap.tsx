@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { useApp } from "@/context/AppContext";
-import { Task } from "@/lib/types";
+import { Task, TaskPriority } from "@/lib/types";
 import { TaskModal } from "./TaskModal";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -18,13 +18,19 @@ interface Node {
 
 interface MindMapProps {
   topicId: string | null;
+  priorityFilter: TaskPriority | null;
 }
 
-export function MindMap({ topicId }: MindMapProps) {
-  const { topics, tasks } = useApp();
+export function MindMap({ topicId, priorityFilter }: MindMapProps) {
+  const { topics, tasks: allTasks } = useApp();
   const [modalTask, setModalTask] = useState<Task | null>(null);
   const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
   const dragState = useRef<{ x: number; y: number } | null>(null);
+
+  const tasks = useMemo(
+    () => allTasks.filter((t) => !priorityFilter || t.priority === priorityFilter),
+    [allTasks, priorityFilter]
+  );
 
   const visibleTopics = topicId ? topics.filter((t) => t.id === topicId) : topics;
 

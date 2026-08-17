@@ -2,13 +2,22 @@
 
 import { useRef } from "react";
 import { useApp } from "@/context/AppContext";
+import { TaskPriority } from "@/lib/types";
+import { PRIORITY_LABEL, PRIORITY_ORDER } from "@/lib/priority";
 
 interface TopBarProps {
   title: string;
   onMenuClick: () => void;
+  priorityFilter: TaskPriority | null;
+  onChangePriorityFilter: (priority: TaskPriority | null) => void;
 }
 
-export function TopBar({ title, onMenuClick }: TopBarProps) {
+export function TopBar({
+  title,
+  onMenuClick,
+  priorityFilter,
+  onChangePriorityFilter,
+}: TopBarProps) {
   const { exportData, importData } = useApp();
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -47,7 +56,24 @@ export function TopBar({ title, onMenuClick }: TopBarProps) {
         </button>
         <h2 className="text-sm font-semibold text-[var(--foreground)]">{title}</h2>
       </div>
-      <div className="flex gap-2">
+      <div className="flex items-center gap-2">
+        <select
+          value={priorityFilter ?? "all"}
+          onChange={(e) =>
+            onChangePriorityFilter(
+              e.target.value === "all" ? null : (e.target.value as TaskPriority)
+            )
+          }
+          className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-xs font-medium text-[var(--foreground)] outline-none focus:border-[var(--focus)] [color-scheme:dark]"
+          aria-label="Filtrar por prioridade"
+        >
+          <option value="all">Toda prioridade</option>
+          {PRIORITY_ORDER.map((p) => (
+            <option key={p} value={p}>
+              {PRIORITY_LABEL[p]}
+            </option>
+          ))}
+        </select>
         <input
           ref={fileRef}
           type="file"

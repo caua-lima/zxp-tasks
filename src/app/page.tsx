@@ -6,12 +6,14 @@ import { Sidebar } from "@/components/Sidebar";
 import { KanbanBoard } from "@/components/KanbanBoard";
 import { MindMap } from "@/components/MindMap";
 import { TopBar } from "@/components/TopBar";
+import { TaskPriority } from "@/lib/types";
 
 function HomeInner() {
   const { topics, ready } = useApp();
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
   const [view, setView] = useState<"kanban" | "mindmap">("kanban");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [priorityFilter, setPriorityFilter] = useState<TaskPriority | null>(null);
 
   const title = useMemo(() => {
     if (!selectedTopicId) return "Todos os tópicos";
@@ -31,12 +33,17 @@ function HomeInner() {
         onClose={() => setSidebarOpen(false)}
       />
       <main className="flex min-w-0 flex-1 flex-col">
-        <TopBar title={title} onMenuClick={() => setSidebarOpen(true)} />
+        <TopBar
+          title={title}
+          onMenuClick={() => setSidebarOpen(true)}
+          priorityFilter={priorityFilter}
+          onChangePriorityFilter={setPriorityFilter}
+        />
         <div className="min-h-0 flex-1">
           {view === "kanban" ? (
-            <KanbanBoard topicId={selectedTopicId} />
+            <KanbanBoard topicId={selectedTopicId} priorityFilter={priorityFilter} />
           ) : (
-            <MindMap topicId={selectedTopicId} />
+            <MindMap topicId={selectedTopicId} priorityFilter={priorityFilter} />
           )}
         </div>
       </main>
