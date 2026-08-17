@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { Task } from "@/lib/types";
 import { TaskFilters, filterTasks } from "@/lib/task-filters";
@@ -41,6 +41,36 @@ export function MindMap({ topicId, filters }: MindMapProps) {
   const [asList, setAsList] = useState(false);
   const dragState = useRef<{ x: number; y: number } | null>(null);
 
+  /**
+   * O mapa desenha em pixels absolutos (sem viewBox) centrado no meio do
+   * painel — não num canvas fixo de 1200×800. Sem isso, num painel menor
+   * (o embed de 420px de altura na visão de projeto, por exemplo) o hub
+   * ficava fora da área visível e só sobrava, por sorte, o nó que caía
+   * dentro do recorte.
+   */
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [center, setCenter] = useState({ x: 400, y: 300 });
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const measure = () => {
+      const rect = el.getBoundingClientRect();
+      setCenter({ x: rect.width / 2, y: rect.height / 2 });
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    // Reforço: girar/redimensionar o celular muda o tamanho do contêiner
+    // (ele é h-full/w-full, guiado pelo layout flex da página) sem
+    // necessariamente disparar o ResizeObserver em todo engine — resize da
+    // janela é o gatilho mais confiável pra esse caso específico.
+    window.addEventListener("resize", measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, []);
+
   const tasks = useMemo(
     () => filterTasks(allTasks, { ...filters, topicId }),
     [allTasks, filters, topicId]
@@ -63,8 +93,13 @@ export function MindMap({ topicId, filters }: MindMapProps) {
   }, [tasks, tooMany]);
 
   const layout = useMemo(() => {
-    const R1 = 260;
-    const R2 = 150;
+    // Raio proporcional ao painel: no embed estreito da visão de projeto
+    // (420px de altura), usar sempre 260/150 fixos jogaria nó pra fora da
+    // área visível mesmo com o hub centralizado. Painel grande (mapa em
+    // tela cheia) mantém o alcance de sempre.
+    const reach = Math.max(60, Math.min(center.x, center.y) - 70);
+    const R1 = Math.min(260, reach);
+    const R2 = Math.min(150, topicId ? reach : reach * 0.55);
     const topicNodes = new Map<string, Node & { angle: number }>();
     const taskNodes = new Map<string, Node>();
 
@@ -76,17 +111,24 @@ export function MindMap({ topicId, filters }: MindMapProps) {
       topicNodes.set(topic.id, { x, y, angle });
 
       const topicTasks = rendered.filter((t) => t.topicId === topic.id);
-      const arc = topicId ? 2 * Math.PI : (Math.PI * 2) / 3;
+      const isFullCircle = !!topicId;
+      const arc = isFullCircle ? 2 * Math.PI : (Math.PI * 2) / 3;
       const start = angle - arc / 2;
+      // Círculo completo (um só tópico aberto) não pode fechar o laço: dividir
+      // por (n-1) faz o primeiro e o último nó caírem no mesmo ângulo — 360°
+      // voltam pro ponto de partida. Arco parcial (vários tópicos) continua
+      // dividindo por (n-1) de propósito, pra ocupar as pontas do leque.
+      const denom = isFullCircle
+        ? Math.max(topicTasks.length, 1)
+        : Math.max(topicTasks.length - 1, 1);
       topicTasks.forEach((task, j) => {
-        const denom = Math.max(topicTasks.length - 1, 1);
         const a = topicTasks.length === 1 ? angle : start + (arc * j) / denom;
         taskNodes.set(task.id, { x: x + R2 * Math.cos(a), y: y + R2 * Math.sin(a) });
       });
     });
 
     return { topicNodes, taskNodes };
-  }, [visibleTopics, rendered, topicId]);
+  }, [visibleTopics, rendered, topicId, center]);
 
   function onPointerDown(e: React.PointerEvent) {
     dragState.current = { x: e.clientX - transform.x, y: e.clientY - transform.y };
@@ -112,7 +154,10 @@ export function MindMap({ topicId, filters }: MindMapProps) {
   }
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-[radial-gradient(circle,_rgba(246,243,232,0.07)_1px,_transparent_1px)] bg-[length:20px_20px]">
+    <div
+      ref={containerRef}
+      className="relative h-full w-full overflow-hidden bg-[radial-gradient(circle,_rgba(246,243,232,0.07)_1px,_transparent_1px)] bg-[length:20px_20px]"
+    >
       <div className="absolute right-3 top-3 z-10 flex flex-wrap justify-end gap-1">
         <button
           onClick={() => setAsList((v) => !v)}
@@ -204,7 +249,7 @@ export function MindMap({ topicId, filters }: MindMapProps) {
           aria-label="Mapa mental das tarefas. Use o botão Ver em lista para a versão acessível."
         >
           <g transform={`translate(${transform.x}, ${transform.y}) scale(${transform.scale})`}>
-            <g transform="translate(600, 400)">
+            <g transform={`translate(${center.x}, ${center.y})`}>
               {!topicId && (
                 <>
                   <circle r={44} fill="var(--brand)" />
