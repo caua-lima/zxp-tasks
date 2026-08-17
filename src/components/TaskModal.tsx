@@ -44,6 +44,7 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
     trashTask,
     archiveTask,
     duplicateTask,
+    skipRecurrence,
     rememberOpenedTask,
   } = useApp();
   const { showToast } = useToast();
@@ -144,6 +145,20 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
                   >
                     Duplicar
                   </button>
+                  {task.recurrence && task.status !== "done" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (skipRecurrence(task.id)) {
+                          showToast("Ocorrência pulada. O prazo foi para a próxima data.");
+                          onClose();
+                        }
+                      }}
+                      className="rounded-md px-2.5 py-1.5 text-xs font-medium text-[var(--muted)] hover:bg-[var(--surface)]"
+                    >
+                      Pular ocorrência
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => {

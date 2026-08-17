@@ -16,11 +16,29 @@ import {
 import { filterTasks, sortTasks } from "./task-filters";
 import { validateBackup, mergeImportedData } from "./task-backup";
 import { calculateWeeklyMetrics } from "./weekly-review";
-import { addDaysISO, startOfWeekISO } from "./date-utils";
-import { createRecurringTask, nextOccurrence, describeRecurrence } from "./recurrence";
-import { getNextAction, getRecentlyCompleted, topicStats } from "./project-utils";
+import { addDaysISO, startOfWeekISO, localDayOf, daysBetween } from "./date-utils";
+import {
+  createRecurringTask,
+  nextOccurrence,
+  describeRecurrence,
+  skipOccurrence,
+} from "./recurrence";
+import {
+  getNextAction,
+  getRecentlyCompleted,
+  topicStats,
+  topicInsights,
+} from "./project-utils";
 
 const HOJE = "2026-08-16";
+
+/** Hoje no fuso local — para os testes que dependem do relógio de verdade. */
+function todayLocal(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
+}
 
 function task(partial: Partial<Task>): Task {
   return {
@@ -568,5 +586,145 @@ describe("visão de projeto", () => {
     const stats = topicStats([], "t1", HOJE);
     assert.equal(stats.percent, 0);
     assert.equal(stats.lastActivity, null);
+  });
+});
+
+describe("dia local vs UTC", () => {
+  test("localDayOf usa o dia do fuso do usuário, não o de UTC", () => {
+    // Meia-noite e meia UTC = ainda o dia anterior em qualquer fuso negativo.
+    const timestamp = "2026-08-17T00:30:00.000Z";
+    const esperado = new Date(timestamp);
+    const local = `${esperado.getFullYear()}-${String(esperado.getMonth() + 1).padStart(2, "0")}-${String(
+      esperado.getDate()
+    ).padStart(2, "0")}`;
+    assert.equal(localDayOf(timestamp), local);
+  });
+
+  test("data pura (sem hora) passa intacta, sem reinterpretar fuso", () => {
+    assert.equal(localDayOf("2026-08-16"), "2026-08-16");
+  });
+
+  test("timestamp inválido devolve o que dá, sem lançar", () => {
+    assert.equal(localDayOf("2026-13-99T99:99:99Z"), "2026-13-99");
+  });
+
+  test("daysBetween compara pelo dia local — conclusão à noite não vira dia negativo", () => {
+    const agora = new Date();
+    const hojeLocal = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, "0")}-${String(
+      agora.getDate()
+    ).padStart(2, "0")}`;
+    assert.equal(daysBetween(agora.toISOString(), hojeLocal), 0);
+  });
+
+  test("daysBetween conta dias inteiros entre datas puras", () => {
+    assert.equal(daysBetween("2026-08-10", "2026-08-16"), 6);
+  });
+});
+
+describe("pular ocorrência", () => {
+  test("empurra o prazo sem concluir a tarefa", () => {
+    const original = task({
+      recurrence: { frequency: "weekly" },
+      dueDate: "2026-08-17",
+      status: "todo",
+    });
+    const pulada = skipOccurrence(original, "2026-08-16T10:00:00.000Z");
+    assert.equal(pulada!.dueDate, "2026-08-24");
+    assert.equal(pulada!.status, "todo");
+    assert.equal(pulada!.completedAt, undefined);
+  });
+
+  test("não conta como concluída — não polui a métrica da semana", () => {
+    const original = task({ recurrence: { frequency: "daily" }, dueDate: "2026-08-16" });
+    const pulada = skipOccurrence(original);
+    assert.equal(pulada!.completedAt, undefined);
+    assert.equal(pulada!.recurrenceSpawned, undefined);
+  });
+
+  test("tarefa não recorrente não pode ser pulada", () => {
+    assert.equal(skipOccurrence(task({ dueDate: "2026-08-16" })), null);
+  });
+});
+
+describe("insights do tópico", () => {
+  test("ritmo separa últimos 7 dias dos últimos 30", () => {
+    const insights = topicInsights(
+      [
+        task({ status: "done", completedAt: "2026-08-14T10:00:00Z" }), // 2 dias
+        task({ status: "done", completedAt: "2026-08-01T10:00:00Z" }), // 15 dias
+        task({ status: "done", completedAt: "2026-06-01T10:00:00Z" }), // 76 dias
+      ],
+      "t1",
+      HOJE
+    );
+    assert.equal(insights.completedLast7, 1);
+    assert.equal(insights.completedLast30, 2);
+  });
+
+  test("mediana de dias até concluir ignora createdAt de migração antiga (1970)", () => {
+    const insights = topicInsights(
+      [
+        task({
+          status: "done",
+          createdAt: "2026-08-10T10:00:00Z",
+          completedAt: "2026-08-14T10:00:00Z",
+        }),
+        task({
+          status: "done",
+          createdAt: "1970-01-01T00:00:00.000Z",
+          completedAt: "2026-08-14T10:00:00Z",
+        }),
+      ],
+      "t1",
+      HOJE
+    );
+    assert.equal(insights.medianDaysToComplete, 4);
+  });
+
+  test("mediana é null quando nada foi concluído", () => {
+    assert.equal(topicInsights([task({})], "t1", HOJE).medianDaysToComplete, null);
+  });
+
+  test("distribuição por prioridade conta só o que está aberto", () => {
+    const insights = topicInsights(
+      [
+        task({ priority: "critical" }),
+        task({ priority: "critical", status: "done", completedAt: "2026-08-15T10:00:00Z" }),
+        task({ priority: "low" }),
+      ],
+      "t1",
+      HOJE
+    );
+    assert.equal(insights.byPriority.critical, 1);
+    assert.equal(insights.byPriority.low, 1);
+  });
+
+  test("percentual de atraso considera só as abertas", () => {
+    const insights = topicInsights(
+      [
+        task({ dueDate: "2026-08-01" }),
+        task({ dueDate: "2026-09-01" }),
+        task({ status: "done", completedAt: "2026-08-15T10:00:00Z" }),
+      ],
+      "t1",
+      HOJE
+    );
+    assert.equal(insights.overdueShare, 50);
+  });
+
+  test("tópico sem tarefa aberta não divide por zero", () => {
+    assert.equal(topicInsights([], "t1", HOJE).overdueShare, 0);
+    assert.equal(topicInsights([], "t1", HOJE).daysSinceActivity, null);
+  });
+
+  test("dias desde a última atividade nunca é negativo na virada do dia", () => {
+    // updatedAt "agora" pode estar no dia seguinte em UTC enquanto o dia
+    // local ainda é hoje — antes isso exibia "-1d desde a última mexida".
+    const insights = topicInsights(
+      [task({ updatedAt: new Date().toISOString() })],
+      "t1",
+      todayLocal()
+    );
+    assert.ok(insights.daysSinceActivity !== null && insights.daysSinceActivity >= 0);
   });
 });

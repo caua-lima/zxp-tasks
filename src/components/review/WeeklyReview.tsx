@@ -40,6 +40,17 @@ export function WeeklyReview() {
   const [nextPriority, setNextPriority] = useState(existing?.nextPriority ?? "");
   const [wastingTime, setWastingTime] = useState(existing?.wastingTime ?? "");
 
+  // A revisão anterior fecha o ciclo: o que você definiu como prioridade da
+  // semana que vem é justamente o que precisa ser cobrado agora.
+  const previous = useMemo(
+    () =>
+      board.weeklyReviews
+        .filter((w) => w.weekStart < weekStart)
+        .sort((a, b) => b.weekStart.localeCompare(a.weekStart)),
+    [board.weeklyReviews, weekStart]
+  );
+  const lastReview = previous[0];
+
   return (
     <div className="mx-auto max-w-3xl space-y-4 p-4">
       <header>
@@ -50,6 +61,18 @@ export function WeeklyReview() {
           Semana de {formatDateShort(metrics.weekStart)} a {formatDateShort(metrics.weekEnd)}
         </p>
       </header>
+
+      {lastReview?.nextPriority && (
+        <section className="rounded-lg border border-[var(--planning)] bg-[var(--surface2)] p-3">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--planning)]">
+            Você definiu como prioridade desta semana
+          </p>
+          <p className="mt-1 text-sm text-[var(--foreground)]">{lastReview.nextPriority}</p>
+          <p className="mt-1 text-[11px] text-[var(--muted)]">
+            Anotado na revisão de {formatDateShort(lastReview.weekStart)}.
+          </p>
+        </section>
+      )}
 
       <section>
         <h2 className="mb-2 text-sm font-semibold text-[var(--foreground)]">Execução</h2>
@@ -162,6 +185,48 @@ export function WeeklyReview() {
           </button>
         </div>
       </section>
+
+      {previous.length > 0 && (
+        <section>
+          <h2 className="mb-2 text-sm font-semibold text-[var(--foreground)]">
+            Revisões anteriores{" "}
+            <span className="tabular-nums text-[var(--muted)]">({previous.length})</span>
+          </h2>
+          <div className="space-y-2">
+            {previous.map((review) => (
+              <details
+                key={review.id}
+                className="rounded-lg border border-[var(--border)] bg-[var(--surface2)]"
+              >
+                <summary className="cursor-pointer px-3 py-2 text-sm text-[var(--foreground)]">
+                  Semana de {formatDateShort(review.weekStart)}
+                </summary>
+                <dl className="space-y-2 border-t border-[var(--border)] px-3 py-2 text-xs">
+                  {[
+                    ["O que ficou travado", review.stuck],
+                    ["O que arquivar", review.toArchive],
+                    ["Prioridade da semana seguinte", review.nextPriority],
+                    ["Ocupando espaço sem resultado", review.wastingTime],
+                  ]
+                    .filter(([, value]) => value)
+                    .map(([question, answer]) => (
+                      <div key={question}>
+                        <dt className="text-[var(--muted)]">{question}</dt>
+                        <dd className="text-[var(--foreground)]">{answer}</dd>
+                      </div>
+                    ))}
+                  {!review.stuck &&
+                    !review.toArchive &&
+                    !review.nextPriority &&
+                    !review.wastingTime && (
+                      <p className="text-[var(--muted)]">Revisão sem anotações.</p>
+                    )}
+                </dl>
+              </details>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

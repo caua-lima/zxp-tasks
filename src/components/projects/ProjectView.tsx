@@ -3,10 +3,16 @@
 import { useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { Task } from "@/lib/types";
-import { getNextAction, getRecentlyCompleted, topicStats } from "@/lib/project-utils";
+import {
+  getNextAction,
+  getRecentlyCompleted,
+  topicStats,
+  topicInsights,
+} from "@/lib/project-utils";
+import { PRIORITY_COLOR, PRIORITY_LABEL, PRIORITY_ORDER } from "@/lib/priority";
 import { getOverdueTasks } from "@/lib/task-utils";
 import { formatMinutes } from "@/lib/weekly-review";
-import { formatDateShort } from "@/lib/date-utils";
+import { formatDateShort, localDayOf } from "@/lib/date-utils";
 import { TaskModal } from "../TaskModal";
 import { TaskRow } from "../today/TaskRow";
 import { MindMap } from "../MindMap";
@@ -57,6 +63,7 @@ export function ProjectView({ topicId }: { topicId: string }) {
   const topic = topics.find((t) => t.id === topicId);
 
   const stats = useMemo(() => topicStats(tasks, topicId), [tasks, topicId]);
+  const insights = useMemo(() => topicInsights(tasks, topicId), [tasks, topicId]);
   const nextAction = useMemo(() => getNextAction(tasks, topicId), [tasks, topicId]);
   const recent = useMemo(() => getRecentlyCompleted(tasks, topicId), [tasks, topicId]);
   const doing = useMemo(
@@ -284,12 +291,91 @@ export function ProjectView({ topicId }: { topicId: string }) {
                 </button>
                 {task.completedAt && (
                   <span className="shrink-0 tabular-nums text-[11px] text-[var(--success)]">
-                    {formatDateShort(task.completedAt.slice(0, 10))}
+                    {formatDateShort(localDayOf(task.completedAt))}
                   </span>
                 )}
               </li>
             ))}
           </ul>
+        )}
+      </Block>
+
+      <Block title="Estatísticas">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="rounded-lg border border-[var(--border)] bg-[var(--surface2)] p-3">
+            <p className="font-[family-name:var(--font-display)] text-lg font-semibold tabular-nums text-[var(--success)]">
+              {insights.completedLast7}
+            </p>
+            <p className="text-[11px] text-[var(--muted)]">Concluídas em 7 dias</p>
+          </div>
+          <div className="rounded-lg border border-[var(--border)] bg-[var(--surface2)] p-3">
+            <p className="font-[family-name:var(--font-display)] text-lg font-semibold tabular-nums text-[var(--foreground)]">
+              {insights.completedLast30}
+            </p>
+            <p className="text-[11px] text-[var(--muted)]">Concluídas em 30 dias</p>
+          </div>
+          <div className="rounded-lg border border-[var(--border)] bg-[var(--surface2)] p-3">
+            <p className="font-[family-name:var(--font-display)] text-lg font-semibold tabular-nums text-[var(--foreground)]">
+              {insights.medianDaysToComplete === null
+                ? "—"
+                : `${insights.medianDaysToComplete}d`}
+            </p>
+            <p className="text-[11px] text-[var(--muted)]">Tempo típico até concluir</p>
+          </div>
+          <div className="rounded-lg border border-[var(--border)] bg-[var(--surface2)] p-3">
+            <p
+              className="font-[family-name:var(--font-display)] text-lg font-semibold tabular-nums"
+              style={{
+                color:
+                  insights.daysSinceActivity !== null && insights.daysSinceActivity > 7
+                    ? "var(--warning)"
+                    : "var(--foreground)",
+              }}
+            >
+              {insights.daysSinceActivity === null ? "—" : `${insights.daysSinceActivity}d`}
+            </p>
+            <p className="text-[11px] text-[var(--muted)]">Desde a última mexida</p>
+          </div>
+        </div>
+
+        {stats.total > 0 && (
+          <div className="mt-3">
+            <p className="mb-1.5 text-[11px] text-[var(--muted)]">
+              Abertas por prioridade
+              {insights.overdueShare > 0 && (
+                <span className="text-[var(--danger)]">
+                  {" "}
+                  · {insights.overdueShare}% já passou do prazo
+                </span>
+              )}
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {PRIORITY_ORDER.filter((p) => insights.byPriority[p] > 0).map((p) => (
+                <span
+                  key={p}
+                  className="inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium tabular-nums"
+                  style={{
+                    color: PRIORITY_COLOR[p],
+                    backgroundColor: `${PRIORITY_COLOR[p]}1f`,
+                  }}
+                >
+                  {PRIORITY_LABEL[p]}: {insights.byPriority[p]}
+                </span>
+              ))}
+              {PRIORITY_ORDER.every((p) => insights.byPriority[p] === 0) && (
+                <span className="text-[11px] text-[var(--muted)]">
+                  Nada em aberto neste tópico.
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {insights.daysSinceActivity !== null && insights.daysSinceActivity > 14 && (
+          <p className="mt-3 rounded-md bg-[var(--surface2)] px-3 py-2 text-xs text-[var(--warning)]">
+            Este tópico está parado há {insights.daysSinceActivity} dias. Vale revisar se
+            ainda faz sentido ou arquivar.
+          </p>
         )}
       </Block>
 

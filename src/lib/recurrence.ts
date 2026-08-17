@@ -75,6 +75,27 @@ export function createRecurringTask(
   };
 }
 
+/**
+ * Empurra a tarefa recorrente para a próxima data sem concluí-la — é o
+ * "essa semana não rolou" sem sujar a métrica de concluídas nem quebrar
+ * a corrente da recorrência.
+ *
+ * Devolve `null` se a tarefa não é recorrente: pular uma tarefa comum
+ * seria só perder o prazo, então quem chama precisa tratar.
+ */
+export function skipOccurrence(
+  task: Task,
+  now: string = new Date().toISOString()
+): Task | null {
+  if (!task.recurrence) return null;
+  const base = task.dueDate ?? now.slice(0, 10);
+  return {
+    ...task,
+    dueDate: nextOccurrence(task.recurrence, base),
+    updatedAt: now,
+  };
+}
+
 export function describeRecurrence(recurrence: Recurrence): string {
   const interval = Math.max(1, recurrence.interval ?? 1);
   if (recurrence.frequency === "daily") {

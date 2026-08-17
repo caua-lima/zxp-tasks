@@ -24,7 +24,7 @@ import { loadBoard, pushBackup, saveBoard } from "@/lib/storage";
 import { nextTopicColor } from "@/lib/colors";
 import { migrateBoard } from "@/lib/task-migrations";
 import { mergeImportedData, MergeReport, validateBackup } from "@/lib/task-backup";
-import { createRecurringTask } from "@/lib/recurrence";
+import { createRecurringTask, skipOccurrence } from "@/lib/recurrence";
 import { todayISO } from "@/lib/date-utils";
 
 export interface NewTaskInput {
@@ -58,6 +58,8 @@ interface AppContextValue {
   emptyTrash: () => void;
   archiveTask: (id: string) => void;
   duplicateTask: (id: string) => void;
+  /** Empurra uma recorrente pro próximo prazo sem marcar como concluída. */
+  skipRecurrence: (id: string) => boolean;
   focusToday: string[];
   toggleFocus: (id: string) => void;
   saveWeeklyReview: (note: Omit<WeeklyReviewNote, "id" | "createdAt">) => void;
@@ -247,6 +249,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
+  const skipRecurrence = useCallback((id: string) => {
+    let skipped = false;
+    setBoard((b) => {
+      const target = b.tasks.find((t) => t.id === id);
+      const next = target ? skipOccurrence(target) : null;
+      if (!next) return b;
+      skipped = true;
+      return { ...b, tasks: b.tasks.map((t) => (t.id === id ? next : t)) };
+    });
+    return skipped;
+  }, []);
+
   const duplicateTask = useCallback((id: string) => {
     setBoard((b) => {
       const original = b.tasks.find((t) => t.id === id);
@@ -355,6 +369,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       emptyTrash,
       archiveTask,
       duplicateTask,
+      skipRecurrence,
       focusToday,
       toggleFocus,
       saveWeeklyReview,
@@ -380,6 +395,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       emptyTrash,
       archiveTask,
       duplicateTask,
+      skipRecurrence,
       focusToday,
       toggleFocus,
       saveWeeklyReview,

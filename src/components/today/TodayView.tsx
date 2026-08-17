@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { Task } from "@/lib/types";
-import { todayISO, addDaysISO } from "@/lib/date-utils";
+import { todayISO, addDaysISO, localDayOf } from "@/lib/date-utils";
 import {
   getOverdueTasks,
   getQuickWins,
@@ -72,7 +72,9 @@ export function TodayView({ onOpenKanban }: { onOpenKanban: () => void }) {
     .map((id) => active.find((t) => t.id === id))
     .filter((t): t is Task => !!t);
 
-  const doneToday = active.filter((t) => t.completedAt?.slice(0, 10) === today).length;
+  const doneToday = active.filter(
+    (t) => t.completedAt && localDayOf(t.completedAt) === today
+  ).length;
   const totalToday = doneToday + dueToday.length + focusTasks.filter((t) => t.status !== "done").length;
 
   function complete(task: Task) {

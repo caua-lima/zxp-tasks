@@ -1,5 +1,5 @@
 import { Task, Topic } from "./types";
-import { addDaysISO, startOfWeekISO, todayISO } from "./date-utils";
+import { addDaysISO, localDayOf, startOfWeekISO, todayISO } from "./date-utils";
 import { calculateTopicProgress, findStuckTopic, isTaskOverdue } from "./task-utils";
 
 export interface WeeklyMetrics {
@@ -22,7 +22,7 @@ export interface WeeklyMetrics {
 
 function inWeek(iso: string | null | undefined, start: string, end: string): boolean {
   if (!iso) return false;
-  const day = iso.slice(0, 10);
+  const day = localDayOf(iso);
   return day >= start && day <= end;
 }
 
