@@ -26,6 +26,10 @@ import { migrateBoard } from "@/lib/task-migrations";
 import { mergeImportedData, MergeReport, validateBackup } from "@/lib/task-backup";
 import { createRecurringTask, skipOccurrence } from "@/lib/recurrence";
 import { todayISO } from "@/lib/date-utils";
+import { useAuth } from "./AuthContext";
+import { pushBoardToCloud, subscribeToCloudBoard } from "@/lib/cloud-sync";
+
+export type SyncStatus = "offline" | "syncing" | "synced" | "error";
 
 export interface NewTaskInput {
   topicId: string;
@@ -68,6 +72,16 @@ interface AppContextValue {
   getLastOpenedTaskId: () => string | null;
   exportData: () => string;
   importData: (json: string, mode: "merge" | "replace") => MergeReport | null;
+  /** Sincronização com a nuvem (opcional — só ativa com usuário logado). */
+  syncStatus: SyncStatus;
+  lastSyncedAt: string | null;
+  /**
+   * Não nulo só na primeira sincronização de um login, quando a nuvem já
+   * tem dados diferentes dos locais — precisa de uma decisão explícita
+   * antes de qualquer coisa ser sobrescrita.
+   */
+  cloudConflict: Board | null;
+  resolveConflict: (choice: "keep-cloud" | "merge" | "replace-cloud") => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -87,6 +101,111 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (ready) saveBoard(board);
   }, [board, ready]);
+
+  // ── Sincronização com a nuvem (opcional) ──────────────────────────────
+  const { user } = useAuth();
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>("offline");
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const [cloudConflict, setCloudConflict] = useState<Board | null>(null);
+  // Só true depois que a primeira reconciliação de UM login termina — antes
+  // disso, o efeito de push não pode rodar, senão sobrescreveria a nuvem
+  // com o board local antes de perguntar o que fazer com o conflito.
+  const initialSyncDone = useRef(false);
+  // Board local no instante em que a nuvem respondeu, capturado fora do
+  // React state pra `resolveConflict` não depender de closure velha do
+  // `board` (o efeito de assinatura só roda de novo quando `user` muda).
+  const localBoardAtConflict = useRef<Board | null>(null);
+
+  useEffect(() => {
+    if (!user) {
+      // Sincroniza o estado local com o estado externo (login) — o caso que
+      // a própria regra recomenda resolver com um efeito, não com derivação.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSyncStatus("offline");
+      setCloudConflict(null);
+      initialSyncDone.current = false;
+      return;
+    }
+
+    setSyncStatus("syncing");
+    const unsubscribe = subscribeToCloudBoard(
+      user.uid,
+      (cloud) => {
+        if (!initialSyncDone.current) {
+          initialSyncDone.current = true;
+          if (cloud === "empty") {
+            // Conta nova: semeia a nuvem com o que já existe neste aparelho.
+            setBoard((current) => {
+              pushBoardToCloud(user.uid, current).catch(() => {});
+              return current;
+            });
+            setSyncStatus("synced");
+            setLastSyncedAt(new Date().toISOString());
+            return;
+          }
+          setBoard((current) => {
+            const localHasData = current.topics.length > 0 || current.tasks.length > 0;
+            if (!localHasData) {
+              setSyncStatus("synced");
+              setLastSyncedAt(new Date().toISOString());
+              return cloud;
+            }
+            // Nuvem e local têm dado de verdade — pergunta antes de decidir.
+            localBoardAtConflict.current = current;
+            setCloudConflict(cloud);
+            setSyncStatus("synced");
+            return current;
+          });
+          return;
+        }
+        setBoard(cloud === "empty" ? emptyBoard() : cloud);
+        setSyncStatus("synced");
+        setLastSyncedAt(new Date().toISOString());
+      },
+      () => setSyncStatus("error")
+    );
+
+    return () => {
+      unsubscribe();
+      initialSyncDone.current = false;
+    };
+  }, [user]);
+
+  useEffect(() => {
+    if (!ready || !user || !initialSyncDone.current || cloudConflict) return;
+    setSyncStatus("syncing");
+    const timeout = setTimeout(() => {
+      pushBoardToCloud(user.uid, board)
+        .then(() => {
+          setSyncStatus("synced");
+          setLastSyncedAt(new Date().toISOString());
+        })
+        .catch(() => setSyncStatus("error"));
+    }, 1200);
+    return () => clearTimeout(timeout);
+  }, [board, ready, user, cloudConflict]);
+
+  const resolveConflict = useCallback(
+    (choice: "keep-cloud" | "merge" | "replace-cloud") => {
+      if (!cloudConflict) return;
+      const localBoard = localBoardAtConflict.current ?? board;
+      // Snapshot local antes de qualquer escolha que descarta um dos lados —
+      // "keep-cloud" descarta o local, "replace-cloud" descarta a nuvem (só
+      // temos essa cópia da nuvem agora, em memória; depois de sobrescrever
+      // não tem mais como recuperar pelo app).
+      if (choice === "keep-cloud") {
+        pushBackup(localBoard, "conflito de sincronização (usar nuvem)");
+        setBoard(cloudConflict);
+      } else if (choice === "merge") {
+        pushBackup(localBoard, "conflito de sincronização (mesclar)");
+        setBoard(mergeImportedData(localBoard, cloudConflict).board);
+      } else {
+        pushBackup(cloudConflict, "conflito de sincronização (usar este aparelho)");
+      }
+      setCloudConflict(null);
+    },
+    [cloudConflict, board]
+  );
 
   const addTopic = useCallback(
     (name: string) => {
@@ -377,6 +496,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       getLastOpenedTaskId,
       exportData,
       importData,
+      syncStatus,
+      lastSyncedAt,
+      cloudConflict,
+      resolveConflict,
     }),
     [
       board,
@@ -403,6 +526,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       getLastOpenedTaskId,
       exportData,
       importData,
+      syncStatus,
+      lastSyncedAt,
+      cloudConflict,
+      resolveConflict,
     ]
   );
 

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppProvider, useApp } from "@/context/AppContext";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { Sidebar, ViewKey } from "@/components/Sidebar";
 import { KanbanBoard } from "@/components/KanbanBoard";
 import { MindMap } from "@/components/MindMap";
@@ -11,6 +12,8 @@ import { WeeklyReview } from "@/components/review/WeeklyReview";
 import { ProjectView } from "@/components/projects/ProjectView";
 import { TaskModal } from "@/components/TaskModal";
 import { DataPanel } from "@/components/shared/DataPanel";
+import { AccountPanel } from "@/components/shared/AccountPanel";
+import { SyncConflictDialog } from "@/components/shared/SyncConflictDialog";
 import { CommandPalette, Command } from "@/components/shared/CommandPalette";
 import { ShortcutsHelp } from "@/components/shared/ShortcutsHelp";
 import { ToastProvider, useToast } from "@/components/shared/Toast";
@@ -35,6 +38,8 @@ function HomeInner() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [dataOpen, setDataOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const { user } = useAuth();
   const [quickTask, setQuickTask] = useState<Task | null>(null);
   const [quickOpen, setQuickOpen] = useState(false);
 
@@ -131,6 +136,11 @@ function HomeInner() {
         run: () => setView("review"),
       },
       { id: "data", label: "Abrir dados e backup", run: () => setDataOpen(true) },
+      {
+        id: "account",
+        label: user ? "Abrir conta" : "Entrar",
+        run: () => setAccountOpen(true),
+      },
       { id: "help", label: "Mostrar atalhos", hint: "?", run: () => setHelpOpen(true) },
       {
         id: "all-topics",
@@ -152,7 +162,7 @@ function HomeInner() {
           },
         })),
     ],
-    [openNewTask, topics]
+    [openNewTask, topics, user]
   );
 
   if (!ready) return null;
@@ -177,6 +187,7 @@ function HomeInner() {
         onChangeView={setView}
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        onOpenAccount={() => setAccountOpen(true)}
       />
       <main className="flex min-w-0 flex-1 flex-col">
         <TopBar
@@ -222,7 +233,9 @@ function HomeInner() {
       )}
 
       {dataOpen && <DataPanel onClose={() => setDataOpen(false)} />}
+      {accountOpen && <AccountPanel onClose={() => setAccountOpen(false)} />}
       {helpOpen && <ShortcutsHelp onClose={() => setHelpOpen(false)} />}
+      <SyncConflictDialog />
 
       {quickOpen && (
         <TaskModal
@@ -238,10 +251,12 @@ function HomeInner() {
 
 export default function Home() {
   return (
-    <AppProvider>
-      <ToastProvider>
-        <HomeInner />
-      </ToastProvider>
-    </AppProvider>
+    <AuthProvider>
+      <AppProvider>
+        <ToastProvider>
+          <HomeInner />
+        </ToastProvider>
+      </AppProvider>
+    </AuthProvider>
   );
 }

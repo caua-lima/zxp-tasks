@@ -2,10 +2,18 @@
 
 import { useState } from "react";
 import { useApp } from "@/context/AppContext";
+import { useAuth } from "@/context/AuthContext";
 import { ZxpMark } from "./ZxpMark";
 import { calculateTopicProgress } from "@/lib/task-utils";
 import { ConfirmDialog } from "./shared/ConfirmDialog";
 import { useToast } from "./shared/Toast";
+
+const SYNC_DOT_COLOR: Record<string, string> = {
+  offline: "var(--muted)",
+  syncing: "var(--warning)",
+  synced: "var(--success)",
+  error: "var(--danger)",
+};
 
 export type ViewKey = "today" | "kanban" | "mindmap" | "review" | "project";
 
@@ -23,6 +31,7 @@ interface SidebarProps {
   onChangeView: (view: ViewKey) => void;
   open: boolean;
   onClose: () => void;
+  onOpenAccount: () => void;
 }
 
 export function Sidebar({
@@ -32,8 +41,10 @@ export function Sidebar({
   onChangeView,
   open,
   onClose,
+  onOpenAccount,
 }: SidebarProps) {
-  const { topics, tasks, addTopic, updateTopic, deleteTopic } = useApp();
+  const { topics, tasks, addTopic, updateTopic, deleteTopic, syncStatus } = useApp();
+  const { user, syncAvailable } = useAuth();
   const { showToast } = useToast();
   const [newTopic, setNewTopic] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -264,6 +275,26 @@ export function Sidebar({
             </button>
           </div>
         </form>
+
+        {syncAvailable && (
+          <button
+            onClick={onOpenAccount}
+            className="flex min-h-[44px] items-center gap-2 border-t border-[var(--border)] px-3 text-left text-xs text-[var(--muted)] hover:bg-[var(--surface)]"
+          >
+            {user ? (
+              <>
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: SYNC_DOT_COLOR[syncStatus] }}
+                  aria-hidden="true"
+                />
+                <span className="min-w-0 flex-1 truncate">{user.email}</span>
+              </>
+            ) : (
+              <span>Entrar pra sincronizar entre aparelhos</span>
+            )}
+          </button>
+        )}
       </aside>
 
       {confirmDelete && pendingDelete && (
