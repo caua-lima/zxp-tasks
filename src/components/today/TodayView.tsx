@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
-import { Task } from "@/lib/types";
+import { Task, TaskPriority } from "@/lib/types";
+import { PRIORITY_LABEL } from "@/lib/priority";
 import { todayISO, addDaysISO, localDayOf } from "@/lib/date-utils";
 import {
   getOverdueTasks,
@@ -47,7 +48,13 @@ function Empty({ children }: { children: React.ReactNode }) {
   return <p className="py-2 text-xs text-[var(--muted)]">{children}</p>;
 }
 
-export function TodayView({ onOpenKanban }: { onOpenKanban: () => void }) {
+export function TodayView({
+  onOpenKanban,
+  priorityFilter = null,
+}: {
+  onOpenKanban: () => void;
+  priorityFilter?: TaskPriority | null;
+}) {
   const { tasks, topics, setTaskStatus, updateTask, archiveTask, focusToday, toggleFocus } =
     useApp();
   const { showToast } = useToast();
@@ -56,7 +63,15 @@ export function TodayView({ onOpenKanban }: { onOpenKanban: () => void }) {
   const [showSuggestions, setShowSuggestions] = useState(false);
 
   const today = todayISO();
-  const active = useMemo(() => visibleTasks(tasks), [tasks]);
+  // O filtro de prioridade vale para as seções de trabalho (atrasadas,
+  // próximas, vitórias rápidas). O progresso do dia continua contando tudo:
+  // filtrar a régua junto faria o número do cabeçalho mentir.
+  const active = useMemo(
+    () =>
+      visibleTasks(tasks).filter((t) => !priorityFilter || t.priority === priorityFilter),
+    [tasks, priorityFilter]
+  );
+  const allActive = useMemo(() => visibleTasks(tasks), [tasks]);
   const topicMap = useMemo(
     () => Object.fromEntries(topics.map((t) => [t.id, t])),
     [topics]
@@ -72,10 +87,13 @@ export function TodayView({ onOpenKanban }: { onOpenKanban: () => void }) {
     .map((id) => active.find((t) => t.id === id))
     .filter((t): t is Task => !!t);
 
-  const doneToday = active.filter(
+  const doneToday = allActive.filter(
     (t) => t.completedAt && localDayOf(t.completedAt) === today
   ).length;
-  const totalToday = doneToday + dueToday.length + focusTasks.filter((t) => t.status !== "done").length;
+  const totalToday =
+    doneToday +
+    getTasksDueToday(allActive, today).length +
+    focusTasks.filter((t) => t.status !== "done").length;
 
   function complete(task: Task) {
     setTaskStatus(task.id, "done");
@@ -108,6 +126,12 @@ export function TodayView({ onOpenKanban }: { onOpenKanban: () => void }) {
             <p className="mt-2 tabular-nums text-sm text-[var(--foreground)]">
               {doneToday} de {Math.max(totalToday, doneToday)} tarefas concluídas hoje
             </p>
+            {priorityFilter && (
+              <p className="mt-1 text-xs text-[var(--brand)]">
+                Filtrando por prioridade {PRIORITY_LABEL[priorityFilter].toLowerCase()} — as
+                listas abaixo mostram só essas.
+              </p>
+            )}
           </div>
           <div className="flex gap-2">
             <button

@@ -11,7 +11,12 @@ interface TopBarProps {
   onChangeFilters: (filters: TaskFilters) => void;
   sortKey: SortKey;
   onChangeSort: (key: SortKey) => void;
-  showFilters: boolean;
+  /**
+   * "full" = quadro/mapa (busca, prioridade, energia, ordem, ocultar feitas).
+   * "priority" = visão Hoje, onde ordenar/ocultar não fazem sentido porque
+   * as seções já são semânticas — mas filtrar por prioridade faz.
+   */
+  filterMode: "full" | "priority" | "none";
   onOpenData: () => void;
   onOpenPalette: () => void;
 }
@@ -26,10 +31,12 @@ export function TopBar({
   onChangeFilters,
   sortKey,
   onChangeSort,
-  showFilters,
+  filterMode,
   onOpenData,
   onOpenPalette,
 }: TopBarProps) {
+  const showFilters = filterMode !== "none";
+  const full = filterMode === "full";
   return (
     <header className="shrink-0 border-b border-[var(--border)]">
       <div className="flex h-14 items-center justify-between gap-2 px-4">
@@ -87,53 +94,68 @@ export function TopBar({
               </option>
             ))}
           </select>
-          <select
-            value={filters.energy ?? "all"}
-            onChange={(e) =>
-              onChangeFilters({
-                ...filters,
-                energy: e.target.value === "all" ? null : (e.target.value as TaskEnergy),
-              })
-            }
-            aria-label="Filtrar por energia"
-            className={control}
-          >
-            <option value="all">Toda energia</option>
-            {ENERGY_ORDER.map((en) => (
-              <option key={en} value={en}>
-                {ENERGY_LABEL[en]}
-              </option>
-            ))}
-          </select>
-          <select
-            value={sortKey}
-            onChange={(e) => onChangeSort(e.target.value as SortKey)}
-            aria-label="Ordenar por"
-            className={control}
-          >
-            <option value="priority">Prioridade</option>
-            <option value="dueDate">Prazo</option>
-            <option value="createdAt">Criação</option>
-            <option value="updatedAt">Atualização</option>
-          </select>
-          <label className="flex min-h-[36px] cursor-pointer items-center gap-1.5 rounded-md border border-[var(--border)] px-2.5 text-xs text-[var(--muted)]">
-            <input
-              type="checkbox"
-              checked={filters.onlyOverdue ?? false}
-              onChange={(e) => onChangeFilters({ ...filters, onlyOverdue: e.target.checked })}
-              className="accent-[var(--danger)]"
-            />
-            Só atrasadas
-          </label>
-          <label className="flex min-h-[36px] cursor-pointer items-center gap-1.5 rounded-md border border-[var(--border)] px-2.5 text-xs text-[var(--muted)]">
-            <input
-              type="checkbox"
-              checked={filters.hideDone ?? false}
-              onChange={(e) => onChangeFilters({ ...filters, hideDone: e.target.checked })}
-              className="accent-[var(--brand)]"
-            />
-            Ocultar concluídas
-          </label>
+          {full && (
+            <>
+              <select
+                value={filters.energy ?? "all"}
+                onChange={(e) =>
+                  onChangeFilters({
+                    ...filters,
+                    energy: e.target.value === "all" ? null : (e.target.value as TaskEnergy),
+                  })
+                }
+                aria-label="Filtrar por energia"
+                className={control}
+              >
+                <option value="all">Toda energia</option>
+                {ENERGY_ORDER.map((en) => (
+                  <option key={en} value={en}>
+                    {ENERGY_LABEL[en]}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={sortKey}
+                onChange={(e) => onChangeSort(e.target.value as SortKey)}
+                aria-label="Ordenar por"
+                className={control}
+              >
+                <option value="priority">Prioridade</option>
+                <option value="dueDate">Prazo</option>
+                <option value="createdAt">Criação</option>
+                <option value="updatedAt">Atualização</option>
+              </select>
+              <label className="flex min-h-[36px] cursor-pointer items-center gap-1.5 rounded-md border border-[var(--border)] px-2.5 text-xs text-[var(--muted)]">
+                <input
+                  type="checkbox"
+                  checked={filters.onlyOverdue ?? false}
+                  onChange={(e) =>
+                    onChangeFilters({ ...filters, onlyOverdue: e.target.checked })
+                  }
+                  className="accent-[var(--danger)]"
+                />
+                Só atrasadas
+              </label>
+              <label className="flex min-h-[36px] cursor-pointer items-center gap-1.5 rounded-md border border-[var(--border)] px-2.5 text-xs text-[var(--muted)]">
+                <input
+                  type="checkbox"
+                  checked={filters.hideDone ?? false}
+                  onChange={(e) => onChangeFilters({ ...filters, hideDone: e.target.checked })}
+                  className="accent-[var(--brand)]"
+                />
+                Ocultar concluídas
+              </label>
+            </>
+          )}
+
+          {filters.priority && (
+            <button
+              onClick={() => onChangeFilters({ ...filters, priority: null })}
+              className="min-h-[36px] rounded-md px-2 text-xs font-medium text-[var(--muted)] hover:bg-[var(--surface)]"
+            >
+              Limpar filtro
+            </button>
+          )}
         </div>
       )}
     </header>

@@ -157,7 +157,12 @@ function HomeInner() {
 
   if (!ready) return null;
 
-  const showFilters = view === "kanban" || view === "mindmap";
+  const filterMode: "full" | "priority" | "none" =
+    view === "kanban" || view === "mindmap"
+      ? "full"
+      : view === "today"
+        ? "priority"
+        : "none";
 
   return (
     <div className="flex h-dvh w-full">
@@ -181,12 +186,17 @@ function HomeInner() {
           onChangeFilters={setFilters}
           sortKey={sortKey}
           onChangeSort={setSortKey}
-          showFilters={showFilters}
+          filterMode={filterMode}
           onOpenData={() => setDataOpen(true)}
           onOpenPalette={() => setPaletteOpen(true)}
         />
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {view === "today" && <TodayView onOpenKanban={() => setView("kanban")} />}
+          {view === "today" && (
+            <TodayView
+              onOpenKanban={() => setView("kanban")}
+              priorityFilter={filters.priority ?? null}
+            />
+          )}
           {view === "kanban" && (
             <KanbanBoard topicId={selectedTopicId} filters={filters} sortKey={sortKey} />
           )}
