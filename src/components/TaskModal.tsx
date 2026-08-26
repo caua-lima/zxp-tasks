@@ -12,11 +12,12 @@ import {
   TaskStatus,
 } from "@/lib/types";
 import { describeRecurrence } from "@/lib/recurrence";
+import { normalizeUrl, priorityLabel, statusLabels, topicKind } from "@/lib/wishlist";
+import { centsToInput, parseBRL } from "@/lib/money";
 import {
   ENERGY_LABEL,
   ENERGY_ORDER,
   ESTIMATE_PRESETS,
-  PRIORITY_LABEL,
   PRIORITY_ORDER,
   formatEstimate,
 } from "@/lib/priority";
@@ -69,8 +70,20 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
   const [newItem, setNewItem] = useState("");
   const [confirmTrash, setConfirmTrash] = useState(false);
   const [titleError, setTitleError] = useState(false);
+  const [priceText, setPriceText] = useState(
+    task?.priceCents !== undefined ? centsToInput(task.priceCents) : ""
+  );
+  const [url, setUrl] = useState(task?.url ?? "");
+  const [store, setStore] = useState(task?.store ?? "");
 
   const done = checklist.filter((c) => c.completed).length;
+
+  // O tipo da pasta escolhida no formulário decide os rótulos e os campos —
+  // trocar o tópico no meio da edição troca a cara do modal na hora.
+  const selectedTopic = topics.find((t) => t.id === topicId);
+  const kind = topicKind(selectedTopic);
+  const wishlist = kind === "wishlist";
+  const priceInvalid = priceText.trim() !== "" && parseBRL(priceText) === null;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -79,6 +92,7 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
       return;
     }
     if (!topicId) return;
+    if (priceInvalid) return;
     const tags = tagsText
       .split(",")
       .map((t) => t.trim())
@@ -91,6 +105,9 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
       priority,
       energy: energy || undefined,
       estimatedMinutes: estimate === "" ? undefined : Number(estimate),
+      priceCents: priceText.trim() === "" ? undefined : (parseBRL(priceText) ?? undefined),
+      url: normalizeUrl(url),
+      store: store.trim() || undefined,
       tags,
       checklist,
       recurrence: recurrence ?? undefined,
@@ -256,7 +273,7 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
             </div>
             <div>
               <label htmlFor="task-priority" className={label}>
-                Prioridade
+                {wishlist ? "Quanto quero" : "Prioridade"}
               </label>
               <select
                 id="task-priority"
@@ -266,14 +283,14 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
               >
                 {PRIORITY_ORDER.map((p) => (
                   <option key={p} value={p}>
-                    {PRIORITY_LABEL[p]}
+                    {priorityLabel(p, kind)}
                   </option>
                 ))}
               </select>
             </div>
             <div>
               <label htmlFor="task-due" className={label}>
-                Prazo
+                {wishlist ? "Comprar até" : "Prazo"}
               </label>
               <input
                 id="task-due"
@@ -293,14 +310,65 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
                 onChange={(e) => setStatus(e.target.value as TaskStatus)}
                 className={field}
               >
-                <option value="todo">A fazer</option>
-                <option value="doing">Fazendo</option>
-                <option value="done">Feito</option>
+                <option value="todo">{statusLabels(kind).todo}</option>
+                <option value="doing">{statusLabels(kind).doing}</option>
+                <option value="done">{statusLabels(kind).done}</option>
               </select>
             </div>
           </div>
 
-          <div>
+          {wishlist && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label htmlFor="task-price" className={label}>
+                  Preço
+                </label>
+                <input
+                  id="task-price"
+                  inputMode="decimal"
+                  placeholder="Ex: 1.500,00"
+                  value={priceText}
+                  onChange={(e) => setPriceText(e.target.value)}
+                  aria-invalid={priceInvalid}
+                  className={`${field} tabular-nums ${
+                    priceInvalid ? "border-[var(--danger)]" : ""
+                  }`}
+                />
+                {priceInvalid && (
+                  <p className="mt-1 text-[11px] text-[var(--danger)]">
+                    Não consegui ler esse valor. Use algo como 1.500,00.
+                  </p>
+                )}
+              </div>
+              <div>
+                <label htmlFor="task-store" className={label}>
+                  Onde comprar
+                </label>
+                <input
+                  id="task-store"
+                  placeholder="Ex: Mercado Livre, loja do bairro"
+                  value={store}
+                  onChange={(e) => setStore(e.target.value)}
+                  className={field}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label htmlFor="task-url" className={label}>
+                  Link do produto
+                </label>
+                <input
+                  id="task-url"
+                  inputMode="url"
+                  placeholder="Cole o link aqui"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  className={field}
+                />
+              </div>
+            </div>
+          )}
+
+          <div className={wishlist ? "hidden" : undefined}>
             <span className={label}>Estimativa</span>
             <div className="flex flex-wrap gap-1.5">
               {ESTIMATE_PRESETS.map((m) => (
@@ -330,7 +398,7 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
             </div>
           </div>
 
-          <div>
+          <div className={wishlist ? "hidden" : undefined}>
             <span className={label}>Energia</span>
             <div className="flex flex-wrap gap-1.5">
               {ENERGY_ORDER.map((e) => (

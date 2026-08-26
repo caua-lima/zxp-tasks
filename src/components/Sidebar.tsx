@@ -5,6 +5,9 @@ import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
 import { ZxpMark } from "./ZxpMark";
 import { calculateTopicProgress } from "@/lib/task-utils";
+import { isWishlist, wishlistTotals } from "@/lib/wishlist";
+import { formatBRL } from "@/lib/money";
+import { TopicKind } from "@/lib/types";
 import { ConfirmDialog } from "./shared/ConfirmDialog";
 import { useToast } from "./shared/Toast";
 
@@ -47,6 +50,7 @@ export function Sidebar({
   const { user, syncAvailable } = useAuth();
   const { showToast } = useToast();
   const [newTopic, setNewTopic] = useState("");
+  const [newTopicKind, setNewTopicKind] = useState<TopicKind>("project");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -58,7 +62,7 @@ export function Sidebar({
     e.preventDefault();
     const name = newTopic.trim();
     if (!name) return;
-    const topic = addTopic(name);
+    const topic = addTopic(name, newTopicKind);
     setNewTopic("");
     onSelectTopic(topic.id);
   }
@@ -148,6 +152,8 @@ export function Sidebar({
           <div className="space-y-0.5 pb-3">
             {activeTopics.map((topic) => {
               const progress = calculateTopicProgress(tasks, topic.id);
+              const wishlist = isWishlist(topic);
+              const totals = wishlist ? wishlistTotals(tasks, topic.id) : null;
               return (
                 <div
                   key={topic.id}
@@ -201,33 +207,52 @@ export function Sidebar({
                       ×
                     </button>
                   </div>
-                  {progress.total > 0 && (
-                    <div className="mt-1.5 flex items-center gap-2 pl-4.5">
-                      <div
-                        className="h-1 flex-1 overflow-hidden rounded-full bg-[var(--surface3)]"
-                        role="progressbar"
-                        aria-valuenow={progress.percent}
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                        aria-label={`Progresso de ${topic.name}`}
-                      >
-                        <div
-                          className="h-full rounded-full bg-[var(--success)]"
-                          style={{ width: `${progress.percent}%` }}
-                        />
-                      </div>
-                      <span className="shrink-0 tabular-nums text-[10px] text-[var(--muted)]">
-                        {progress.done}/{progress.total}
-                      </span>
-                      {progress.overdue > 0 && (
-                        <span
-                          className="shrink-0 tabular-nums text-[10px] text-[var(--danger)]"
-                          title={`${progress.overdue} atrasadas`}
-                        >
-                          !{progress.overdue}
+                  {totals ? (
+                    totals.itemsWanted + totals.itemsBought > 0 && (
+                      <div className="mt-1 flex items-center gap-2 pl-4.5 text-[10px]">
+                        <span className="tabular-nums text-[var(--brand)]">
+                          {formatBRL(totals.wantedCents)}
                         </span>
-                      )}
-                    </div>
+                        <span className="tabular-nums text-[var(--muted)]">
+                          {totals.itemsWanted}{" "}
+                          {totals.itemsWanted === 1 ? "item" : "itens"}
+                        </span>
+                        {totals.itemsBought > 0 && (
+                          <span className="tabular-nums text-[var(--success)]">
+                            {totals.itemsBought} ✓
+                          </span>
+                        )}
+                      </div>
+                    )
+                  ) : (
+                    progress.total > 0 && (
+                      <div className="mt-1.5 flex items-center gap-2 pl-4.5">
+                        <div
+                          className="h-1 flex-1 overflow-hidden rounded-full bg-[var(--surface3)]"
+                          role="progressbar"
+                          aria-valuenow={progress.percent}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-label={`Progresso de ${topic.name}`}
+                        >
+                          <div
+                            className="h-full rounded-full bg-[var(--success)]"
+                            style={{ width: `${progress.percent}%` }}
+                          />
+                        </div>
+                        <span className="shrink-0 tabular-nums text-[10px] text-[var(--muted)]">
+                          {progress.done}/{progress.total}
+                        </span>
+                        {progress.overdue > 0 && (
+                          <span
+                            className="shrink-0 tabular-nums text-[10px] text-[var(--danger)]"
+                            title={`${progress.overdue} atrasadas`}
+                          >
+                            !{progress.overdue}
+                          </span>
+                        )}
+                      </div>
+                    )
                   )}
                 </div>
               );
@@ -258,11 +283,30 @@ export function Sidebar({
         </div>
 
         <form onSubmit={handleAddTopic} className="border-t border-[var(--border)] p-3">
+          <div className="mb-1.5 flex gap-1">
+            {(["project", "wishlist"] as TopicKind[]).map((k) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setNewTopicKind(k)}
+                aria-pressed={newTopicKind === k}
+                className={`flex-1 rounded-md px-2 py-1 text-[11px] font-medium transition ${
+                  newTopicKind === k
+                    ? "bg-[var(--brand)] text-[var(--accent-ink)]"
+                    : "bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface2)]"
+                }`}
+              >
+                {k === "project" ? "Projeto" : "Desejos"}
+              </button>
+            ))}
+          </div>
           <div className="flex gap-1.5">
             <input
               value={newTopic}
               onChange={(e) => setNewTopic(e.target.value)}
-              placeholder="Novo tópico..."
+              placeholder={
+                newTopicKind === "wishlist" ? "Nova lista de desejos..." : "Novo tópico..."
+              }
               aria-label="Nome do novo tópico"
               className="min-h-[40px] min-w-0 flex-1 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 text-sm text-[var(--foreground)] outline-none placeholder:text-[var(--muted)] focus:border-[var(--focus)]"
             />

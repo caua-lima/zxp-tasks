@@ -4,15 +4,12 @@ import { useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { Task, TaskStatus } from "@/lib/types";
 import { filterTasks, SortKey, TaskFilters, sortTasks } from "@/lib/task-filters";
+import { statusLabel, topicKind } from "@/lib/wishlist";
 import { TaskCard } from "./TaskCard";
 import { TaskModal } from "./TaskModal";
 import { useToast } from "./shared/Toast";
 
-const COLUMNS: { status: TaskStatus; label: string }[] = [
-  { status: "todo", label: "A fazer" },
-  { status: "doing", label: "Fazendo" },
-  { status: "done", label: "Feito" },
-];
+const COLUMN_ORDER: TaskStatus[] = ["todo", "doing", "done"];
 
 interface KanbanBoardProps {
   topicId: string | null;
@@ -39,11 +36,23 @@ export function KanbanBoard({ topicId, filters, sortKey }: KanbanBoardProps) {
     [tasks, filters, topicId, sortKey]
   );
 
+  // Com um tópico aberto, as colunas falam a língua dele ("Quero / Pesquisando
+  // / Comprado" numa lista de desejos). Em "todos os tópicos" não dá pra
+  // escolher um dos dois, então fica o rótulo neutro de projeto.
+  const boardKind = topicKind(topicId ? topicMap[topicId] : undefined);
+  const COLUMNS = COLUMN_ORDER.map((status) => ({
+    status,
+    label: statusLabel(status, boardKind),
+  }));
+
   function moveTo(task: Task, status: TaskStatus) {
     const previous = task.status;
     setTaskStatus(task.id, status);
     if (status === "done") {
-      showToast("Tarefa concluída.", () => setTaskStatus(task.id, previous));
+      const isWish = topicKind(topicMap[task.topicId]) === "wishlist";
+      showToast(isWish ? "Comprado!" : "Tarefa concluída.", () =>
+        setTaskStatus(task.id, previous)
+      );
     }
   }
 
@@ -56,9 +65,9 @@ export function KanbanBoard({ topicId, filters, sortKey }: KanbanBoardProps) {
   }
 
   function moveByOffset(task: Task, direction: -1 | 1) {
-    const i = COLUMNS.findIndex((c) => c.status === task.status);
-    const next = COLUMNS[i + direction];
-    if (next) moveTo(task, next.status);
+    const i = COLUMN_ORDER.indexOf(task.status);
+    const next = COLUMN_ORDER[i + direction];
+    if (next) moveTo(task, next);
   }
 
   if (topics.length === 0) {

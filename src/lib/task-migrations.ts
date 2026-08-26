@@ -94,6 +94,14 @@ function migrateTask(raw: unknown): Task | null {
     dueDate: dueDate ?? undefined,
     completedAt: completedAt ?? undefined,
     estimatedMinutes: typeof r.estimatedMinutes === "number" ? r.estimatedMinutes : undefined,
+    // Preço tem que ser inteiro não-negativo: NaN/Infinity/negativo vindo de
+    // um backup editado à mão envenenaria a soma da lista inteira.
+    priceCents:
+      typeof r.priceCents === "number" && Number.isFinite(r.priceCents) && r.priceCents >= 0
+        ? Math.round(r.priceCents)
+        : undefined,
+    url: asString(r.url),
+    store: asString(r.store),
     energy:
       r.energy === "deep" || r.energy === "normal" || r.energy === "quick"
         ? r.energy
@@ -121,6 +129,13 @@ function migrateTopic(raw: unknown): Topic | null {
     color: asString(r.color) ?? "#F4B942",
     icon: asString(r.icon),
     description: asString(r.description),
+    // Tópico salvo antes das listas de desejos não tem `kind` — vira projeto,
+    // que é o que ele sempre foi na prática.
+    kind: r.kind === "wishlist" ? "wishlist" : "project",
+    budgetCents:
+      typeof r.budgetCents === "number" && Number.isFinite(r.budgetCents) && r.budgetCents >= 0
+        ? Math.round(r.budgetCents)
+        : undefined,
     createdAt: asString(r.createdAt) ?? SAFE_FALLBACK_DATE,
     archivedAt: asString(r.archivedAt) ?? undefined,
   };

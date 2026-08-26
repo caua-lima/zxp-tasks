@@ -13,10 +13,9 @@ import { v4 as uuid } from "uuid";
 import {
   Board,
   Task,
-  TaskEnergy,
-  TaskPriority,
   TaskStatus,
   Topic,
+  TopicKind,
   WeeklyReviewNote,
   emptyBoard,
 } from "@/lib/types";
@@ -28,27 +27,18 @@ import { createRecurringTask, skipOccurrence } from "@/lib/recurrence";
 import { todayISO } from "@/lib/date-utils";
 import { useAuth } from "./AuthContext";
 import { pushBoardToCloud, subscribeToCloudBoard } from "@/lib/cloud-sync";
+import { createTask, NewTaskInput } from "@/lib/task-factory";
+
+export type { NewTaskInput };
 
 export type SyncStatus = "offline" | "syncing" | "synced" | "error";
-
-export interface NewTaskInput {
-  topicId: string;
-  title: string;
-  description?: string;
-  dueDate?: string | null;
-  status?: TaskStatus;
-  priority?: TaskPriority;
-  energy?: TaskEnergy;
-  estimatedMinutes?: number;
-  tags?: string[];
-}
 
 interface AppContextValue {
   topics: Topic[];
   tasks: Task[];
   board: Board;
   ready: boolean;
-  addTopic: (name: string) => Topic;
+  addTopic: (name: string, kind?: TopicKind) => Topic;
   updateTopic: (id: string, patch: Partial<Omit<Topic, "id" | "createdAt">>) => void;
   archiveTopic: (id: string) => void;
   restoreTopic: (id: string) => void;
@@ -208,11 +198,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   );
 
   const addTopic = useCallback(
-    (name: string) => {
+    (name: string, kind: TopicKind = "project") => {
       const topic: Topic = {
         id: uuid(),
         name: name.trim(),
         color: nextTopicColor(board.topics.length),
+        kind,
         createdAt: new Date().toISOString(),
       };
       setBoard((b) => ({ ...b, topics: [...b.topics, topic] }));
@@ -258,22 +249,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const addTask = useCallback((input: NewTaskInput) => {
-    const now = new Date().toISOString();
-    const task: Task = {
-      id: uuid(),
-      topicId: input.topicId,
-      title: input.title.trim(),
-      description: input.description?.trim() ?? "",
-      status: input.status ?? "todo",
-      priority: input.priority ?? "medium",
-      dueDate: input.dueDate ?? undefined,
-      energy: input.energy,
-      estimatedMinutes: input.estimatedMinutes,
-      tags: input.tags ?? [],
-      checklist: [],
-      createdAt: now,
-      updatedAt: now,
-    };
+    const task = createTask(input, uuid(), new Date().toISOString());
     setBoard((b) => ({ ...b, tasks: [...b.tasks, task] }));
     return task;
   }, []);

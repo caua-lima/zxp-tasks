@@ -2,6 +2,13 @@ export type TaskStatus = "todo" | "doing" | "done";
 export type TaskPriority = "critical" | "high" | "medium" | "low";
 export type TaskEnergy = "deep" | "normal" | "quick";
 
+/**
+ * Um tópico é uma pasta de trabalho ("projeto") ou uma pasta de coisas que
+ * quero comprar ("lista de desejos"). Muda os rótulos de status, os campos
+ * do item e o resumo da pasta — o modelo de dados por baixo é o mesmo.
+ */
+export type TopicKind = "project" | "wishlist";
+
 export interface ChecklistItem {
   id: string;
   label: string;
@@ -28,6 +35,15 @@ export interface Task {
   estimatedMinutes?: number;
   energy?: TaskEnergy;
 
+  /**
+   * Campos de desejo/compra — só aparecem quando o tópico é uma lista de
+   * desejos. Preço em CENTAVOS (inteiro) de propósito: somar float dá
+   * "R$ 1.234,5600000001" na hora de totalizar a pasta.
+   */
+  priceCents?: number;
+  url?: string;
+  store?: string;
+
   tags: string[];
   checklist: ChecklistItem[];
 
@@ -51,6 +67,10 @@ export interface Topic {
   color: string;
   icon?: string;
   description?: string;
+  /** Ausente em tópicos criados antes das listas de desejos = "project". */
+  kind?: TopicKind;
+  /** Meta de gasto da lista de desejos, em centavos. */
+  budgetCents?: number;
   createdAt: string;
   archivedAt?: string | null;
 }
@@ -73,7 +93,7 @@ export interface Board {
   weeklyReviews: WeeklyReviewNote[];
 }
 
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 3;
 
 export function emptyBoard(): Board {
   return {

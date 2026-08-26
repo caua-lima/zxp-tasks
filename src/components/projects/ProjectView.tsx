@@ -9,10 +9,12 @@ import {
   topicStats,
   topicInsights,
 } from "@/lib/project-utils";
-import { PRIORITY_COLOR, PRIORITY_LABEL, PRIORITY_ORDER } from "@/lib/priority";
+import { PRIORITY_COLOR, PRIORITY_ORDER } from "@/lib/priority";
 import { getOverdueTasks } from "@/lib/task-utils";
 import { formatMinutes } from "@/lib/weekly-review";
 import { formatDateShort, localDayOf } from "@/lib/date-utils";
+import { isWishlist, priorityLabel, wishlistTotals } from "@/lib/wishlist";
+import { formatBRL } from "@/lib/money";
 import { TaskModal } from "../TaskModal";
 import { TaskRow } from "../today/TaskRow";
 import { MindMap } from "../MindMap";
@@ -64,6 +66,11 @@ export function ProjectView({ topicId }: { topicId: string }) {
 
   const stats = useMemo(() => topicStats(tasks, topicId), [tasks, topicId]);
   const insights = useMemo(() => topicInsights(tasks, topicId), [tasks, topicId]);
+  const wishlist = isWishlist(topic);
+  const totals = useMemo(
+    () => (wishlist ? wishlistTotals(tasks, topicId) : null),
+    [wishlist, tasks, topicId]
+  );
   const nextAction = useMemo(() => getNextAction(tasks, topicId), [tasks, topicId]);
   const recent = useMemo(() => getRecentlyCompleted(tasks, topicId), [tasks, topicId]);
   const doing = useMemo(
@@ -93,7 +100,9 @@ export function ProjectView({ topicId }: { topicId: string }) {
 
   function complete(task: Task) {
     setTaskStatus(task.id, "done");
-    showToast("Tarefa concluída.", () => setTaskStatus(task.id, "todo"));
+    showToast(wishlist ? "Comprado!" : "Tarefa concluída.", () =>
+      setTaskStatus(task.id, "todo")
+    );
   }
 
   return (
@@ -164,7 +173,7 @@ export function ProjectView({ topicId }: { topicId: string }) {
               }}
               className="min-h-[36px] rounded-md bg-[var(--brand)] px-3 text-sm font-medium text-[var(--accent-ink)] hover:bg-[var(--accent-hover)]"
             >
-              + Nova tarefa
+              {wishlist ? "+ Novo item" : "+ Nova tarefa"}
             </button>
             {topic.archivedAt ? (
               <button
@@ -187,6 +196,38 @@ export function ProjectView({ topicId }: { topicId: string }) {
           </div>
         </div>
 
+        {totals ? (
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <div className="rounded-lg border border-[var(--border)] bg-[var(--surface2)] p-3">
+              <p className="font-[family-name:var(--font-display)] text-lg font-semibold tabular-nums text-[var(--brand)]">
+                {formatBRL(totals.wantedCents)}
+              </p>
+              <p className="text-[11px] text-[var(--muted)]">
+                {totals.itemsWanted} {totals.itemsWanted === 1 ? "item" : "itens"} que quero
+                {totals.itemsWithoutPrice > 0 && (
+                  <span className="text-[var(--warning)]">
+                    {" "}
+                    · {totals.itemsWithoutPrice} sem preço
+                  </span>
+                )}
+              </p>
+            </div>
+            <div className="rounded-lg border border-[var(--border)] bg-[var(--surface2)] p-3">
+              <p className="font-[family-name:var(--font-display)] text-lg font-semibold tabular-nums text-[var(--success)]">
+                {formatBRL(totals.boughtCents)}
+              </p>
+              <p className="text-[11px] text-[var(--muted)]">
+                {totals.itemsBought} já {totals.itemsBought === 1 ? "comprado" : "comprados"}
+              </p>
+            </div>
+            <div className="col-span-2 rounded-lg border border-[var(--border)] bg-[var(--surface2)] p-3 sm:col-span-1">
+              <p className="font-[family-name:var(--font-display)] text-lg font-semibold tabular-nums text-[var(--foreground)]">
+                {formatBRL(totals.wantedCents + totals.boughtCents)}
+              </p>
+              <p className="text-[11px] text-[var(--muted)]">Lista inteira</p>
+            </div>
+          </div>
+        ) : (
         <div className="mt-4">
           <div className="mb-1 flex items-center justify-between text-xs">
             <span className="text-[var(--muted)]">Progresso</span>
@@ -222,9 +263,10 @@ export function ProjectView({ topicId }: { topicId: string }) {
             )}
           </div>
         </div>
+        )}
       </header>
 
-      <Block title="Próxima ação">
+      <Block title={wishlist ? "Próximo a comprar" : "Próxima ação"}>
         {nextAction ? (
           <ul>
             <TaskRow
@@ -236,13 +278,13 @@ export function ProjectView({ topicId }: { topicId: string }) {
           </ul>
         ) : (
           <p className="text-xs text-[var(--muted)]">
-            Nada em aberto neste tópico.
+            {wishlist ? "Nenhum item em aberto nesta lista." : "Nada em aberto neste tópico."}
           </p>
         )}
       </Block>
 
       {doing.length > 0 && (
-        <Block title="Em andamento" count={doing.length}>
+        <Block title={wishlist ? "Pesquisando" : "Em andamento"} count={doing.length}>
           <ul className="space-y-2">
             {doing.map((task) => (
               <TaskRow
@@ -273,9 +315,9 @@ export function ProjectView({ topicId }: { topicId: string }) {
         </Block>
       )}
 
-      <Block title="Concluídas recentemente" count={recent.length}>
+      <Block title={wishlist ? "Comprados recentemente" : "Concluídas recentemente"} count={recent.length}>
         {recent.length === 0 ? (
-          <p className="text-xs text-[var(--muted)]">Nada concluído por aqui ainda.</p>
+          <p className="text-xs text-[var(--muted)]">{wishlist ? "Nada comprado por aqui ainda." : "Nada concluído por aqui ainda."}</p>
         ) : (
           <ul className="space-y-1.5">
             {recent.map((task) => (
@@ -306,13 +348,13 @@ export function ProjectView({ topicId }: { topicId: string }) {
             <p className="font-[family-name:var(--font-display)] text-lg font-semibold tabular-nums text-[var(--success)]">
               {insights.completedLast7}
             </p>
-            <p className="text-[11px] text-[var(--muted)]">Concluídas em 7 dias</p>
+            <p className="text-[11px] text-[var(--muted)]">{wishlist ? "Comprados em 7 dias" : "Concluídas em 7 dias"}</p>
           </div>
           <div className="rounded-lg border border-[var(--border)] bg-[var(--surface2)] p-3">
             <p className="font-[family-name:var(--font-display)] text-lg font-semibold tabular-nums text-[var(--foreground)]">
               {insights.completedLast30}
             </p>
-            <p className="text-[11px] text-[var(--muted)]">Concluídas em 30 dias</p>
+            <p className="text-[11px] text-[var(--muted)]">{wishlist ? "Comprados em 30 dias" : "Concluídas em 30 dias"}</p>
           </div>
           <div className="rounded-lg border border-[var(--border)] bg-[var(--surface2)] p-3">
             <p className="font-[family-name:var(--font-display)] text-lg font-semibold tabular-nums text-[var(--foreground)]">
@@ -320,7 +362,7 @@ export function ProjectView({ topicId }: { topicId: string }) {
                 ? "—"
                 : `${insights.medianDaysToComplete}d`}
             </p>
-            <p className="text-[11px] text-[var(--muted)]">Tempo típico até concluir</p>
+            <p className="text-[11px] text-[var(--muted)]">{wishlist ? "Tempo típico até comprar" : "Tempo típico até concluir"}</p>
           </div>
           <div className="rounded-lg border border-[var(--border)] bg-[var(--surface2)] p-3">
             <p
@@ -341,7 +383,7 @@ export function ProjectView({ topicId }: { topicId: string }) {
         {stats.total > 0 && (
           <div className="mt-3">
             <p className="mb-1.5 text-[11px] text-[var(--muted)]">
-              Abertas por prioridade
+              {wishlist ? "Em aberto por desejo" : "Abertas por prioridade"}
               {insights.overdueShare > 0 && (
                 <span className="text-[var(--danger)]">
                   {" "}
@@ -359,12 +401,12 @@ export function ProjectView({ topicId }: { topicId: string }) {
                     backgroundColor: `${PRIORITY_COLOR[p]}1f`,
                   }}
                 >
-                  {PRIORITY_LABEL[p]}: {insights.byPriority[p]}
+                  {priorityLabel(p, wishlist ? "wishlist" : "project")}: {insights.byPriority[p]}
                 </span>
               ))}
               {PRIORITY_ORDER.every((p) => insights.byPriority[p] === 0) && (
                 <span className="text-[11px] text-[var(--muted)]">
-                  Nada em aberto neste tópico.
+                  {wishlist ? "Nenhum item em aberto nesta lista." : "Nada em aberto neste tópico."}
                 </span>
               )}
             </div>
@@ -379,7 +421,7 @@ export function ProjectView({ topicId }: { topicId: string }) {
         )}
       </Block>
 
-      <Block title="Mapa mental do tópico">
+      <Block title={wishlist ? "Mapa da lista" : "Mapa mental do tópico"}>
         <button
           onClick={() => setShowMap((v) => !v)}
           className="mb-3 min-h-[36px] rounded-md border border-[var(--border)] px-3 text-xs font-medium text-[var(--muted)] hover:bg-[var(--surface2)]"

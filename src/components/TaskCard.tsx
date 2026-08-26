@@ -1,9 +1,11 @@
 "use client";
 
 import { Task, Topic } from "@/lib/types";
-import { PRIORITY_COLOR, PRIORITY_ICON, PRIORITY_LABEL, formatEstimate } from "@/lib/priority";
+import { PRIORITY_COLOR, PRIORITY_ICON, formatEstimate } from "@/lib/priority";
 import { checklistProgress, isTaskOverdue } from "@/lib/task-utils";
 import { formatDateShort } from "@/lib/date-utils";
+import { formatBRL } from "@/lib/money";
+import { linkHost, priorityLabel, topicKind } from "@/lib/wishlist";
 
 interface TaskCardProps {
   task: Task;
@@ -24,6 +26,7 @@ export function TaskCard({
 }: TaskCardProps) {
   const overdue = isTaskOverdue(task);
   const { done, total } = checklistProgress(task);
+  const kind = topicKind(topic);
 
   return (
     <div
@@ -38,9 +41,9 @@ export function TaskCard({
       }}
       role="button"
       tabIndex={0}
-      aria-label={`${task.title}. Prioridade ${PRIORITY_LABEL[task.priority]}${
-        overdue ? ". Atrasada" : ""
-      }`}
+      aria-label={`${task.title}. ${priorityLabel(task.priority, kind)}${
+        task.priceCents !== undefined ? `. ${formatBRL(task.priceCents)}` : ""
+      }${overdue ? ". Atrasada" : ""}`}
       className="group relative min-h-[44px] cursor-pointer overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface2)] p-3 pl-4 shadow-sm transition hover:border-[var(--brand)] focus:outline-none focus-visible:border-[var(--focus)] active:cursor-grabbing"
     >
       <span
@@ -67,6 +70,12 @@ export function TaskCard({
       )}
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] font-medium">
+        {task.priceCents !== undefined && (
+          <span className="inline-flex items-center gap-1 rounded bg-[var(--brand)]/15 px-1.5 py-0.5 font-[family-name:var(--font-display)] tabular-nums text-[var(--brand)]">
+            {formatBRL(task.priceCents)}
+          </span>
+        )}
+
         <span
           className="inline-flex items-center gap-1 rounded px-1.5 py-0.5"
           style={{
@@ -75,7 +84,7 @@ export function TaskCard({
           }}
         >
           <span aria-hidden="true">{PRIORITY_ICON[task.priority]}</span>
-          {PRIORITY_LABEL[task.priority]}
+          {priorityLabel(task.priority, kind)}
         </span>
 
         {task.dueDate && (
@@ -111,6 +120,26 @@ export function TaskCard({
           >
             ↻
           </span>
+        )}
+
+        {task.store && (
+          <span className="inline-flex items-center gap-1 rounded bg-[var(--surface3)] px-1.5 py-0.5 text-[var(--muted)]">
+            {task.store}
+          </span>
+        )}
+
+        {task.url && (
+          // stopPropagation: o card inteiro abre o modal no clique — sem isso,
+          // tocar no link abriria a loja E o modal por cima.
+          <a
+            href={task.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex items-center gap-1 rounded bg-[var(--surface3)] px-1.5 py-0.5 text-[var(--info)] underline-offset-2 hover:underline"
+          >
+            {linkHost(task.url)} ↗
+          </a>
         )}
       </div>
 

@@ -23,6 +23,16 @@ import {
   describeRecurrence,
   skipOccurrence,
 } from "./recurrence";
+import { parseBRL, formatBRL, centsToInput } from "./money";
+import { createTask } from "./task-factory";
+import {
+  wishlistTotals,
+  isWishlist,
+  statusLabel,
+  priorityLabel,
+  linkHost,
+  normalizeUrl,
+} from "./wishlist";
 import {
   getNextAction,
   getRecentlyCompleted,
@@ -726,5 +736,253 @@ describe("insights do tópico", () => {
       todayLocal()
     );
     assert.ok(insights.daysSinceActivity !== null && insights.daysSinceActivity >= 0);
+  });
+});
+
+describe("dinheiro (centavos)", () => {
+  test("lê os formatos que a pessoa realmente digita", () => {
+    assert.equal(parseBRL("1500"), 150000);
+    assert.equal(parseBRL("1500,50"), 150050);
+    assert.equal(parseBRL("1.500,50"), 150050);
+    assert.equal(parseBRL("R$ 1.500,50"), 150050);
+    assert.equal(parseBRL("R$1500"), 150000);
+    assert.equal(parseBRL("  89,90 "), 8990);
+  });
+
+  test("ponto sozinho: 3 casas é milhar, o resto é decimal", () => {
+    assert.equal(parseBRL("1.500"), 150000);
+    assert.equal(parseBRL("1.5"), 150);
+    assert.equal(parseBRL("1.50"), 150);
+    assert.equal(parseBRL("1500.50"), 150050);
+  });
+
+  test("campo vazio ou lixo devolve null, não zero", () => {
+    assert.equal(parseBRL(""), null);
+    assert.equal(parseBRL("   "), null);
+    assert.equal(parseBRL("abc"), null);
+    assert.equal(parseBRL("R$"), null);
+    // Zero de verdade continua sendo zero, não null.
+    assert.equal(parseBRL("0"), 0);
+  });
+
+  test("formata em real brasileiro", () => {
+    // \u00a0 = espaço não separável, é o que o Intl usa depois do "R$".
+    assert.equal(formatBRL(150050).replace(/\u00a0/g, " "), "R$ 1.500,50");
+    assert.equal(formatBRL(0).replace(/\u00a0/g, " "), "R$ 0,00");
+  });
+
+  test("ida e volta entre input e centavos não perde valor", () => {
+    for (const cents of [0, 990, 8990, 150050, 99999999]) {
+      assert.equal(parseBRL(centsToInput(cents)), cents);
+    }
+  });
+
+  test("soma de centavos não tem erro de float (o motivo de usar inteiro)", () => {
+    const itens = [1010, 2020, 3030, 1099];
+    assert.equal(itens.reduce((a, b) => a + b, 0), 7159);
+    // O mesmo em reais com float erraria:
+    assert.notEqual(0.1 + 0.2, 0.3);
+  });
+});
+
+describe("lista de desejos", () => {
+  function item(partial: Partial<Task>): Task {
+    return task({ topicId: "w1", ...partial });
+  }
+
+  test("separa o que já foi comprado do que ainda quero", () => {
+    const totals = wishlistTotals(
+      [
+        item({ title: "Insulfilm", priceCents: 45000, status: "todo" }),
+        item({ title: "Calça", priceCents: 19990, status: "todo" }),
+        item({ title: "Prateleira", priceCents: 12000, status: "done" }),
+      ],
+      "w1"
+    );
+    assert.equal(totals.wantedCents, 64990);
+    assert.equal(totals.boughtCents, 12000);
+    assert.equal(totals.itemsWanted, 2);
+    assert.equal(totals.itemsBought, 1);
+  });
+
+  test("conta itens sem preço pro total poder ser honesto", () => {
+    const totals = wishlistTotals(
+      [
+        item({ priceCents: 45000 }),
+        item({ priceCents: undefined }),
+        item({ priceCents: undefined }),
+      ],
+      "w1"
+    );
+    assert.equal(totals.wantedCents, 45000);
+    assert.equal(totals.itemsWithoutPrice, 2);
+  });
+
+  test("item na lixeira ou arquivado não entra no total", () => {
+    const totals = wishlistTotals(
+      [
+        item({ priceCents: 10000 }),
+        item({ priceCents: 99900, deletedAt: "2026-08-16T00:00:00Z" }),
+        item({ priceCents: 88800, archivedAt: "2026-08-16T00:00:00Z" }),
+      ],
+      "w1"
+    );
+    assert.equal(totals.wantedCents, 10000);
+  });
+
+  test("item de outra pasta não entra no total", () => {
+    const totals = wishlistTotals(
+      [item({ priceCents: 10000 }), task({ topicId: "outro", priceCents: 50000 })],
+      "w1"
+    );
+    assert.equal(totals.wantedCents, 10000);
+  });
+
+  test("lista vazia soma zero sem quebrar", () => {
+    const totals = wishlistTotals([], "w1");
+    assert.equal(totals.wantedCents, 0);
+    assert.equal(totals.itemsWanted, 0);
+  });
+
+  test("tópico antigo sem kind continua sendo projeto", () => {
+    assert.equal(isWishlist(topic()), false);
+    assert.equal(isWishlist(topic({ kind: "wishlist" })), true);
+    assert.equal(isWishlist(undefined), false);
+  });
+
+  test("rótulos falam a língua da pasta", () => {
+    assert.equal(statusLabel("done", "project"), "Feito");
+    assert.equal(statusLabel("done", "wishlist"), "Comprado");
+    assert.equal(statusLabel("todo", "wishlist"), "Quero");
+    assert.equal(priorityLabel("critical", "project"), "Crítica");
+    assert.equal(priorityLabel("critical", "wishlist"), "Preciso");
+  });
+
+  test("mostra o domínio do link, não a URL inteira", () => {
+    assert.equal(linkHost("https://www.amazon.com.br/dp/B08XYZ?ref=abc"), "amazon.com.br");
+    assert.equal(linkHost("não é url"), "não é url");
+  });
+
+  test("link colado sem https vira link absoluto", () => {
+    assert.equal(normalizeUrl("amazon.com.br/dp/X"), "https://amazon.com.br/dp/X");
+    assert.equal(normalizeUrl("https://loja.com/x"), "https://loja.com/x");
+    assert.equal(normalizeUrl(""), undefined);
+  });
+
+  test("javascript: no link é recusado (nunca vira href executável)", () => {
+    // Sem esquema http/https explícito o normalize prefixa https://, então o
+    // que importa é que o resultado nunca seja um href javascript:.
+    const resultado = normalizeUrl("javascript:alert(1)");
+    assert.ok(resultado === undefined || resultado.startsWith("https://"));
+  });
+});
+
+describe("migração dos campos de desejo", () => {
+  test("tópico antigo sem kind vira projeto, não lista de desejos", () => {
+    const board = migrateBoard({
+      topics: [{ id: "t1", name: "Antigo", createdAt: "2026-01-01" }],
+      tasks: [],
+    });
+    assert.equal(board.topics[0].kind, "project");
+  });
+
+  test("kind wishlist é preservado; valor inválido cai pra projeto", () => {
+    const board = migrateBoard({
+      topics: [
+        { id: "a", name: "Desejos", kind: "wishlist", createdAt: "2026-01-01" },
+        { id: "b", name: "Estranho", kind: "sei-la", createdAt: "2026-01-01" },
+      ],
+      tasks: [],
+    });
+    assert.equal(board.topics[0].kind, "wishlist");
+    assert.equal(board.topics[1].kind, "project");
+  });
+
+  test("preço inválido em backup adulterado não envenena a soma", () => {
+    const board = migrateBoard({
+      topics: [topic()],
+      tasks: [
+        { id: "a", topicId: "t1", title: "Ok", priceCents: 45000 },
+        { id: "b", topicId: "t1", title: "NaN", priceCents: Number.NaN },
+        { id: "c", topicId: "t1", title: "Negativo", priceCents: -500 },
+        { id: "d", topicId: "t1", title: "Texto", priceCents: "1000" },
+        { id: "e", topicId: "t1", title: "Quebrado", priceCents: 12.7 },
+      ],
+    });
+    const precos = board.tasks.map((t) => t.priceCents);
+    assert.deepEqual(precos, [45000, undefined, undefined, undefined, 13]);
+  });
+
+  test("link e loja sobrevivem à migração", () => {
+    const board = migrateBoard({
+      topics: [topic()],
+      tasks: [
+        {
+          id: "a",
+          topicId: "t1",
+          title: "Insulfilm",
+          url: "https://loja.com/x",
+          store: "Loja do Zé",
+        },
+      ],
+    });
+    assert.equal(board.tasks[0].url, "https://loja.com/x");
+    assert.equal(board.tasks[0].store, "Loja do Zé");
+  });
+});
+
+describe("criação de tarefa (o construtor não pode engolir campo)", () => {
+  test("campos de compra sobrevivem à criação — o bug que fez preço sumir", () => {
+    const criada = createTask(
+      {
+        topicId: "w1",
+        title: "Insulfilm G5",
+        priceCents: 45000,
+        url: "https://loja.com/x",
+        store: "Auto Center",
+      },
+      "id-novo",
+      "2026-08-16T10:00:00.000Z"
+    );
+    assert.equal(criada.priceCents, 45000);
+    assert.equal(criada.url, "https://loja.com/x");
+    assert.equal(criada.store, "Auto Center");
+  });
+
+  test("todo campo do input aparece na tarefa criada", () => {
+    // Trava a classe do bug: se alguém adicionar um campo ao input e esquecer
+    // de copiar no construtor, este teste quebra em vez de sumir calado.
+    const input = {
+      topicId: "t1",
+      title: "Tudo preenchido",
+      description: "desc",
+      dueDate: "2026-09-01",
+      status: "doing" as const,
+      priority: "high" as const,
+      energy: "quick" as const,
+      estimatedMinutes: 15,
+      tags: ["a"],
+      priceCents: 1000,
+      url: "https://x.com/",
+      store: "Loja",
+    };
+    const criada = createTask(input, "id", "2026-08-16T10:00:00.000Z");
+    for (const [chave, valor] of Object.entries(input)) {
+      if (chave === "title" || chave === "description") continue; // sofrem trim
+      assert.deepEqual(
+        criada[chave as keyof typeof criada],
+        valor,
+        `campo "${chave}" foi descartado na criação`
+      );
+    }
+  });
+
+  test("aplica os padrões quando o formulário manda o mínimo", () => {
+    const criada = createTask({ topicId: "t1", title: "  Só título  " }, "id", "2026-08-16T10:00:00.000Z");
+    assert.equal(criada.title, "Só título");
+    assert.equal(criada.status, "todo");
+    assert.equal(criada.priority, "medium");
+    assert.deepEqual(criada.tags, []);
+    assert.equal(criada.priceCents, undefined);
   });
 });
