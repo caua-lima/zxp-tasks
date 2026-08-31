@@ -1,13 +1,13 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut, User } from "firebase/auth";
-import { auth, firebaseConfigured } from "@/lib/firebase";
+import type { User } from "@supabase/supabase-js";
+import { supabase, supabaseConfigured } from "@/lib/supabase";
 
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
-  /** Sincronização exige um projeto Firebase configurado (ver .env.local.example). */
+  /** Sincronização exige Supabase configurado (ver .env.local.example). */
   syncAvailable: boolean;
   login: (email: string, senha: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -17,29 +17,40 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(firebaseConfigured);
+  const [loading, setLoading] = useState(supabaseConfigured);
 
   useEffect(() => {
-    if (!auth) return;
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
+    if (!supabase) return;
+
+    // Sessão já existente (voltou ao app depois de ter logado antes).
+    supabase.auth.getSession().then(({ data }) => {
+      setUser(data.session?.user ?? null);
       setLoading(false);
     });
-    return unsubscribe;
+
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      setLoading(false);
+    });
+
+    return () => subscription.subscription.unsubscribe();
   }, []);
 
   async function login(email: string, senha: string) {
-    if (!auth) throw new Error("Sincronização não está configurada neste app.");
-    await signInWithEmailAndPassword(auth, email, senha);
+    if (!supabase) throw new Error("Sincronização não está configurada neste app.");
+    const { error } = await supabase.auth.signInWithPassword({ email, password: senha });
+    if (error) throw error;
   }
 
   async function logout() {
-    if (!auth) return;
-    await signOut(auth);
+    if (!supabase) return;
+    await supabase.auth.signOut();
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, syncAvailable: firebaseConfigured, login, logout }}>
+    <AuthContext.Provider
+      value={{ user, loading, syncAvailable: supabaseConfigured, login, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );

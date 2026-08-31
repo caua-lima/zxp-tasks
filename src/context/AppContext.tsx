@@ -138,14 +138,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     setSyncStatus("syncing");
     const unsubscribe = subscribeToCloudBoard(
-      user.uid,
+      user.id,
       (cloud) => {
         if (!initialSyncDone.current) {
           initialSyncDone.current = true;
           if (cloud === "empty") {
             // Conta nova: semeia a nuvem com o que já existe neste aparelho.
             setBoard((current) => {
-              pushBoardToCloud(user.uid, current).catch(() => {});
+              pushBoardToCloud(user.id, current).catch(() => {});
               return current;
             });
             setSyncStatus("synced");
@@ -184,7 +184,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!ready || !user || !initialSyncDone.current || cloudConflict) return;
     setSyncStatus("syncing");
     const timeout = setTimeout(() => {
-      pushBoardToCloud(user.uid, board)
+      pushBoardToCloud(user.id, board)
         .then(() => {
           setSyncStatus("synced");
           setLastSyncedAt(new Date().toISOString());
