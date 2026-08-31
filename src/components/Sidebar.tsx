@@ -18,10 +18,27 @@ const SYNC_DOT_COLOR: Record<string, string> = {
   error: "var(--danger)",
 };
 
-export type ViewKey = "today" | "kanban" | "mindmap" | "review" | "project";
+export type ViewKey =
+  | "schedule"
+  | "goals"
+  | "today"
+  | "kanban"
+  | "mindmap"
+  | "review"
+  | "project";
 
+/**
+ * O app tem duas partes, e é isso que a barra mostra: o Cronograma (o dia,
+ * com cronômetro) e os Objetivos (o que quero conquistar/comprar). As telas
+ * antigas continuam existindo, mas atrás de "Mais" — fora do caminho.
+ */
 const VIEWS: { key: ViewKey; label: string }[] = [
-  { key: "today", label: "Hoje" },
+  { key: "schedule", label: "Cronograma" },
+  { key: "goals", label: "Objetivos" },
+];
+
+const EXTRA_VIEWS: { key: ViewKey; label: string }[] = [
+  { key: "today", label: "Hoje (foco)" },
   { key: "kanban", label: "Kanban" },
   { key: "mindmap", label: "Mapa mental" },
   { key: "review", label: "Revisão semanal" },
@@ -54,6 +71,7 @@ export function Sidebar({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [showExtras, setShowExtras] = useState(false);
 
   const activeTopics = topics.filter((t) => !t.archivedAt);
   const archivedTopics = topics.filter((t) => t.archivedAt);
@@ -132,11 +150,34 @@ export function Sidebar({
               {v.label}
             </button>
           ))}
+
+          <button
+            onClick={() => setShowExtras((v) => !v)}
+            aria-expanded={showExtras}
+            className="min-h-[40px] w-full rounded-md px-2.5 text-left text-xs text-[var(--muted)] hover:bg-[var(--surface)]"
+          >
+            {showExtras ? "− Mais" : "+ Mais"}
+          </button>
+          {showExtras &&
+            EXTRA_VIEWS.map((v) => (
+              <button
+                key={v.key}
+                onClick={() => changeView(v.key)}
+                aria-current={view === v.key ? "page" : undefined}
+                className={`min-h-[36px] w-full rounded-md pl-5 pr-2.5 text-left text-xs transition ${
+                  view === v.key
+                    ? "bg-[var(--surface2)] text-[var(--foreground)]"
+                    : "text-[var(--muted)] hover:bg-[var(--surface)]"
+                }`}
+              >
+                {v.label}
+              </button>
+            ))}
         </nav>
 
         <div className="flex-1 overflow-y-auto border-t border-[var(--border)] px-3 pt-3">
           <p className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-            Tópicos
+            Objetivos
           </p>
           <button
             onClick={() => selectTopic(null)}
@@ -146,7 +187,7 @@ export function Sidebar({
                 : "text-[var(--muted)] hover:bg-[var(--surface)]"
             }`}
           >
-            Todos os tópicos
+            Ver todos
           </button>
 
           <div className="space-y-0.5 pb-3">

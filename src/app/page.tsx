@@ -8,6 +8,8 @@ import { KanbanBoard } from "@/components/KanbanBoard";
 import { MindMap } from "@/components/MindMap";
 import { TopBar } from "@/components/TopBar";
 import { TodayView } from "@/components/today/TodayView";
+import { ScheduleView } from "@/components/schedule/ScheduleView";
+import { GoalsView } from "@/components/goals/GoalsView";
 import { WeeklyReview } from "@/components/review/WeeklyReview";
 import { ProjectView } from "@/components/projects/ProjectView";
 import { TaskModal } from "@/components/TaskModal";
@@ -31,7 +33,7 @@ function HomeInner() {
   const { topics, tasks, ready, setTaskStatus, getLastOpenedTaskId } = useApp();
   const { showToast } = useToast();
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
-  const [view, setView] = useState<ViewKey>("today");
+  const [view, setView] = useState<ViewKey>("schedule");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [filters, setFilters] = useState<TaskFilters>({});
   const [sortKey, setSortKey] = useState<SortKey>("priority");
@@ -48,6 +50,8 @@ function HomeInner() {
   const selectedTopic = topics.find((t) => t.id === selectedTopicId);
 
   const title = useMemo(() => {
+    if (view === "schedule") return "Cronograma";
+    if (view === "goals") return "Objetivos";
     if (view === "today") return "Hoje";
     if (view === "review") return "Revisão semanal";
     if (view === "project") return selectedTopic?.name ?? "Projeto";
@@ -78,6 +82,8 @@ function HomeInner() {
       if (pendingGoTo.current) {
         pendingGoTo.current = false;
         const destino: Record<string, ViewKey> = {
+          c: "schedule",
+          o: "goals",
           h: "today",
           k: "kanban",
           m: "mindmap",
@@ -126,7 +132,9 @@ function HomeInner() {
   const commands: Command[] = useMemo(
     () => [
       { id: "new", label: "Nova tarefa", hint: "N", run: openNewTask },
-      { id: "today", label: "Ir para Hoje", hint: "G H", run: () => setView("today") },
+      { id: "schedule", label: "Ir para Cronograma", hint: "G C", run: () => setView("schedule") },
+      { id: "goals", label: "Ir para Objetivos", hint: "G O", run: () => setView("goals") },
+      { id: "today", label: "Ir para Hoje (foco)", hint: "G H", run: () => setView("today") },
       { id: "kanban", label: "Ir para Kanban", hint: "G K", run: () => setView("kanban") },
       { id: "mind", label: "Ir para Mapa mental", hint: "G M", run: () => setView("mindmap") },
       {
@@ -202,6 +210,15 @@ function HomeInner() {
           onOpenPalette={() => setPaletteOpen(true)}
         />
         <div className="min-h-0 flex-1 overflow-y-auto">
+          {view === "schedule" && <ScheduleView />}
+          {view === "goals" && (
+            <GoalsView
+              onOpenTopic={(id) => {
+                setSelectedTopicId(id);
+                setView("project");
+              }}
+            />
+          )}
           {view === "today" && (
             <TodayView
               onOpenKanban={() => setView("kanban")}

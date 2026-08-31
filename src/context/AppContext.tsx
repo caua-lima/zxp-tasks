@@ -12,6 +12,7 @@ import {
 import { v4 as uuid } from "uuid";
 import {
   Board,
+  ScheduleBlock,
   Task,
   TaskStatus,
   Topic,
@@ -28,6 +29,13 @@ import { todayISO } from "@/lib/date-utils";
 import { useAuth } from "./AuthContext";
 import { pushBoardToCloud, subscribeToCloudBoard } from "@/lib/cloud-sync";
 import { createTask, NewTaskInput } from "@/lib/task-factory";
+import {
+  completeBlock,
+  pauseBlock,
+  reopenBlock,
+  resetBlock,
+  startBlock,
+} from "@/lib/schedule";
 
 export type { NewTaskInput };
 
@@ -57,6 +65,17 @@ interface AppContextValue {
   focusToday: string[];
   toggleFocus: (id: string) => void;
   saveWeeklyReview: (note: Omit<WeeklyReviewNote, "id" | "createdAt">) => void;
+  /** Cronograma do dia — blocos de trabalho com cronômetro. */
+  schedule: ScheduleBlock[];
+  addBlock: (date: string, title: string, plannedMinutes: number) => void;
+  updateBlock: (id: string, patch: Partial<Omit<ScheduleBlock, "id">>) => void;
+  removeBlock: (id: string) => void;
+  startTimer: (id: string) => void;
+  pauseTimer: (id: string) => void;
+  finishBlock: (id: string) => void;
+  reopenTimer: (id: string) => void;
+  resetTimer: (id: string) => void;
+  copyDay: (fromDate: string, toDate: string) => number;
   /** Última tarefa aberta em qualquer tela — alvo dos atalhos E e D. */
   rememberOpenedTask: (id: string) => void;
   getLastOpenedTaskId: () => string | null;
@@ -417,6 +436,104 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
   const getLastOpenedTaskId = useCallback(() => lastOpenedTask.current, []);
 
+  // ── Cronograma ────────────────────────────────────────────────────────
+  const addBlock = useCallback((date: string, title: string, plannedMinutes: number) => {
+    setBoard((b) => {
+      const doDia = b.schedule.filter((x) => x.date === date);
+      const nextOrder = doDia.length === 0 ? 0 : Math.max(...doDia.map((x) => x.order)) + 1;
+      const block: ScheduleBlock = {
+        id: uuid(),
+        date,
+        title: title.trim(),
+        plannedMinutes,
+        accumulatedMs: 0,
+        order: nextOrder,
+      };
+      return { ...b, schedule: [...b.schedule, block] };
+    });
+  }, []);
+
+  const updateBlock = useCallback(
+    (id: string, patch: Partial<Omit<ScheduleBlock, "id">>) => {
+      setBoard((b) => ({
+        ...b,
+        schedule: b.schedule.map((x) => (x.id === id ? { ...x, ...patch } : x)),
+      }));
+    },
+    []
+  );
+
+  const removeBlock = useCallback((id: string) => {
+    setBoard((b) => ({ ...b, schedule: b.schedule.filter((x) => x.id !== id) }));
+  }, []);
+
+  /**
+   * Só um cronômetro roda por vez: startar um bloco pausa o que estiver
+   * rodando. Dois relógios correndo juntos contariam o mesmo minuto duas
+   * vezes, e o total do dia deixaria de significar alguma coisa.
+   */
+  const startTimer = useCallback((id: string) => {
+    const nowIso = new Date().toISOString();
+    const nowMs = Date.now();
+    setBoard((b) => ({
+      ...b,
+      schedule: b.schedule.map((x) => {
+        if (x.id === id) return startBlock(x, nowIso);
+        return x.startedAt && !x.completedAt ? pauseBlock(x, nowMs) : x;
+      }),
+    }));
+  }, []);
+
+  const pauseTimer = useCallback((id: string) => {
+    const nowMs = Date.now();
+    setBoard((b) => ({
+      ...b,
+      schedule: b.schedule.map((x) => (x.id === id ? pauseBlock(x, nowMs) : x)),
+    }));
+  }, []);
+
+  const finishBlock = useCallback((id: string) => {
+    const nowIso = new Date().toISOString();
+    setBoard((b) => ({
+      ...b,
+      schedule: b.schedule.map((x) => (x.id === id ? completeBlock(x, nowIso) : x)),
+    }));
+  }, []);
+
+  const reopenTimer = useCallback((id: string) => {
+    setBoard((b) => ({
+      ...b,
+      schedule: b.schedule.map((x) => (x.id === id ? reopenBlock(x) : x)),
+    }));
+  }, []);
+
+  const resetTimer = useCallback((id: string) => {
+    setBoard((b) => ({
+      ...b,
+      schedule: b.schedule.map((x) => (x.id === id ? resetBlock(x) : x)),
+    }));
+  }, []);
+
+  /** Copia a estrutura de um dia pro outro, com os cronômetros zerados. */
+  const copyDay = useCallback((fromDate: string, toDate: string) => {
+    let copiados = 0;
+    setBoard((b) => {
+      const origem = b.schedule.filter((x) => x.date === fromDate);
+      if (origem.length === 0) return b;
+      copiados = origem.length;
+      const novos = origem.map((x, i) => ({
+        id: uuid(),
+        date: toDate,
+        title: x.title,
+        plannedMinutes: x.plannedMinutes,
+        accumulatedMs: 0,
+        order: i,
+      }));
+      return { ...b, schedule: [...b.schedule.filter((x) => x.date !== toDate), ...novos] };
+    });
+    return copiados;
+  }, []);
+
   const exportData = useCallback(() => JSON.stringify(board, null, 2), [board]);
 
   const importData = useCallback(
@@ -468,6 +585,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       focusToday,
       toggleFocus,
       saveWeeklyReview,
+      schedule: board.schedule,
+      addBlock,
+      updateBlock,
+      removeBlock,
+      startTimer,
+      pauseTimer,
+      finishBlock,
+      reopenTimer,
+      resetTimer,
+      copyDay,
       rememberOpenedTask,
       getLastOpenedTaskId,
       exportData,
@@ -498,6 +625,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       focusToday,
       toggleFocus,
       saveWeeklyReview,
+      addBlock,
+      updateBlock,
+      removeBlock,
+      startTimer,
+      pauseTimer,
+      finishBlock,
+      reopenTimer,
+      resetTimer,
+      copyDay,
       rememberOpenedTask,
       getLastOpenedTaskId,
       exportData,

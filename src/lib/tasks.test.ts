@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { Task, Topic, emptyBoard } from "./types";
+import { ScheduleBlock, Task, Topic, emptyBoard } from "./types";
 import { migrateBoard } from "./task-migrations";
 import {
   isTaskOverdue,
@@ -25,6 +25,21 @@ import {
 } from "./recurrence";
 import { parseBRL, formatBRL, centsToInput } from "./money";
 import { createTask } from "./task-factory";
+import {
+  MINUTE_MS,
+  blocksOfDay,
+  completeBlock,
+  elapsedMs,
+  formatDuration,
+  isOvertime,
+  isRunning,
+  pauseBlock,
+  progressPercent,
+  remainingMs,
+  resetBlock,
+  scheduleTotals,
+  startBlock,
+} from "./schedule";
 import {
   wishlistTotals,
   isWishlist,
@@ -984,5 +999,135 @@ describe("criação de tarefa (o construtor não pode engolir campo)", () => {
     assert.equal(criada.priority, "medium");
     assert.deepEqual(criada.tags, []);
     assert.equal(criada.priceCents, undefined);
+  });
+});
+
+describe("cronograma — cronômetro", () => {
+  const T0 = new Date("2026-08-16T10:00:00.000Z").getTime();
+
+  function bloco(partial: Partial<ScheduleBlock> = {}): ScheduleBlock {
+    return {
+      id: "b1",
+      date: "2026-08-16",
+      title: "Chamar leads",
+      plannedMinutes: 40,
+      accumulatedMs: 0,
+      order: 0,
+      ...partial,
+    };
+  }
+
+  test("bloco parado não conta tempo", () => {
+    assert.equal(elapsedMs(bloco(), T0), 0);
+    assert.equal(isRunning(bloco()), false);
+  });
+
+  test("bloco rodando conta a partir do instante de início", () => {
+    const b = bloco({ startedAt: new Date(T0).toISOString() });
+    assert.equal(elapsedMs(b, T0 + 5 * MINUTE_MS), 5 * MINUTE_MS);
+    assert.equal(isRunning(b), true);
+  });
+
+  test("o tempo continua correndo com o app fechado (é o instante que manda)", () => {
+    // Ligou às 10h, voltou ao app 25 min depois: tem que mostrar 25 min,
+    // não zero — nada depende de um contador rodando na tela.
+    const b = startBlock(bloco(), new Date(T0).toISOString());
+    assert.equal(elapsedMs(b, T0 + 25 * MINUTE_MS), 25 * MINUTE_MS);
+  });
+
+  test("pausar acumula e parar de contar", () => {
+    const rodando = startBlock(bloco(), new Date(T0).toISOString());
+    const pausado = pauseBlock(rodando, T0 + 10 * MINUTE_MS);
+    assert.equal(pausado.accumulatedMs, 10 * MINUTE_MS);
+    assert.equal(isRunning(pausado), false);
+    // Meia hora depois, parado, continua marcando os mesmos 10 min.
+    assert.equal(elapsedMs(pausado, T0 + 40 * MINUTE_MS), 10 * MINUTE_MS);
+  });
+
+  test("retomar soma em cima do que já tinha", () => {
+    let b = startBlock(bloco(), new Date(T0).toISOString());
+    b = pauseBlock(b, T0 + 10 * MINUTE_MS);
+    b = startBlock(b, new Date(T0 + 20 * MINUTE_MS).toISOString());
+    assert.equal(elapsedMs(b, T0 + 25 * MINUTE_MS), 15 * MINUTE_MS);
+  });
+
+  test("tempo restante e passar do combinado", () => {
+    const b = startBlock(bloco({ plannedMinutes: 40 }), new Date(T0).toISOString());
+    assert.equal(remainingMs(b, T0 + 30 * MINUTE_MS), 10 * MINUTE_MS);
+    assert.equal(isOvertime(b, T0 + 30 * MINUTE_MS), false);
+    assert.equal(remainingMs(b, T0 + 45 * MINUTE_MS), -5 * MINUTE_MS);
+    assert.equal(isOvertime(b, T0 + 45 * MINUTE_MS), true);
+  });
+
+  test("concluir congela o tempo — bloco feito não segue contando", () => {
+    const rodando = startBlock(bloco(), new Date(T0).toISOString());
+    const feito = completeBlock(rodando, new Date(T0 + 40 * MINUTE_MS).toISOString());
+    assert.equal(isRunning(feito), false);
+    assert.equal(elapsedMs(feito, T0 + 999 * MINUTE_MS), 40 * MINUTE_MS);
+  });
+
+  test("relógio andando pra trás não faz o tempo encolher", () => {
+    const b = startBlock(bloco(), new Date(T0).toISOString());
+    assert.equal(elapsedMs(b, T0 - 10 * MINUTE_MS), 0);
+  });
+
+  test("startar duas vezes não reinicia nem duplica a contagem", () => {
+    const b = startBlock(bloco(), new Date(T0).toISOString());
+    const denovo = startBlock(b, new Date(T0 + 5 * MINUTE_MS).toISOString());
+    assert.equal(denovo.startedAt, b.startedAt);
+    assert.equal(elapsedMs(denovo, T0 + 10 * MINUTE_MS), 10 * MINUTE_MS);
+  });
+
+  test("zerar limpa o cronômetro mas mantém o bloco", () => {
+    let b = startBlock(bloco(), new Date(T0).toISOString());
+    b = completeBlock(b, new Date(T0 + 40 * MINUTE_MS).toISOString());
+    const zerado = resetBlock(b);
+    assert.equal(elapsedMs(zerado, T0 + 99 * MINUTE_MS), 0);
+    assert.equal(zerado.completedAt, undefined);
+    assert.equal(zerado.title, "Chamar leads");
+  });
+
+  test("formata o tempo do jeito que se lê de relance", () => {
+    assert.equal(formatDuration(0), "00:00");
+    assert.equal(formatDuration(65 * 1000), "01:05");
+    assert.equal(formatDuration(40 * MINUTE_MS), "40:00");
+    assert.equal(formatDuration(65 * MINUTE_MS), "1:05:00");
+    assert.equal(formatDuration(-5000), "00:00");
+  });
+
+  test("progresso trava em 100% mesmo passando do tempo", () => {
+    const b = startBlock(bloco({ plannedMinutes: 40 }), new Date(T0).toISOString());
+    assert.equal(progressPercent(b, T0 + 20 * MINUTE_MS), 50);
+    assert.equal(progressPercent(b, T0 + 80 * MINUTE_MS), 100);
+  });
+
+  test("totais do dia somam planejado, gasto e concluídos", () => {
+    const b1 = completeBlock(
+      startBlock(bloco({ id: "1", plannedMinutes: 40 }), new Date(T0).toISOString()),
+      new Date(T0 + 40 * MINUTE_MS).toISOString()
+    );
+    const b2 = bloco({ id: "2", plannedMinutes: 30 });
+    const t = scheduleTotals([b1, b2], T0 + 40 * MINUTE_MS);
+    assert.equal(t.plannedMs, 70 * MINUTE_MS);
+    assert.equal(t.elapsedMs, 40 * MINUTE_MS);
+    assert.equal(t.doneCount, 1);
+    assert.equal(t.total, 2);
+    assert.equal(t.runningId, null);
+  });
+
+  test("totais apontam qual bloco está rodando", () => {
+    const rodando = startBlock(bloco({ id: "x" }), new Date(T0).toISOString());
+    assert.equal(scheduleTotals([bloco({ id: "y" }), rodando], T0).runningId, "x");
+  });
+
+  test("a mesma atividade pode aparecer várias vezes no mesmo dia", () => {
+    // É o caso da agenda de papel: leads de manhã, leads à tarde.
+    const dia = [
+      bloco({ id: "1", title: "Leads", plannedMinutes: 40, order: 0 }),
+      bloco({ id: "2", title: "Leads", plannedMinutes: 30, order: 5 }),
+      bloco({ id: "3", title: "Instagram", plannedMinutes: 30, order: 2, date: "2026-08-17" }),
+    ];
+    const hoje = blocksOfDay(dia, "2026-08-16");
+    assert.deepEqual(hoje.map((b) => b.id), ["1", "2"]);
   });
 });

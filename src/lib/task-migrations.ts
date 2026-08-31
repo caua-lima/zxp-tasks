@@ -1,6 +1,7 @@
 import {
   Board,
   ChecklistItem,
+  ScheduleBlock,
   CURRENT_SCHEMA_VERSION,
   Recurrence,
   Task,
@@ -141,6 +142,32 @@ function migrateTopic(raw: unknown): Topic | null {
   };
 }
 
+function migrateScheduleBlock(raw: unknown): ScheduleBlock | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const date = asString(r.date);
+  const title = asString(r.title);
+  if (!date || !title) return null;
+  const planned =
+    typeof r.plannedMinutes === "number" && Number.isFinite(r.plannedMinutes) && r.plannedMinutes > 0
+      ? Math.round(r.plannedMinutes)
+      : 30;
+  return {
+    id: asString(r.id) ?? crypto.randomUUID(),
+    date,
+    title,
+    plannedMinutes: planned,
+    startedAt: asString(r.startedAt),
+    // Tempo acumulado inválido viraria NaN e contaminaria o total do dia.
+    accumulatedMs:
+      typeof r.accumulatedMs === "number" && Number.isFinite(r.accumulatedMs) && r.accumulatedMs >= 0
+        ? r.accumulatedMs
+        : 0,
+    completedAt: asString(r.completedAt),
+    order: typeof r.order === "number" && Number.isFinite(r.order) ? r.order : 0,
+  };
+}
+
 function migrateWeeklyReview(raw: unknown): WeeklyReviewNote | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
@@ -175,6 +202,9 @@ export function migrateBoard(raw: unknown): Board {
   const weeklyReviews = Array.isArray(r.weeklyReviews)
     ? r.weeklyReviews.map(migrateWeeklyReview).filter((w): w is WeeklyReviewNote => w !== null)
     : [];
+  const schedule = Array.isArray(r.schedule)
+    ? r.schedule.map(migrateScheduleBlock).filter((b): b is ScheduleBlock => b !== null)
+    : [];
   const dailyFocus =
     r.dailyFocus && typeof r.dailyFocus === "object"
       ? (r.dailyFocus as Record<string, string[]>)
@@ -184,6 +214,7 @@ export function migrateBoard(raw: unknown): Board {
     schemaVersion: CURRENT_SCHEMA_VERSION,
     topics,
     tasks,
+    schedule,
     dailyFocus,
     weeklyReviews,
   };

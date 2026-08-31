@@ -85,21 +85,48 @@ export interface WeeklyReviewNote {
   createdAt: string;
 }
 
+/**
+ * Um bloco de trabalho do dia: "Chamar leads — 40 min".
+ *
+ * NÃO é uma tarefa: a mesma atividade aparece várias vezes no mesmo dia
+ * (leads de manhã, leads à tarde), cada uma com sua própria duração e seu
+ * próprio cronômetro. Por isso é uma sessão, não um item de lista.
+ */
+export interface ScheduleBlock {
+  id: string;
+  /** Dia local "AAAA-MM-DD" a que o bloco pertence. */
+  date: string;
+  title: string;
+  plannedMinutes: number;
+  /**
+   * Instante em que o cronômetro foi ligado, em ISO. Presente = rodando.
+   * Guardar o instante (e não um contador) faz o tempo continuar correndo
+   * com o app fechado ou o celular bloqueado — que é o uso real.
+   */
+  startedAt?: string;
+  /** Tempo somado das vezes em que já foi pausado. */
+  accumulatedMs: number;
+  completedAt?: string;
+  order: number;
+}
+
 export interface Board {
   schemaVersion: number;
   topics: Topic[];
   tasks: Task[];
+  schedule: ScheduleBlock[];
   dailyFocus: Record<string, string[]>;
   weeklyReviews: WeeklyReviewNote[];
 }
 
-export const CURRENT_SCHEMA_VERSION = 3;
+export const CURRENT_SCHEMA_VERSION = 4;
 
 export function emptyBoard(): Board {
   return {
     schemaVersion: CURRENT_SCHEMA_VERSION,
     topics: [],
     tasks: [],
+    schedule: [],
     dailyFocus: {},
     weeklyReviews: [],
   };
