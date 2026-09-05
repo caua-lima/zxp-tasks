@@ -24,12 +24,15 @@ import {
   pedirPermissao,
   permissaoAtual,
 } from "@/lib/notifications";
+import { BotaoNotificacoes } from "./BotaoNotificacoes";
+import { EditarBloco } from "./EditarBloco";
 import { useToast } from "../shared/Toast";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
 
 function BlockRow({
   block,
   projeto,
+  onEdit,
   now,
   onStart,
   onPause,
@@ -41,6 +44,7 @@ function BlockRow({
   now: number;
   projeto?: string;
   onStart: () => void;
+  onEdit: () => void;
   onPause: () => void;
   onFinish: () => void;
   onReopen: () => void;
@@ -82,6 +86,17 @@ function BlockRow({
           {projeto && (
             <p className="mt-0.5 truncate text-[11px] text-[var(--brand)]">{projeto}</p>
           )}
+        </div>
+
+        <div className="flex shrink-0 items-start gap-1">
+          <button
+            onClick={onEdit}
+            aria-label={`Editar ${block.title}`}
+            title="Editar"
+            className="min-h-[32px] rounded-md px-1.5 text-xs text-[var(--muted)] hover:bg-[var(--surface2)] hover:text-[var(--foreground)]"
+          >
+            ✎
+          </button>
         </div>
 
         <div className="shrink-0 text-right">
@@ -185,8 +200,10 @@ export function ScheduleView() {
   const [title, setTitle] = useState("");
   const [minutes, setMinutes] = useState(40);
   const [topicId, setTopicId] = useState("");
+  const [tarefaExistenteId, setTarefaExistenteId] = useState("");
   const [semTitulo, setSemTitulo] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState<ScheduleBlock | null>(null);
+  const [editando, setEditando] = useState<ScheduleBlock | null>(null);
 
   const blocks = useMemo(() => blocksOfDay(schedule, date), [schedule, date]);
 
@@ -196,6 +213,27 @@ export function ScheduleView() {
     () => topics.filter((t) => !t.archivedAt && topicKind(t) !== "wishlist"),
     [topics]
   );
+  /**
+   * Tarefas que já existem no projeto escolhido e ainda não foram feitas.
+   *
+   * O que não vai ser feito hoje é criado direto no projeto; quando o dia
+   * chega, escolher a tarefa daqui evita criar uma segunda cópia dela — que
+   * é o que acontecia antes, e deixava a mesma coisa em dois cartões.
+   */
+  const tarefasEmAberto = useMemo(() => {
+    if (!topicId) return [];
+    return tasks.filter(
+      (t) =>
+        t.topicId === topicId &&
+        t.status !== "done" &&
+        !t.deletedAt &&
+        !t.archivedAt &&
+        // Já tem bloco hoje: escolher de novo criaria dois cronômetros pra
+        // mesma tarefa e o total do dia contaria o trabalho em dobro.
+        !schedule.some((b) => b.date === date && b.taskId === t.id)
+    );
+  }, [tasks, topicId, schedule, date]);
+
   const nomeDoProjeto = useMemo(() => {
     const mapa = new Map(topics.map((t) => [t.id, t.name]));
     return (id: string | undefined) => (id ? mapa.get(id) : undefined);
@@ -237,10 +275,14 @@ export function ScheduleView() {
     startTimer(block.id);
 
     const restanteMs = Math.max(0, remainingMs(block));
-    if (permissaoAtual() === "default") await pedirPermissao();
-    if (permissaoAtual() !== "granted") return;
+    // Usa o resultado do pedido em vez de reler a permissão: no iPhone a
+    // releitura logo depois do prompt ainda vinha "default" e o aviso era
+    // descartado justo na vez em que a pessoa acabara de autorizar.
+    const permissao =
+      permissaoAtual() === "default" ? await pedirPermissao() : permissaoAtual();
+    if (permissao !== "granted") return;
 
-    avisarInicio(block.title, restanteMs);
+    avisarInicio(block.title, block.plannedMinutes, restanteMs, permissao);
     agendarFim(block.id, block.title, block.plannedMinutes, restanteMs);
   }
 
@@ -254,8 +296,12 @@ export function ScheduleView() {
       showToast("Escreva o que vai fazer antes de adicionar.");
       return;
     }
-    addBlock(date, t, minutes, topicId || undefined);
+    addBlock(date, t, minutes, {
+      topicId: topicId || undefined,
+      taskId: tarefaExistenteId || undefined,
+    });
     setTitle("");
+    setTarefaExistenteId("");
     setSemTitulo(false);
   }
 
@@ -375,14 +421,40 @@ export function ScheduleView() {
                 </option>
               ))}
             </select>
+            {topicId && tarefasEmAberto.length > 0 && (
+              <select
+                value={tarefaExistenteId}
+                onChange={(e) => {
+                  setTarefaExistenteId(e.target.value);
+                  const escolhida = tasks.find((t) => t.id === e.target.value);
+                  if (escolhida) {
+                    setTitle(escolhida.title);
+                    setSemTitulo(false);
+                    if (escolhida.estimatedMinutes) setMinutes(escolhida.estimatedMinutes);
+                  }
+                }}
+                aria-label="Tarefa que já existe no projeto"
+                className="mt-1.5 min-h-[36px] w-full rounded-md border border-[var(--border)] bg-[var(--surface2)] px-2 text-xs text-[var(--foreground)] outline-none focus:border-[var(--focus)]"
+              >
+                <option value="">Criar uma tarefa nova</option>
+                {tarefasEmAberto.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.title}
+                  </option>
+                ))}
+              </select>
+            )}
             {topicId && (
               <p className="mt-1 text-[11px] text-[var(--muted)]">
-                A tarefa também vai ser criada dentro do projeto — não precisa
-                escrever nos dois lugares.
+                {tarefaExistenteId
+                  ? "Vai usar essa tarefa que já existe — nenhuma cópia é criada."
+                  : "A tarefa também vai ser criada dentro do projeto — não precisa escrever nos dois lugares."}
               </p>
             )}
           </div>
         )}
+
+        <BotaoNotificacoes />
       </form>
 
       {blocks.length === 0 ? (
@@ -414,6 +486,7 @@ export function ScheduleView() {
               block={block}
               now={now}
               projeto={nomeDoProjeto(block.topicId)}
+              onEdit={() => setEditando(block)}
               onStart={() => iniciarComAviso(block)}
               onPause={() => {
                 pauseTimer(block.id);
@@ -444,6 +517,14 @@ export function ScheduleView() {
             />
           ))}
         </ul>
+      )}
+
+      {editando && (
+        <EditarBloco
+          block={editando}
+          projetos={projetosDisponiveis}
+          onClose={() => setEditando(null)}
+        />
       )}
 
       {confirmRemove && (

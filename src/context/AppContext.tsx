@@ -67,7 +67,12 @@ interface AppContextValue {
   saveWeeklyReview: (note: Omit<WeeklyReviewNote, "id" | "createdAt">) => void;
   /** Cronograma do dia — blocos de trabalho com cronômetro. */
   schedule: ScheduleBlock[];
-  addBlock: (date: string, title: string, plannedMinutes: number, topicId?: string) => void;
+  addBlock: (
+    date: string,
+    title: string,
+    plannedMinutes: number,
+    vinculo?: { topicId?: string; taskId?: string }
+  ) => void;
   updateBlock: (id: string, patch: Partial<Omit<ScheduleBlock, "id">>) => void;
   removeBlock: (id: string) => void;
   startTimer: (id: string) => void;
@@ -407,18 +412,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
    * digitar duas vezes é justamente o trabalho que o app deveria poupar.
    */
   const addBlock = useCallback(
-    (date: string, title: string, plannedMinutes: number, topicId?: string) => {
+    (
+      date: string,
+      title: string,
+      plannedMinutes: number,
+      vinculo?: { topicId?: string; taskId?: string }
+    ) => {
       const blockId = uuid();
-      const taskId = uuid();
+      const novaTarefaId = uuid();
       const now = new Date().toISOString();
 
       setBoard((b) => {
         const doDia = b.schedule.filter((x) => x.date === date);
         const nextOrder = doDia.length === 0 ? 0 : Math.max(...doDia.map((x) => x.order)) + 1;
-        // Projeto que sumiu entre escolher e salvar não pode gerar tarefa
-        // órfã — sem tópico, o bloco simplesmente fica solto.
-        const topico = topicId ? b.topics.find((t) => t.id === topicId) : undefined;
+        // Projeto ou tarefa que sumiram entre escolher e salvar não podem
+        // virar vínculo quebrado — sem eles o bloco fica simplesmente solto.
+        const topico = vinculo?.topicId
+          ? b.topics.find((t) => t.id === vinculo.topicId)
+          : undefined;
+        const existente = vinculo?.taskId
+          ? b.tasks.find((t) => t.id === vinculo.taskId && !t.deletedAt)
+          : undefined;
 
+        const criarTarefa = !!topico && !existente;
         const block: ScheduleBlock = {
           id: blockId,
           date,
@@ -426,10 +442,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           plannedMinutes,
           accumulatedMs: 0,
           order: nextOrder,
-          topicId: topico?.id,
-          taskId: topico ? taskId : undefined,
+          topicId: existente?.topicId ?? topico?.id,
+          taskId: existente?.id ?? (criarTarefa ? novaTarefaId : undefined),
         };
-        if (!topico) return { ...b, schedule: [...b.schedule, block] };
+
+        if (!criarTarefa) return { ...b, schedule: [...b.schedule, block] };
 
         const task = createTask(
           {
@@ -438,7 +455,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             status: "todo",
             estimatedMinutes: plannedMinutes,
           },
-          taskId,
+          novaTarefaId,
           now
         );
         return { ...b, tasks: [...b.tasks, task], schedule: [...b.schedule, block] };
@@ -469,13 +486,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const startTimer = useCallback((id: string) => {
     const nowIso = new Date().toISOString();
     const nowMs = Date.now();
-    setBoard((b) => ({
-      ...b,
-      schedule: b.schedule.map((x) => {
-        if (x.id === id) return startBlock(x, nowIso);
-        return x.startedAt && !x.completedAt ? pauseBlock(x, nowMs) : x;
-      }),
-    }));
+    setBoard((b) => {
+      const block = b.schedule.find((x) => x.id === id);
+      // Ligar o cronômetro move a tarefa do projeto pra "Fazendo": é a mesma
+      // informação dita duas vezes, e arrastar o cartão à mão depois de já
+      // ter apertado "Começar" é trabalho que o app pode poupar.
+      const vinculada = block?.taskId
+        ? b.tasks.find((t) => t.id === block.taskId && t.status === "todo")
+        : undefined;
+
+      return {
+        ...b,
+        schedule: b.schedule.map((x) => {
+          if (x.id === id) return startBlock(x, nowIso);
+          return x.startedAt && !x.completedAt ? pauseBlock(x, nowMs) : x;
+        }),
+        tasks: vinculada
+          ? b.tasks.map((t) =>
+              t.id === vinculada.id
+                ? { ...t, status: "doing" as const, updatedAt: nowIso }
+                : t
+            )
+          : b.tasks,
+      };
+    });
   }, []);
 
   const pauseTimer = useCallback((id: string) => {

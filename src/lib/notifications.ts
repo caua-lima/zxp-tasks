@@ -8,9 +8,8 @@
  * - NÃO dá pra desenhar um cronômetro que corre sozinho na tela de bloqueio
  *   do iPhone. Aquilo é Live Activity, exclusivo de app nativo — nenhum app
  *   web consegue criar um. O aviso daqui é uma notificação normal, parada.
- * - No iPhone, notificação de app web só existe se o app estiver instalado
- *   na tela de início (Compartilhar → Adicionar à Tela de Início) e a
- *   permissão tiver sido concedida. No navegador comum, nada aparece.
+ * - No iPhone, notificação de app web só existe se o app tiver sido aberto
+ *   PELO ícone da tela de início. Aberto pelo Safari, a API nem existe.
  *
  * O aviso de "tempo acabou" é agendado com `setTimeout`, ou seja, depende do
  * app continuar vivo em segundo plano. O sistema pode congelar a página e
@@ -21,38 +20,85 @@
 
 const TAG_INICIO = "zxp-bloco-rodando";
 
+export type EstadoNotificacao =
+  /** O navegador não tem a API — no iPhone, isso quer dizer "abra pelo ícone". */
+  | "indisponivel"
+  /** Dá pra pedir. */
+  | "default"
+  | "granted"
+  | "denied";
+
 function suportado(): boolean {
-  return typeof window !== "undefined" && "Notification" in window;
+  return (
+    typeof window !== "undefined" &&
+    "Notification" in window &&
+    "serviceWorker" in navigator
+  );
 }
 
-export function permissaoAtual(): NotificationPermission | "indisponivel" {
+/** O app foi aberto pelo ícone da tela de início (e não pelo navegador). */
+export function estaInstalado(): boolean {
+  if (typeof window === "undefined") return false;
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    // iOS antigo não implementa display-mode e usa esta propriedade própria.
+    (navigator as unknown as { standalone?: boolean }).standalone === true
+  );
+}
+
+export function permissaoAtual(): EstadoNotificacao {
   if (!suportado()) return "indisponivel";
-  return Notification.permission;
+  return Notification.permission as EstadoNotificacao;
 }
 
 /**
- * Pede a permissão. Só pode ser chamada a partir de um gesto do usuário —
- * os navegadores recusam pedidos disparados sozinhos ao abrir a página.
+ * Pede a permissão. Só funciona a partir de um gesto do usuário — navegador
+ * nenhum aceita o pedido disparado sozinho ao abrir a página.
+ *
+ * Devolve o resultado do próprio pedido em vez de reler
+ * `Notification.permission`: no Safari do iPhone o valor lido logo depois do
+ * prompt ainda vinha "default", e o aviso era descartado justamente na vez
+ * em que a pessoa acabara de autorizar.
  */
-export async function pedirPermissao(): Promise<NotificationPermission | "indisponivel"> {
+export async function pedirPermissao(): Promise<EstadoNotificacao> {
   if (!suportado()) return "indisponivel";
-  if (Notification.permission !== "default") return Notification.permission;
   try {
-    return await Notification.requestPermission();
+    const resultado = await Notification.requestPermission();
+    return resultado as EstadoNotificacao;
   } catch {
     return "denied";
   }
 }
 
-async function mostrar(titulo: string, opcoes: NotificationOptions): Promise<void> {
-  if (!suportado() || Notification.permission !== "granted") return;
+/**
+ * O service worker ativo, ou `null` se ele não aparecer a tempo.
+ *
+ * `navigator.serviceWorker.ready` NUNCA resolve quando não há worker
+ * registrado — não rejeita, fica pendurada. Sem esta corrida contra o
+ * relógio, o `await` prendia a função pra sempre e a notificação
+ * simplesmente não saía, sem erro nenhum pra denunciar o motivo.
+ */
+async function registroAtivo(timeoutMs = 3000): Promise<ServiceWorkerRegistration | null> {
+  if (!("serviceWorker" in navigator)) return null;
+  return Promise.race([
+    navigator.serviceWorker.ready.catch(() => null),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
+  ]);
+}
+
+async function mostrar(
+  titulo: string,
+  opcoes: NotificationOptions,
+  permissao: EstadoNotificacao = permissaoAtual()
+): Promise<void> {
+  if (permissao !== "granted") return;
   try {
-    // Pelo service worker quando existe: é o único caminho que funciona no
-    // Android e no iPhone instalado na tela de início. `new Notification()`
-    // fica de reserva pro desktop.
-    const registration = await navigator.serviceWorker?.getRegistration();
-    if (registration) {
-      await registration.showNotification(titulo, opcoes);
+    // Pelo service worker quando existe: é o único caminho que o iPhone
+    // aceita, e no Android é o que faz a notificação sobreviver à aba
+    // fechar. `new Notification()` cobre o desktop sem worker.
+    const registro = await registroAtivo();
+    if (registro) {
+      await registro.showNotification(titulo, opcoes);
       return;
     }
     new Notification(titulo, opcoes);
@@ -60,6 +106,12 @@ async function mostrar(titulo: string, opcoes: NotificationOptions): Promise<voi
     // Notificação é enfeite: se falhar, o app segue funcionando igual.
   }
 }
+
+const BASE: NotificationOptions = {
+  icon: "/manifest-icon-192",
+  badge: "/manifest-icon-192",
+  tag: TAG_INICIO,
+};
 
 function horario(instante: number): string {
   return new Date(instante).toLocaleTimeString("pt-BR", {
@@ -69,31 +121,48 @@ function horario(instante: number): string {
 }
 
 /** `restanteMs` é quanto falta do bloco a partir de agora. */
-export function avisarInicio(titulo: string, restanteMs: number): void {
-  void mostrar(`▶ ${titulo}`, {
-    body: `Em andamento — termina às ${horario(Date.now() + restanteMs)}.`,
-    tag: TAG_INICIO,
-    icon: "/manifest-icon-192",
-    badge: "/manifest-icon-192",
-    // Sem som/vibração: começar a trabalhar não é um alarme.
-    silent: true,
-  });
+export function avisarInicio(
+  titulo: string,
+  minutos: number,
+  restanteMs: number,
+  permissao?: EstadoNotificacao
+): void {
+  void mostrar(
+    `▶ ${titulo}`,
+    {
+      ...BASE,
+      body: `Tarefa de ${minutos} min iniciada. Termina às ${horario(Date.now() + restanteMs)}.`,
+      // Sem som: começar a trabalhar não é um alarme.
+      silent: true,
+    },
+    permissao
+  );
 }
 
 export function avisarFim(titulo: string, minutos: number): void {
   void mostrar(`⏱ ${titulo}`, {
+    ...BASE,
     body: `Os ${minutos} min planejados acabaram.`,
-    tag: TAG_INICIO,
-    icon: "/manifest-icon-192",
-    badge: "/manifest-icon-192",
   });
+}
+
+/** Aviso de teste, pra pessoa conferir na hora que ativou. */
+export function avisarTeste(permissao?: EstadoNotificacao): void {
+  void mostrar(
+    "ZXP Tasks",
+    {
+      ...BASE,
+      tag: "zxp-teste",
+      body: "Pronto — é assim que os avisos do cronômetro vão chegar.",
+    },
+    permissao
+  );
 }
 
 /** Tira o aviso de "em andamento" da central — ao pausar ou concluir. */
 export function limparAvisoDeInicio(): void {
   if (!suportado()) return;
-  void navigator.serviceWorker
-    ?.getRegistration()
+  void registroAtivo()
     .then((reg) => reg?.getNotifications({ tag: TAG_INICIO }))
     .then((notificacoes) => notificacoes?.forEach((n) => n.close()))
     .catch(() => {});

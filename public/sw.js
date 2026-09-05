@@ -58,3 +58,19 @@ self.addEventListener("fetch", (event) => {
     )
   );
 });
+
+/**
+ * Tocar na notificação traz o app pra frente em vez de abrir outra janela —
+ * no celular, abrir uma segunda instância do PWA é desnorteante.
+ */
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        if ("focus" in client) return client.focus();
+      }
+      return self.clients.openWindow("/");
+    })
+  );
+});

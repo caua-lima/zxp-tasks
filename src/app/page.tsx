@@ -18,6 +18,7 @@ import { AccountPanel } from "@/components/shared/AccountPanel";
 import { CommandPalette, Command } from "@/components/shared/CommandPalette";
 import { ShortcutsHelp } from "@/components/shared/ShortcutsHelp";
 import { ToastProvider, useToast } from "@/components/shared/Toast";
+import { PuxarParaRecarregar } from "@/components/shared/PuxarParaRecarregar";
 import { SortKey, TaskFilters } from "@/lib/task-filters";
 import { Task } from "@/lib/types";
 
@@ -208,7 +209,7 @@ function HomeInner() {
           onOpenData={() => setDataOpen(true)}
           onOpenPalette={() => setPaletteOpen(true)}
         />
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <PuxarParaRecarregar className="min-h-0 flex-1 overflow-y-auto">
           {view === "schedule" && <ScheduleView />}
           {view === "goals" && (
             <GoalsView
@@ -237,7 +238,7 @@ function HomeInner() {
                 Escolha um tópico na barra lateral.
               </div>
             ))}
-        </div>
+        </PuxarParaRecarregar>
       </main>
 
       {paletteOpen && (

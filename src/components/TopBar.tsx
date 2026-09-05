@@ -3,6 +3,7 @@
 import { TaskFilters, SortKey } from "@/lib/task-filters";
 import { TaskEnergy, TaskPriority } from "@/lib/types";
 import { ENERGY_LABEL, ENERGY_ORDER, PRIORITY_LABEL, PRIORITY_ORDER } from "@/lib/priority";
+import { ZxpMark } from "./ZxpMark";
 
 interface TopBarProps {
   title: string;
@@ -48,6 +49,12 @@ export function TopBar({
           >
             ☰
           </button>
+          {/* No celular a barra lateral fica escondida, e com ela sumia a
+              única marca da tela. Aqui a logo aparece só no mobile — no
+              desktop ela já está no topo da lateral, e repetir vira ruído. */}
+          <span className="md:hidden">
+            <ZxpMark size={24} />
+          </span>
           <h2 className="truncate text-sm font-semibold text-[var(--foreground)]">{title}</h2>
         </div>
         <div className="flex shrink-0 items-center gap-2">
