@@ -16,7 +16,8 @@ const sora = Sora({
 
 export const metadata: Metadata = {
   title: "ZXP Tasks",
-  description: "Kanban pessoal por tópicos, com mapa mental das tarefas. Um produto ZXP Solutions.",
+  description:
+    "Cronograma do dia com cronômetro e seus objetivos. Um produto ZXP Solutions.",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
