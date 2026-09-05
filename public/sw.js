@@ -1,4 +1,4 @@
-const CACHE = "zxp-tasks-v3";
+const CACHE = "zxp-tasks-v4";
 
 self.addEventListener("install", () => {
   self.skipWaiting();

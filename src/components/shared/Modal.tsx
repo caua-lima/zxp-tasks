@@ -15,6 +15,17 @@ const FOCUSABLE =
 
 export function Modal({ title, onClose, children, footer, wide }: ModalProps) {
   const ref = useRef<HTMLDivElement>(null);
+  /**
+   * Só fecha no clique de fundo se o dedo/mouse TAMBÉM desceu no fundo.
+   *
+   * O `click` do DOM dispara no ancestral comum de onde apertou e onde
+   * soltou: começar a selecionar o texto de um campo e soltar fora do
+   * diálogo fechava tudo e perdia o que estava escrito. Pior no celular —
+   * o seletor nativo de um `<select>` é desenhado por cima da página, e ao
+   * escolher a opção o toque chegava no fundo, fechando o modal alguns
+   * segundos depois de abrir a lista.
+   */
+  const desceuNoFundo = useRef(false);
 
   useEffect(() => {
     const previouslyFocused = document.activeElement as HTMLElement | null;
@@ -52,14 +63,19 @@ export function Modal({ title, onClose, children, footer, wide }: ModalProps) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-      onClick={onClose}
+      onPointerDown={(e) => {
+        desceuNoFundo.current = e.target === e.currentTarget;
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget && desceuNoFundo.current) onClose();
+        desceuNoFundo.current = false;
+      }}
     >
       <div
         ref={ref}
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        onClick={(e) => e.stopPropagation()}
         className={`flex max-h-[90dvh] w-full flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--sidebar)] shadow-xl ${
           wide ? "max-w-2xl" : "max-w-md"
         }`}

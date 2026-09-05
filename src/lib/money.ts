@@ -58,3 +58,44 @@ export function parseBRL(input: string): number | null {
   if (!Number.isFinite(value)) return null;
   return Math.round(value * 100);
 }
+
+export interface ValorComposto {
+  /** Soma de todas as partes, em centavos. */
+  cents: number;
+  /** Cada valor encontrado, em centavos, na ordem em que foi escrito. */
+  parts: number[];
+}
+
+/**
+ * Lê um preço montado por partes: "multimídia 1.200 + mão de obra 300".
+ *
+ * Um desejo quase nunca tem um preço só — tem o produto e o que falta pra
+ * ele funcionar (instalação, frete, mão de obra). Obrigar a pessoa a somar
+ * de cabeça antes de digitar é justamente o tipo de conta que ela abriu o
+ * app pra não fazer.
+ *
+ * A regra é simples de propósito: soma TODO número que aparecer no texto, o
+ * resto é rótulo livre. Aceita o sufixo "k" ("1.2k" = 1.200) porque é como
+ * preço costuma ser falado.
+ *
+ * Devolve `null` quando não há número nenhum — campo vazio precisa continuar
+ * distinguível de "custa zero".
+ */
+export function parseValorComposto(input: string): ValorComposto | null {
+  const parts: number[] = [];
+  // Um número é uma sequência de dígitos com pontos/vírgulas no meio; o "k"
+  // logo depois multiplica por mil. Tudo que não casa é rótulo e é ignorado.
+  const regex = /\d[\d.,]*\s*k?/gi;
+
+  for (const match of input.matchAll(regex)) {
+    const bruto = match[0].trim();
+    const temK = /k$/i.test(bruto);
+    const numero = temK ? bruto.slice(0, -1).trim() : bruto;
+    const cents = parseBRL(numero);
+    if (cents === null) continue;
+    parts.push(temK ? cents * 1000 : cents);
+  }
+
+  if (parts.length === 0) return null;
+  return { cents: parts.reduce((a, b) => a + b, 0), parts };
+}

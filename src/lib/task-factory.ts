@@ -11,6 +11,7 @@ export interface NewTaskInput {
   estimatedMinutes?: number;
   tags?: string[];
   priceCents?: number;
+  priceParts?: string;
   url?: string;
   store?: string;
 }
@@ -36,6 +37,7 @@ export function createTask(input: NewTaskInput, id: string, now: string): Task {
     energy: input.energy,
     estimatedMinutes: input.estimatedMinutes,
     priceCents: input.priceCents,
+    priceParts: input.priceParts,
     url: input.url,
     store: input.store,
     tags: input.tags ?? [],

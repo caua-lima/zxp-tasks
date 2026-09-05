@@ -41,6 +41,13 @@ export interface Task {
    * "R$ 1.234,5600000001" na hora de totalizar a pasta.
    */
   priceCents?: number;
+  /**
+   * O texto exatamente como foi digitado quando o preço é montado por
+   * partes ("multimídia 1.200 + mão de obra 300"). `priceCents` guarda só
+   * a soma; sem isso, reabrir o item mostraria "1500,00" e a pessoa perderia
+   * a conta que ela mesma fez.
+   */
+  priceParts?: string;
   url?: string;
   store?: string;
 

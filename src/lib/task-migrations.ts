@@ -101,6 +101,7 @@ function migrateTask(raw: unknown): Task | null {
       typeof r.priceCents === "number" && Number.isFinite(r.priceCents) && r.priceCents >= 0
         ? Math.round(r.priceCents)
         : undefined,
+    priceParts: asString(r.priceParts),
     url: asString(r.url),
     store: asString(r.store),
     energy:

@@ -17,19 +17,43 @@ function sanitize(board: Board): Record<string, unknown> {
 }
 
 /**
- * Assinatura do último payload que ESTE cliente escreveu.
+ * Assinatura canônica: JSON com as chaves de cada objeto em ordem.
+ *
+ * `JSON.stringify` puro não serve para comparar com o que volta do banco.
+ * O `jsonb` do Postgres não guarda a ordem das chaves — ele devolve o
+ * objeto reordenado, então a comparação textual dava "diferente" mesmo
+ * quando o conteúdo era idêntico.
+ */
+function assinatura(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(assinatura).join(",")}]`;
+  if (value && typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+    return `{${Object.keys(obj)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${assinatura(obj[k])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+/**
+ * Assinatura do conteúdo que já está sincronizado com a nuvem.
  *
  * O Realtime do Supabase devolve as próprias escritas de volta (não existe
  * equivalente ao `hasPendingWrites` do Firestore). Sem esta comparação,
- * cada push local voltaria como se fosse "mudança vinda de outro aparelho"
- * e reescreveria o estado no meio da digitação.
+ * cada push local voltava como se fosse "mudança vinda de outro aparelho"
+ * e reescrevia o board inteiro ~2s depois de cada alteração — no meio da
+ * digitação, inclusive.
  */
-let lastPushed: string | null = null;
+let ultimoSincronizado: string | null = null;
 
 export async function pushBoardToCloud(uid: string, board: Board): Promise<void> {
   if (!supabase) throw new Error("Supabase não está configurado.");
   const payload = sanitize(board);
-  lastPushed = JSON.stringify(payload);
+  const marca = assinatura(payload);
+  // Nada mudou de fato: não gasta escrita nem provoca um eco desnecessário.
+  if (marca === ultimoSincronizado) return;
+  ultimoSincronizado = marca;
 
   const { error } = await supabase.from(TABLE).upsert(
     {
@@ -76,7 +100,12 @@ export function subscribeToCloudBoard(
         onError(error);
         return;
       }
-      onChange(data?.data ? migrateBoard(data.data) : "empty");
+      if (data?.data) {
+        ultimoSincronizado = assinatura(data.data);
+        onChange(migrateBoard(data.data));
+      } else {
+        onChange("empty");
+      }
     });
 
   const channel = client
@@ -90,7 +119,9 @@ export function subscribeToCloudBoard(
         if (!raw) return;
         // Eco da própria escrita: ignora pra não sobrescrever o que o
         // usuário está digitando neste exato aparelho.
-        if (JSON.stringify(raw) === lastPushed) return;
+        const marca = assinatura(raw);
+        if (marca === ultimoSincronizado) return;
+        ultimoSincronizado = marca;
         onChange(migrateBoard(raw));
       }
     )
@@ -102,6 +133,10 @@ export function subscribeToCloudBoard(
 
   return () => {
     cancelled = true;
+    // Zera a marca junto com a assinatura: trocar de conta precisa poder
+    // reescrever a nuvem mesmo que o conteúdo local seja idêntico ao da
+    // conta anterior — senão a linha da conta nova nunca seria criada.
+    ultimoSincronizado = null;
     client.removeChannel(channel);
   };
 }

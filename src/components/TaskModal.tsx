@@ -13,7 +13,7 @@ import {
 } from "@/lib/types";
 import { describeRecurrence } from "@/lib/recurrence";
 import { normalizeUrl, priorityLabel, statusLabels, topicKind } from "@/lib/wishlist";
-import { centsToInput, parseBRL } from "@/lib/money";
+import { centsToInput, formatBRL, parseValorComposto } from "@/lib/money";
 import {
   ENERGY_LABEL,
   ENERGY_ORDER,
@@ -71,7 +71,7 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
   const [confirmTrash, setConfirmTrash] = useState(false);
   const [titleError, setTitleError] = useState(false);
   const [priceText, setPriceText] = useState(
-    task?.priceCents !== undefined ? centsToInput(task.priceCents) : ""
+    task?.priceParts ?? (task?.priceCents !== undefined ? centsToInput(task.priceCents) : "")
   );
   const [url, setUrl] = useState(task?.url ?? "");
   const [store, setStore] = useState(task?.store ?? "");
@@ -83,7 +83,10 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
   const selectedTopic = topics.find((t) => t.id === topicId);
   const kind = topicKind(selectedTopic);
   const wishlist = kind === "wishlist";
-  const priceInvalid = priceText.trim() !== "" && parseBRL(priceText) === null;
+  const preco = priceText.trim() === "" ? null : parseValorComposto(priceText);
+  const priceInvalid = priceText.trim() !== "" && preco === null;
+  // Só vale mostrar a conta quando ela realmente foi uma conta.
+  const precoTemPartes = (preco?.parts.length ?? 0) > 1;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -105,7 +108,10 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
       priority,
       energy: energy || undefined,
       estimatedMinutes: estimate === "" ? undefined : Number(estimate),
-      priceCents: priceText.trim() === "" ? undefined : (parseBRL(priceText) ?? undefined),
+      priceCents: preco?.cents,
+      // Guarda o texto só quando ele é uma soma; um preço simples se
+      // reconstrói sozinho a partir dos centavos.
+      priceParts: precoTemPartes ? priceText.trim() : undefined,
       url: normalizeUrl(url),
       store: store.trim() || undefined,
       tags,
@@ -239,7 +245,7 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
             )}
           </div>
 
-          <div>
+          <div className={wishlist ? "hidden" : undefined}>
             <label htmlFor="task-desc" className={label}>
               Descrição
             </label>
@@ -290,7 +296,7 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
             </div>
             <div>
               <label htmlFor="task-due" className={label}>
-                {wishlist ? "Comprar até" : "Prazo"}
+                {wishlist ? "Comprar até (opcional)" : "Prazo"}
               </label>
               <input
                 id="task-due"
@@ -325,20 +331,27 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
                 </label>
                 <input
                   id="task-price"
-                  inputMode="decimal"
-                  placeholder="Ex: 1.500,00"
+                  placeholder="Ex: multimídia 1.2k + mão de obra 300"
                   value={priceText}
                   onChange={(e) => setPriceText(e.target.value)}
                   aria-invalid={priceInvalid}
-                  className={`${field} tabular-nums ${
-                    priceInvalid ? "border-[var(--danger)]" : ""
-                  }`}
+                  aria-describedby="task-price-ajuda"
+                  className={`${field} ${priceInvalid ? "border-[var(--danger)]" : ""}`}
                 />
-                {priceInvalid && (
-                  <p className="mt-1 text-[11px] text-[var(--danger)]">
-                    Não consegui ler esse valor. Use algo como 1.500,00.
-                  </p>
-                )}
+                <p id="task-price-ajuda" className="mt-1 text-[11px] text-[var(--muted)]">
+                  {priceInvalid ? (
+                    <span className="text-[var(--danger)]">
+                      Não achei nenhum valor aí. Escreva algo como 1.500 ou 1.2k + 300.
+                    </span>
+                  ) : precoTemPartes ? (
+                    <span className="text-[var(--foreground)]">
+                      Total: <strong className="tabular-nums">{formatBRL(preco!.cents)}</strong>{" "}
+                      ({preco!.parts.map((c) => formatBRL(c)).join(" + ")})
+                    </span>
+                  ) : (
+                    "Pode somar as partes: 1.2k + 300. Escreva o que quiser no meio."
+                  )}
+                </p>
               </div>
               <div>
                 <label htmlFor="task-store" className={label}>
@@ -419,7 +432,7 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
             </div>
           </div>
 
-          <div>
+          <div className={wishlist ? "hidden" : undefined}>
             <label htmlFor="task-tags" className={label}>
               Tags (separadas por vírgula)
             </label>
@@ -431,7 +444,7 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
             />
           </div>
 
-          <div>
+          <div className={wishlist ? "hidden" : undefined}>
             <label htmlFor="task-recurrence" className={label}>
               Recorrência
             </label>

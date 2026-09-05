@@ -15,6 +15,14 @@ import {
   scheduleTotals,
 } from "@/lib/schedule";
 import { addDaysISO, todayISO } from "@/lib/date-utils";
+import {
+  agendarFim,
+  avisarInicio,
+  cancelarFim,
+  limparAvisoDeInicio,
+  pedirPermissao,
+  permissaoAtual,
+} from "@/lib/notifications";
 import { useToast } from "../shared/Toast";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
 
@@ -196,6 +204,24 @@ export function ScheduleView() {
   const totals = useMemo(() => scheduleTotals(blocks, now), [blocks, now]);
   const isToday = date === todayISO();
 
+  /**
+   * Começar o bloco também avisa na central de notificações do aparelho.
+   *
+   * A permissão é pedida aqui, no clique, e não ao abrir o app: é o único
+   * momento em que o pedido faz sentido pra quem está usando — e navegador
+   * nenhum aceita o pedido fora de um gesto do usuário.
+   */
+  async function iniciarComAviso(block: ScheduleBlock) {
+    startTimer(block.id);
+
+    const restanteMs = Math.max(0, remainingMs(block));
+    if (permissaoAtual() === "default") await pedirPermissao();
+    if (permissaoAtual() !== "granted") return;
+
+    avisarInicio(block.title, restanteMs);
+    agendarFim(block.id, block.title, block.plannedMinutes, restanteMs);
+  }
+
   function handleAdd(e: React.FormEvent) {
     e.preventDefault();
     const t = title.trim();
@@ -328,10 +354,16 @@ export function ScheduleView() {
               key={block.id}
               block={block}
               now={now}
-              onStart={() => startTimer(block.id)}
-              onPause={() => pauseTimer(block.id)}
+              onStart={() => iniciarComAviso(block)}
+              onPause={() => {
+                pauseTimer(block.id);
+                cancelarFim(block.id);
+                limparAvisoDeInicio();
+              }}
               onFinish={() => {
                 finishBlock(block.id);
+                cancelarFim(block.id);
+                limparAvisoDeInicio();
                 showToast("Bloco concluído.");
               }}
               onReopen={() => reopenTimer(block.id)}

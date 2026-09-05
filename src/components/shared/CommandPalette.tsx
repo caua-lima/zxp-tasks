@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { Task } from "@/lib/types";
 
@@ -21,6 +21,7 @@ export function CommandPalette({ commands, onOpenTask, onClose }: CommandPalette
   const { tasks } = useApp();
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState(0);
+  const desceuNoFundo = useRef(false);
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -66,13 +67,20 @@ export function CommandPalette({ commands, onOpenTask, onClose }: CommandPalette
   return (
     <div
       className="fixed inset-0 z-[70] flex items-start justify-center bg-black/60 p-4 pt-[12vh]"
-      onClick={onClose}
+      // Mesma regra do Modal: soltar o clique no fundo só fecha se ele
+      // também tiver começado no fundo.
+      onPointerDown={(e) => {
+        desceuNoFundo.current = e.target === e.currentTarget;
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget && desceuNoFundo.current) onClose();
+        desceuNoFundo.current = false;
+      }}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Paleta de comandos"
-        onClick={(e) => e.stopPropagation()}
         className="w-full max-w-lg overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--sidebar)] shadow-xl"
       >
         <input

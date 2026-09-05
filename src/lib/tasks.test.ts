@@ -23,7 +23,7 @@ import {
   describeRecurrence,
   skipOccurrence,
 } from "./recurrence";
-import { parseBRL, formatBRL, centsToInput } from "./money";
+import { parseBRL, formatBRL, centsToInput, parseValorComposto } from "./money";
 import { createTask } from "./task-factory";
 import { traduzErroAuth } from "./auth-errors";
 import {
@@ -1265,4 +1265,23 @@ describe("mescla automática entre aparelhos", () => {
     assert.equal(r.tasks.length, 1);
     assert.equal(r.schedule.length, 1);
   });
+});
+
+test("parseValorComposto soma as partes escritas com rótulo", () => {
+  const r = parseValorComposto("multimídia 1.200 + mão de obra 300");
+  assert.deepEqual(r, { cents: 150000, parts: [120000, 30000] });
+});
+
+test("parseValorComposto entende o sufixo k", () => {
+  assert.equal(parseValorComposto("1.2k")?.cents, 120000);
+  assert.equal(parseValorComposto("multimídia 1.2k + 300")?.cents, 150000);
+});
+
+test("parseValorComposto continua lendo um preço simples", () => {
+  assert.deepEqual(parseValorComposto("1.500,00"), { cents: 150000, parts: [150000] });
+});
+
+test("parseValorComposto devolve null quando não há número — vazio não é zero", () => {
+  assert.equal(parseValorComposto(""), null);
+  assert.equal(parseValorComposto("mão de obra"), null);
 });
