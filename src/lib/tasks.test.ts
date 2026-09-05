@@ -25,6 +25,7 @@ import {
 } from "./recurrence";
 import { parseBRL, formatBRL, centsToInput } from "./money";
 import { createTask } from "./task-factory";
+import { traduzErroAuth } from "./auth-errors";
 import {
   MINUTE_MS,
   blocksOfDay,
@@ -1129,5 +1130,46 @@ describe("cronograma — cronômetro", () => {
     ];
     const hoje = blocksOfDay(dia, "2026-08-16");
     assert.deepEqual(hoje.map((b) => b.id), ["1", "2"]);
+  });
+});
+
+describe("mensagens de erro de login/cadastro", () => {
+  test("credencial inválida vira frase clara em português", () => {
+    assert.equal(
+      traduzErroAuth(new Error("Invalid login credentials")),
+      "E-mail ou senha incorretos."
+    );
+  });
+
+  test("e-mail já cadastrado orienta a entrar em vez de cadastrar", () => {
+    assert.match(traduzErroAuth(new Error("User already registered")), /Tente entrar/);
+  });
+
+  test("cadastro desativado diz ONDE ligar, não só que falhou", () => {
+    const t = traduzErroAuth(new Error("Signups not allowed for this instance"));
+    assert.match(t, /Authentication/);
+  });
+
+  test("senha curta explica o mínimo", () => {
+    assert.match(
+      traduzErroAuth(new Error("Password should be at least 6 characters")),
+      /6 caracteres/
+    );
+  });
+
+  test("erro desconhecido devolve o original em vez de escondê-lo", () => {
+    // Esconder atrás de "erro inesperado" tiraria a única pista de diagnóstico.
+    assert.equal(traduzErroAuth(new Error("Something very specific broke")), "Something very specific broke");
+  });
+
+  test("aceita string, objeto com message, e vazio sem quebrar", () => {
+    assert.equal(traduzErroAuth("Invalid login credentials"), "E-mail ou senha incorretos.");
+    assert.equal(traduzErroAuth({ message: "Rate limit exceeded" }), "Muitas tentativas seguidas. Espere um pouco e tente de novo.");
+    assert.match(traduzErroAuth(null), /Tente de novo/);
+    assert.match(traduzErroAuth(undefined), /Tente de novo/);
+  });
+
+  test("não depende de maiúsculas/minúsculas do texto original", () => {
+    assert.equal(traduzErroAuth(new Error("INVALID LOGIN CREDENTIALS")), "E-mail ou senha incorretos.");
   });
 });
