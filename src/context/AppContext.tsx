@@ -67,11 +67,12 @@ interface AppContextValue {
   saveWeeklyReview: (note: Omit<WeeklyReviewNote, "id" | "createdAt">) => void;
   /** Cronograma do dia — blocos de trabalho com cronômetro. */
   schedule: ScheduleBlock[];
-  addBlock: (date: string, title: string, plannedMinutes: number) => void;
+  addBlock: (date: string, title: string, plannedMinutes: number, topicId?: string) => void;
   updateBlock: (id: string, patch: Partial<Omit<ScheduleBlock, "id">>) => void;
   removeBlock: (id: string) => void;
   startTimer: (id: string) => void;
   pauseTimer: (id: string) => void;
+  /** Conclui o bloco e, se houver, a tarefa do projeto vinculada a ele. */
   finishBlock: (id: string) => void;
   reopenTimer: (id: string) => void;
   resetTimer: (id: string) => void;
@@ -400,21 +401,51 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const getLastOpenedTaskId = useCallback(() => lastOpenedTask.current, []);
 
   // ── Cronograma ────────────────────────────────────────────────────────
-  const addBlock = useCallback((date: string, title: string, plannedMinutes: number) => {
-    setBoard((b) => {
-      const doDia = b.schedule.filter((x) => x.date === date);
-      const nextOrder = doDia.length === 0 ? 0 : Math.max(...doDia.map((x) => x.order)) + 1;
-      const block: ScheduleBlock = {
-        id: uuid(),
-        date,
-        title: title.trim(),
-        plannedMinutes,
-        accumulatedMs: 0,
-        order: nextOrder,
-      };
-      return { ...b, schedule: [...b.schedule, block] };
-    });
-  }, []);
+  /**
+   * Cria o bloco do dia. Com `topicId`, cria TAMBÉM a tarefa no projeto e
+   * guarda o vínculo — "Chamar leads" precisa existir nos dois lugares, e
+   * digitar duas vezes é justamente o trabalho que o app deveria poupar.
+   */
+  const addBlock = useCallback(
+    (date: string, title: string, plannedMinutes: number, topicId?: string) => {
+      const blockId = uuid();
+      const taskId = uuid();
+      const now = new Date().toISOString();
+
+      setBoard((b) => {
+        const doDia = b.schedule.filter((x) => x.date === date);
+        const nextOrder = doDia.length === 0 ? 0 : Math.max(...doDia.map((x) => x.order)) + 1;
+        // Projeto que sumiu entre escolher e salvar não pode gerar tarefa
+        // órfã — sem tópico, o bloco simplesmente fica solto.
+        const topico = topicId ? b.topics.find((t) => t.id === topicId) : undefined;
+
+        const block: ScheduleBlock = {
+          id: blockId,
+          date,
+          title: title.trim(),
+          plannedMinutes,
+          accumulatedMs: 0,
+          order: nextOrder,
+          topicId: topico?.id,
+          taskId: topico ? taskId : undefined,
+        };
+        if (!topico) return { ...b, schedule: [...b.schedule, block] };
+
+        const task = createTask(
+          {
+            topicId: topico.id,
+            title: title.trim(),
+            status: "todo",
+            estimatedMinutes: plannedMinutes,
+          },
+          taskId,
+          now
+        );
+        return { ...b, tasks: [...b.tasks, task], schedule: [...b.schedule, block] };
+      });
+    },
+    []
+  );
 
   const updateBlock = useCallback(
     (id: string, patch: Partial<Omit<ScheduleBlock, "id">>) => {
@@ -455,12 +486,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
+  /**
+   * Conclui o bloco e, se ele veio de um projeto, conclui a tarefa junto.
+   *
+   * Quem chama decide o que dizer e o que oferecer como desfazer — a
+   * informação de qual tarefa foi afetada já está no próprio bloco, e tentar
+   * devolvê-la daqui não funcionaria: o corpo do `setBoard` só roda na
+   * renderização seguinte, então o valor sairia sempre vazio.
+   */
   const finishBlock = useCallback((id: string) => {
     const nowIso = new Date().toISOString();
-    setBoard((b) => ({
-      ...b,
-      schedule: b.schedule.map((x) => (x.id === id ? completeBlock(x, nowIso) : x)),
-    }));
+    setBoard((b) => {
+      const block = b.schedule.find((x) => x.id === id);
+      const task = block?.taskId ? b.tasks.find((t) => t.id === block.taskId) : undefined;
+      const concluirTarefa = task && task.status !== "done";
+
+      return {
+        ...b,
+        schedule: b.schedule.map((x) => (x.id === id ? completeBlock(x, nowIso) : x)),
+        tasks: concluirTarefa
+          ? b.tasks.map((t) =>
+              t.id === task.id
+                ? { ...t, status: "done" as const, completedAt: nowIso, updatedAt: nowIso }
+                : t
+            )
+          : b.tasks,
+      };
+    });
   }, []);
 
   const reopenTimer = useCallback((id: string) => {

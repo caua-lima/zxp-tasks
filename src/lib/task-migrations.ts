@@ -133,7 +133,7 @@ function migrateTopic(raw: unknown): Topic | null {
     description: asString(r.description),
     // Tópico salvo antes das listas de desejos não tem `kind` — vira projeto,
     // que é o que ele sempre foi na prática.
-    kind: r.kind === "wishlist" ? "wishlist" : "project",
+    kind: r.kind === "wishlist" || r.kind === "work" ? r.kind : "project",
     budgetCents:
       typeof r.budgetCents === "number" && Number.isFinite(r.budgetCents) && r.budgetCents >= 0
         ? Math.round(r.budgetCents)
@@ -166,6 +166,8 @@ function migrateScheduleBlock(raw: unknown): ScheduleBlock | null {
         : 0,
     completedAt: asString(r.completedAt),
     order: typeof r.order === "number" && Number.isFinite(r.order) ? r.order : 0,
+    topicId: asString(r.topicId),
+    taskId: asString(r.taskId),
   };
 }
 

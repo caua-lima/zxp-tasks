@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { Task, TaskPriority } from "@/lib/types";
 import { PRIORITY_LABEL } from "@/lib/priority";
@@ -16,6 +16,13 @@ import {
 import { TaskModal } from "../TaskModal";
 import { TaskRow } from "./TaskRow";
 import { useToast } from "../shared/Toast";
+import {
+  blocksOfDay,
+  formatDuration,
+  isRunning,
+  remainingMs,
+  scheduleTotals,
+} from "@/lib/schedule";
 
 function Section({
   title,
@@ -55,8 +62,16 @@ export function TodayView({
   onOpenKanban: () => void;
   priorityFilter?: TaskPriority | null;
 }) {
-  const { tasks, topics, setTaskStatus, updateTask, archiveTask, focusToday, toggleFocus } =
-    useApp();
+  const {
+    tasks,
+    topics,
+    schedule,
+    setTaskStatus,
+    updateTask,
+    archiveTask,
+    focusToday,
+    toggleFocus,
+  } = useApp();
   const { showToast } = useToast();
   const [modalTask, setModalTask] = useState<Task | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -76,6 +91,27 @@ export function TodayView({
     () => Object.fromEntries(topics.map((t) => [t.id, t])),
     [topics]
   );
+
+  /**
+   * O cronograma do dia aparece aqui também, em modo leitura.
+   *
+   * Cronograma e Hoje respondem a perguntas diferentes — "o que vou fazer
+   * agora, por quanto tempo" e "o que está pegando fogo" — mas são o MESMO
+   * dia. Ver um sem o outro fazia parecer que existiam duas agendas.
+   * Editar continua sendo só no Cronograma: dois lugares para mexer no mesmo
+   * bloco é como esse tipo de coisa começa a divergir.
+   */
+  const blocosDeHoje = useMemo(() => blocksOfDay(schedule, today), [schedule, today]);
+  // Relógio só enquanto algum bloco corre — um cronômetro parado num número
+  // velho passa a impressão de que o app travou.
+  const [agora, setAgora] = useState(() => Date.now());
+  const algumRodando = blocosDeHoje.some(isRunning);
+  useEffect(() => {
+    if (!algumRodando) return;
+    const id = setInterval(() => setAgora(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [algumRodando]);
+  const totaisDoDia = useMemo(() => scheduleTotals(blocosDeHoje, agora), [blocosDeHoje, agora]);
 
   const overdue = useMemo(() => getOverdueTasks(active, today), [active, today]);
   const dueToday = useMemo(() => getTasksDueToday(active, today), [active, today]);
@@ -152,6 +188,57 @@ export function TodayView({
           </div>
         </div>
       </header>
+
+      {blocosDeHoje.length > 0 && (
+        <Section
+          title="Cronograma de hoje"
+          hint={`${Math.round(totaisDoDia.plannedMs / 60000)} min planejados · ${formatDuration(
+            totaisDoDia.elapsedMs
+          )} feitos — o cronômetro fica na tela Cronograma.`}
+          count={totaisDoDia.doneCount}
+        >
+          <ul className="space-y-1.5">
+            {blocosDeHoje.map((bloco) => {
+              const rodando = isRunning(bloco);
+              const feito = !!bloco.completedAt;
+              return (
+                <li
+                  key={bloco.id}
+                  className={`flex items-center gap-3 rounded-lg border px-3 py-2 ${
+                    rodando ? "border-[var(--brand)]" : "border-[var(--border)]"
+                  }`}
+                >
+                  <span
+                    className={`min-w-0 flex-1 truncate text-sm ${
+                      feito
+                        ? "text-[var(--muted)] line-through"
+                        : "text-[var(--foreground)]"
+                    }`}
+                  >
+                    {bloco.title}
+                  </span>
+                  <span
+                    className="shrink-0 tabular-nums text-xs"
+                    style={{
+                      color: feito
+                        ? "var(--success)"
+                        : rodando
+                          ? "var(--brand)"
+                          : "var(--muted)",
+                    }}
+                  >
+                    {feito
+                      ? "concluído"
+                      : rodando
+                        ? formatDuration(Math.max(0, remainingMs(bloco, agora)))
+                        : `${bloco.plannedMinutes} min`}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </Section>
+      )}
 
       <Section
         title="Foco de hoje"

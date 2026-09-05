@@ -5,13 +5,11 @@ import { v4 as uuid } from "uuid";
 import { useApp } from "@/context/AppContext";
 import {
   ChecklistItem,
-  Recurrence,
   Task,
   TaskEnergy,
   TaskPriority,
   TaskStatus,
 } from "@/lib/types";
-import { describeRecurrence } from "@/lib/recurrence";
 import { normalizeUrl, priorityLabel, statusLabels, topicKind } from "@/lib/wishlist";
 import { centsToInput, formatBRL, parseValorComposto } from "@/lib/money";
 import {
@@ -64,10 +62,20 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
   const [priority, setPriority] = useState<TaskPriority>(task?.priority ?? "medium");
   const [energy, setEnergy] = useState<TaskEnergy | "">(task?.energy ?? "");
   const [estimate, setEstimate] = useState<number | "">(task?.estimatedMinutes ?? "");
-  const [tagsText, setTagsText] = useState((task?.tags ?? []).join(", "));
-  const [recurrence, setRecurrence] = useState<Recurrence | null>(task?.recurrence ?? null);
+  /**
+   * Tags e recorrência saíram do formulário — quase nenhuma tarefa usava, e
+   * o campo em toda tarefa custava mais atenção do que devolvia. Os valores
+   * continuam sendo lidos da tarefa e regravados como estão: tirar o campo
+   * da tela não pode apagar o que já estava salvo em quem usa.
+   */
+  const tags = task?.tags ?? [];
+  const recurrence = task?.recurrence ?? null;
   const [checklist, setChecklist] = useState<ChecklistItem[]>(task?.checklist ?? []);
   const [newItem, setNewItem] = useState("");
+  // Campos que a maioria das tarefas não usa nascem fechados. Se a tarefa
+  // já tem conteúdo neles, abrem sozinhos — senão sumiriam da edição.
+  const [mostrarDescricao, setMostrarDescricao] = useState((task?.description ?? "") !== "");
+  const [mostrarPassos, setMostrarPassos] = useState((task?.checklist ?? []).length > 0);
   const [confirmTrash, setConfirmTrash] = useState(false);
   const [titleError, setTitleError] = useState(false);
   const [priceText, setPriceText] = useState(
@@ -96,10 +104,6 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
     }
     if (!topicId) return;
     if (priceInvalid) return;
-    const tags = tagsText
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
     const patch = {
       title: title.trim(),
       description,
@@ -140,7 +144,7 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
       const next = c.map((i) => (i.id === id ? { ...i, completed: !i.completed } : i));
       if (next.length > 0 && next.every((i) => i.completed) && status !== "done") {
         // Sugere, nunca conclui sozinho.
-        showToast("Checklist completo. Marque a tarefa como Feito se ela acabou.");
+        showToast("Todos os passos feitos. Marque a tarefa como Feito se ela acabou.");
       }
       return next;
     });
@@ -245,18 +249,29 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
             )}
           </div>
 
-          <div className={wishlist ? "hidden" : undefined}>
-            <label htmlFor="task-desc" className={label}>
-              Descrição
-            </label>
-            <textarea
-              id="task-desc"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              className={`${field} resize-none`}
-            />
-          </div>
+          {mostrarDescricao ? (
+            <div>
+              <label htmlFor="task-desc" className={label}>
+                Descrição
+              </label>
+              <textarea
+                id="task-desc"
+                autoFocus
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={3}
+                className={`${field} resize-none`}
+              />
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setMostrarDescricao(true)}
+              className="text-xs font-medium text-[var(--brand)] hover:underline"
+            >
+              + Adicionar descrição
+            </button>
+          )}
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
@@ -432,113 +447,29 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
             </div>
           </div>
 
-          <div className={wishlist ? "hidden" : undefined}>
-            <label htmlFor="task-tags" className={label}>
-              Tags (separadas por vírgula)
-            </label>
-            <input
-              id="task-tags"
-              value={tagsText}
-              onChange={(e) => setTagsText(e.target.value)}
-              className={field}
-            />
-          </div>
-
-          <div className={wishlist ? "hidden" : undefined}>
-            <label htmlFor="task-recurrence" className={label}>
-              Recorrência
-            </label>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <select
-                id="task-recurrence"
-                value={recurrence?.frequency ?? "none"}
-                onChange={(e) =>
-                  setRecurrence(
-                    e.target.value === "none"
-                      ? null
-                      : {
-                          frequency: e.target.value as Recurrence["frequency"],
-                          interval: recurrence?.interval ?? 1,
-                          weekdays: recurrence?.weekdays,
-                        }
-                  )
-                }
-                className={`${field} w-auto`}
-              >
-                <option value="none">Não repete</option>
-                <option value="daily">Diária</option>
-                <option value="weekly">Semanal</option>
-                <option value="monthly">Mensal</option>
-              </select>
-              {recurrence && (
-                <label className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
-                  a cada
-                  <input
-                    type="number"
-                    min={1}
-                    value={recurrence.interval ?? 1}
-                    onChange={(e) =>
-                      setRecurrence({
-                        ...recurrence,
-                        interval: Math.max(1, Number(e.target.value) || 1),
-                      })
-                    }
-                    aria-label="Intervalo da recorrência"
-                    className={`${field} w-16 tabular-nums`}
-                  />
-                </label>
-              )}
-            </div>
-
-            {recurrence?.frequency === "weekly" && (
-              <div className="mt-2 flex flex-wrap gap-1">
-                {["dom", "seg", "ter", "qua", "qui", "sex", "sáb"].map((name, day) => {
-                  const active = recurrence.weekdays?.includes(day) ?? false;
-                  return (
-                    <button
-                      key={name}
-                      type="button"
-                      aria-pressed={active}
-                      onClick={() => {
-                        const current = recurrence.weekdays ?? [];
-                        const next = active
-                          ? current.filter((d) => d !== day)
-                          : [...current, day];
-                        setRecurrence({
-                          ...recurrence,
-                          weekdays: next.length > 0 ? next : undefined,
-                        });
-                      }}
-                      className={`min-h-[32px] rounded-md border px-2 text-xs font-medium transition ${
-                        active
-                          ? "border-[var(--brand)] bg-[var(--brand)] text-[var(--accent-ink)]"
-                          : "border-[var(--border)] text-[var(--muted)] hover:bg-[var(--surface)]"
-                      }`}
-                    >
-                      {name}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {recurrence && (
-              <p className="mt-1.5 text-[11px] text-[var(--muted)]">
-                {describeRecurrence(recurrence)}. A próxima ocorrência é criada quando você
-                concluir esta.
-              </p>
-            )}
-          </div>
-
+          {!mostrarPassos ? (
+            <button
+              type="button"
+              onClick={() => setMostrarPassos(true)}
+              className="block text-xs font-medium text-[var(--brand)] hover:underline"
+            >
+              + Quebrar em passos
+            </button>
+          ) : (
           <div>
             <span className={label}>
-              Checklist{" "}
+              Passos{" "}
               {checklist.length > 0 && (
                 <span className="tabular-nums text-[var(--muted)]">
-                  — {done}/{checklist.length} concluídas
+                  — {done}/{checklist.length} feitos
                 </span>
               )}
             </span>
+            <p className="mb-2 text-[11px] text-[var(--muted)]">
+              Para tarefas grandes demais pra marcar de uma vez. Ex: &ldquo;Gravar
+              aula&rdquo; vira roteiro, gravar, editar — e você vê o quanto já andou
+              sem precisar criar três tarefas.
+            </p>
             <ul className="mb-2 space-y-1">
               {checklist.map((item) => (
                 <li key={item.id} className="flex items-center gap-2">
@@ -580,8 +511,8 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
                     addChecklistItem();
                   }
                 }}
-                placeholder="Novo item..."
-                aria-label="Novo item do checklist"
+                placeholder="Ex: escrever o roteiro"
+                aria-label="Novo passo"
                 className={field}
               />
               <button
@@ -593,6 +524,7 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
               </button>
             </div>
           </div>
+          )}
 
           {task && (
             <p className="pt-1 text-[11px] text-[var(--muted)]">

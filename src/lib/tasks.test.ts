@@ -1285,3 +1285,33 @@ test("parseValorComposto devolve null quando não há número — vazio não é 
   assert.equal(parseValorComposto(""), null);
   assert.equal(parseValorComposto("mão de obra"), null);
 });
+
+test("migração preserva o vínculo do bloco com projeto e tarefa", () => {
+  const board = migrateBoard({
+    topics: [{ id: "t1", name: "Mercado Livre", kind: "work", createdAt: "2026-01-01" }],
+    tasks: [],
+    schedule: [
+      {
+        id: "b1",
+        date: "2026-09-05",
+        title: "Chamar leads",
+        plannedMinutes: 40,
+        accumulatedMs: 0,
+        order: 0,
+        topicId: "t1",
+        taskId: "k1",
+      },
+    ],
+  });
+  assert.equal(board.topics[0].kind, "work");
+  assert.equal(board.schedule[0].topicId, "t1");
+  assert.equal(board.schedule[0].taskId, "k1");
+});
+
+test("vertente desconhecida vira projeto em vez de quebrar", () => {
+  const board = migrateBoard({
+    topics: [{ id: "t1", name: "X", kind: "inventado", createdAt: "2026-01-01" }],
+    tasks: [],
+  });
+  assert.equal(board.topics[0].kind, "project");
+});

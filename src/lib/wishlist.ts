@@ -8,12 +8,24 @@ export function isWishlist(topic: Topic | undefined): boolean {
   return topicKind(topic) === "wishlist";
 }
 
+export function isWork(topic: Topic | undefined): boolean {
+  return topicKind(topic) === "work";
+}
+
+/** Nome da vertente, como aparece nos botões e nos títulos das seções. */
+export const KIND_LABEL: Record<TopicKind, string> = {
+  project: "Projeto",
+  work: "Trabalho",
+  wishlist: "Desejos",
+};
+
 /**
  * Os mesmos três status, ditos na língua de cada tipo de pasta. "Feito"
  * numa lista de compras não quer dizer nada — "Comprado" quer.
  */
 const STATUS_LABELS: Record<TopicKind, Record<TaskStatus, string>> = {
   project: { todo: "A fazer", doing: "Fazendo", done: "Feito" },
+  work: { todo: "A fazer", doing: "Fazendo", done: "Feito" },
   wishlist: { todo: "Quero", doing: "Pesquisando", done: "Comprado" },
 };
 
@@ -28,6 +40,7 @@ export function statusLabels(kind: TopicKind = "project"): Record<TaskStatus, st
 /** Numa lista de desejos, prioridade é o quanto se quer aquilo. */
 const PRIORITY_LABELS: Record<TopicKind, Record<TaskPriority, string>> = {
   project: { critical: "Crítica", high: "Alta", medium: "Média", low: "Baixa" },
+  work: { critical: "Crítica", high: "Alta", medium: "Média", low: "Baixa" },
   wishlist: { critical: "Preciso", high: "Quero muito", medium: "Quero", low: "Talvez" },
 };
 

@@ -5,9 +5,9 @@ import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
 import { ZxpMark } from "./ZxpMark";
 import { calculateTopicProgress } from "@/lib/task-utils";
-import { isWishlist, wishlistTotals } from "@/lib/wishlist";
+import { KIND_LABEL, isWishlist, topicKind, wishlistTotals } from "@/lib/wishlist";
 import { formatBRL } from "@/lib/money";
-import { TopicKind } from "@/lib/types";
+import { Task, Topic, TopicKind } from "@/lib/types";
 import { ConfirmDialog } from "./shared/ConfirmDialog";
 import { useToast } from "./shared/Toast";
 
@@ -29,12 +29,12 @@ export type ViewKey =
 
 /**
  * O app tem duas partes, e é isso que a barra mostra: o Cronograma (o dia,
- * com cronômetro) e os Objetivos (o que quero conquistar/comprar). As telas
+ * com cronômetro) e os Projetos (onde ficam as tarefas e os desejos). As telas
  * antigas continuam existindo, mas atrás de "Mais" — fora do caminho.
  */
 const VIEWS: { key: ViewKey; label: string }[] = [
   { key: "schedule", label: "Cronograma" },
-  { key: "goals", label: "Objetivos" },
+  { key: "goals", label: "Projetos" },
 ];
 
 const EXTRA_VIEWS: { key: ViewKey; label: string }[] = [
@@ -52,6 +52,137 @@ interface SidebarProps {
   open: boolean;
   onClose: () => void;
   onOpenAccount: () => void;
+}
+
+/**
+ * Uma linha da lista de pastas. Vive fora do `Sidebar` porque as três
+ * seções (projetos, trabalho, desejos) desenham exatamente a mesma linha —
+ * antes era o mesmo bloco de JSX copiado, e cada ajuste tinha que ser feito
+ * duas vezes (com o risco de sair diferente numa delas).
+ */
+function LinhaDeTopico({
+  topic,
+  tasks,
+  selecionado,
+  editando,
+  editingName,
+  onChangeEditingName,
+  onCommitEdit,
+  onCancelEdit,
+  onStartEdit,
+  onSelect,
+  onDelete,
+}: {
+  topic: Topic;
+  tasks: Task[];
+  selecionado: boolean;
+  editando: boolean;
+  editingName: string;
+  onChangeEditingName: (v: string) => void;
+  onCommitEdit: () => void;
+  onCancelEdit: () => void;
+  onStartEdit: () => void;
+  onSelect: () => void;
+  onDelete: () => void;
+}) {
+  const progress = calculateTopicProgress(tasks, topic.id);
+  const wishlist = isWishlist(topic);
+  const totals = wishlist ? wishlistTotals(tasks, topic.id) : null;
+
+  return (
+    <div
+      className={`group rounded-md px-2 py-2 transition ${
+        selecionado ? "bg-[var(--surface2)]" : "hover:bg-[var(--surface)]"
+      }`}
+    >
+      <div className="flex items-center gap-2 text-sm">
+        <span
+          className="h-2.5 w-2.5 shrink-0 rounded-full"
+          style={{ backgroundColor: topic.color }}
+          aria-hidden="true"
+        />
+        {editando ? (
+          <input
+            autoFocus
+            value={editingName}
+            onChange={(e) => onChangeEditingName(e.target.value)}
+            onBlur={onCommitEdit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") onCommitEdit();
+              if (e.key === "Escape") onCancelEdit();
+            }}
+            aria-label={`Renomear ${topic.name}`}
+            className="min-w-0 flex-1 rounded border border-[var(--border)] bg-transparent px-1 py-0.5 text-sm text-[var(--foreground)] outline-none focus:border-[var(--focus)]"
+          />
+        ) : (
+          <button
+            onClick={onSelect}
+            onDoubleClick={onStartEdit}
+            className={`min-w-0 flex-1 truncate text-left ${
+              selecionado ? "text-[var(--foreground)]" : "text-[var(--muted)]"
+            }`}
+            title="Clique duplo para renomear"
+          >
+            {topic.name}
+          </button>
+        )}
+        <button
+          onClick={onDelete}
+          aria-label={`Excluir tópico ${topic.name}`}
+          className="hidden shrink-0 px-1 text-[var(--muted)] hover:text-[var(--danger)] group-hover:block"
+        >
+          ×
+        </button>
+      </div>
+
+      {totals ? (
+        totals.itemsWanted + totals.itemsBought > 0 && (
+          <div className="mt-1 flex items-center gap-2 pl-4.5 text-[10px]">
+            <span className="tabular-nums text-[var(--brand)]">
+              {formatBRL(totals.wantedCents)}
+            </span>
+            <span className="tabular-nums text-[var(--muted)]">
+              {totals.itemsWanted} {totals.itemsWanted === 1 ? "item" : "itens"}
+            </span>
+            {totals.itemsBought > 0 && (
+              <span className="tabular-nums text-[var(--success)]">
+                {totals.itemsBought} ✓
+              </span>
+            )}
+          </div>
+        )
+      ) : (
+        progress.total > 0 && (
+          <div className="mt-1.5 flex items-center gap-2 pl-4.5">
+            <div
+              className="h-1 flex-1 overflow-hidden rounded-full bg-[var(--surface3)]"
+              role="progressbar"
+              aria-valuenow={progress.percent}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`Progresso de ${topic.name}`}
+            >
+              <div
+                className="h-full rounded-full bg-[var(--success)]"
+                style={{ width: `${progress.percent}%` }}
+              />
+            </div>
+            <span className="shrink-0 tabular-nums text-[10px] text-[var(--muted)]">
+              {progress.done}/{progress.total}
+            </span>
+            {progress.overdue > 0 && (
+              <span
+                className="shrink-0 tabular-nums text-[10px] text-[var(--danger)]"
+                title={`${progress.overdue} atrasadas`}
+              >
+                !{progress.overdue}
+              </span>
+            )}
+          </div>
+        )
+      )}
+    </div>
+  );
 }
 
 export function Sidebar({
@@ -75,12 +206,14 @@ export function Sidebar({
 
   const activeTopics = topics.filter((t) => !t.archivedAt);
   const archivedTopics = topics.filter((t) => t.archivedAt);
-  // Duas naturezas diferentes de pasta, e por isso duas seções: coisas de
-  // trabalho/projeto e coisas que quero conquistar/comprar. Misturar as
-  // duas numa lista só faz "comprar uma roupa" competir visualmente com
-  // "Mentoria RUMO", que não é a mesma decisão.
-  const objetivos = activeTopics.filter((t) => !isWishlist(t));
-  const conquistas = activeTopics.filter((t) => isWishlist(t));
+  // Três naturezas diferentes de pasta, e por isso três seções. Misturar
+  // tudo numa lista só faz "comprar uma roupa" competir visualmente com
+  // "Chamar leads", que não é nem de longe a mesma decisão.
+  const secoes = [
+    { titulo: "", lista: activeTopics.filter((t) => topicKind(t) === "project") },
+    { titulo: "Trabalho", lista: activeTopics.filter((t) => topicKind(t) === "work") },
+    { titulo: "Conquistas pessoais", lista: activeTopics.filter((t) => isWishlist(t)) },
+  ];
 
   function handleAddTopic(e: React.FormEvent) {
     e.preventDefault();
@@ -183,7 +316,7 @@ export function Sidebar({
 
         <div className="flex-1 overflow-y-auto border-t border-[var(--border)] px-3 pt-3">
           <p className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-            Objetivos
+            Projetos
           </p>
           <button
             onClick={() => selectTopic(null)}
@@ -196,233 +329,37 @@ export function Sidebar({
             Ver todos
           </button>
 
-          {objetivos.length > 0 && (
-            <div className="space-y-0.5 pb-2">
-              {objetivos.map((topic) => {
-              const progress = calculateTopicProgress(tasks, topic.id);
-              const wishlist = isWishlist(topic);
-              const totals = wishlist ? wishlistTotals(tasks, topic.id) : null;
-              return (
-                <div
-                  key={topic.id}
-                  className={`group rounded-md px-2 py-2 transition ${
-                    selectedTopicId === topic.id
-                      ? "bg-[var(--surface2)]"
-                      : "hover:bg-[var(--surface)]"
-                  }`}
-                >
-                  <div className="flex items-center gap-2 text-sm">
-                    <span
-                      className="h-2.5 w-2.5 shrink-0 rounded-full"
-                      style={{ backgroundColor: topic.color }}
-                      aria-hidden="true"
+          {secoes.map(({ titulo, lista }) =>
+            lista.length === 0 ? null : (
+              <div key={titulo} className="pb-2">
+                {titulo && (
+                  <p className="mb-1.5 mt-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                    {titulo}
+                  </p>
+                )}
+                <div className="space-y-0.5">
+                  {lista.map((topic) => (
+                    <LinhaDeTopico
+                      key={topic.id}
+                      topic={topic}
+                      tasks={tasks}
+                      selecionado={selectedTopicId === topic.id}
+                      editando={editingId === topic.id}
+                      editingName={editingName}
+                      onChangeEditingName={setEditingName}
+                      onCommitEdit={commitEdit}
+                      onCancelEdit={() => setEditingId(null)}
+                      onStartEdit={() => {
+                        setEditingId(topic.id);
+                        setEditingName(topic.name);
+                      }}
+                      onSelect={() => selectTopic(topic.id)}
+                      onDelete={() => setConfirmDelete(topic.id)}
                     />
-                    {editingId === topic.id ? (
-                      <input
-                        autoFocus
-                        value={editingName}
-                        onChange={(e) => setEditingName(e.target.value)}
-                        onBlur={commitEdit}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") commitEdit();
-                          if (e.key === "Escape") setEditingId(null);
-                        }}
-                        aria-label={`Renomear ${topic.name}`}
-                        className="min-w-0 flex-1 rounded border border-[var(--border)] bg-transparent px-1 py-0.5 text-sm text-[var(--foreground)] outline-none focus:border-[var(--focus)]"
-                      />
-                    ) : (
-                      <button
-                        onClick={() => selectTopic(topic.id)}
-                        onDoubleClick={() => {
-                          setEditingId(topic.id);
-                          setEditingName(topic.name);
-                        }}
-                        className={`min-w-0 flex-1 truncate text-left ${
-                          selectedTopicId === topic.id
-                            ? "text-[var(--foreground)]"
-                            : "text-[var(--muted)]"
-                        }`}
-                        title="Clique duplo para renomear"
-                      >
-                        {topic.name}
-                      </button>
-                    )}
-                    <button
-                      onClick={() => setConfirmDelete(topic.id)}
-                      aria-label={`Excluir tópico ${topic.name}`}
-                      className="hidden shrink-0 px-1 text-[var(--muted)] hover:text-[var(--danger)] group-hover:block"
-                    >
-                      ×
-                    </button>
-                  </div>
-                  {totals ? (
-                    totals.itemsWanted + totals.itemsBought > 0 && (
-                      <div className="mt-1 flex items-center gap-2 pl-4.5 text-[10px]">
-                        <span className="tabular-nums text-[var(--brand)]">
-                          {formatBRL(totals.wantedCents)}
-                        </span>
-                        <span className="tabular-nums text-[var(--muted)]">
-                          {totals.itemsWanted}{" "}
-                          {totals.itemsWanted === 1 ? "item" : "itens"}
-                        </span>
-                        {totals.itemsBought > 0 && (
-                          <span className="tabular-nums text-[var(--success)]">
-                            {totals.itemsBought} ✓
-                          </span>
-                        )}
-                      </div>
-                    )
-                  ) : (
-                    progress.total > 0 && (
-                      <div className="mt-1.5 flex items-center gap-2 pl-4.5">
-                        <div
-                          className="h-1 flex-1 overflow-hidden rounded-full bg-[var(--surface3)]"
-                          role="progressbar"
-                          aria-valuenow={progress.percent}
-                          aria-valuemin={0}
-                          aria-valuemax={100}
-                          aria-label={`Progresso de ${topic.name}`}
-                        >
-                          <div
-                            className="h-full rounded-full bg-[var(--success)]"
-                            style={{ width: `${progress.percent}%` }}
-                          />
-                        </div>
-                        <span className="shrink-0 tabular-nums text-[10px] text-[var(--muted)]">
-                          {progress.done}/{progress.total}
-                        </span>
-                        {progress.overdue > 0 && (
-                          <span
-                            className="shrink-0 tabular-nums text-[10px] text-[var(--danger)]"
-                            title={`${progress.overdue} atrasadas`}
-                          >
-                            !{progress.overdue}
-                          </span>
-                        )}
-                      </div>
-                    )
-                  )}
+                  ))}
                 </div>
-              );
-            })}
-            </div>
-          )}
-
-          {conquistas.length > 0 && (
-            <>
-              <p className="mb-1.5 mt-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-                Conquistas pessoais
-              </p>
-              <div className="space-y-0.5 pb-3">
-                {conquistas.map((topic) => {
-              const progress = calculateTopicProgress(tasks, topic.id);
-              const wishlist = isWishlist(topic);
-              const totals = wishlist ? wishlistTotals(tasks, topic.id) : null;
-              return (
-                <div
-                  key={topic.id}
-                  className={`group rounded-md px-2 py-2 transition ${
-                    selectedTopicId === topic.id
-                      ? "bg-[var(--surface2)]"
-                      : "hover:bg-[var(--surface)]"
-                  }`}
-                >
-                  <div className="flex items-center gap-2 text-sm">
-                    <span
-                      className="h-2.5 w-2.5 shrink-0 rounded-full"
-                      style={{ backgroundColor: topic.color }}
-                      aria-hidden="true"
-                    />
-                    {editingId === topic.id ? (
-                      <input
-                        autoFocus
-                        value={editingName}
-                        onChange={(e) => setEditingName(e.target.value)}
-                        onBlur={commitEdit}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") commitEdit();
-                          if (e.key === "Escape") setEditingId(null);
-                        }}
-                        aria-label={`Renomear ${topic.name}`}
-                        className="min-w-0 flex-1 rounded border border-[var(--border)] bg-transparent px-1 py-0.5 text-sm text-[var(--foreground)] outline-none focus:border-[var(--focus)]"
-                      />
-                    ) : (
-                      <button
-                        onClick={() => selectTopic(topic.id)}
-                        onDoubleClick={() => {
-                          setEditingId(topic.id);
-                          setEditingName(topic.name);
-                        }}
-                        className={`min-w-0 flex-1 truncate text-left ${
-                          selectedTopicId === topic.id
-                            ? "text-[var(--foreground)]"
-                            : "text-[var(--muted)]"
-                        }`}
-                        title="Clique duplo para renomear"
-                      >
-                        {topic.name}
-                      </button>
-                    )}
-                    <button
-                      onClick={() => setConfirmDelete(topic.id)}
-                      aria-label={`Excluir tópico ${topic.name}`}
-                      className="hidden shrink-0 px-1 text-[var(--muted)] hover:text-[var(--danger)] group-hover:block"
-                    >
-                      ×
-                    </button>
-                  </div>
-                  {totals ? (
-                    totals.itemsWanted + totals.itemsBought > 0 && (
-                      <div className="mt-1 flex items-center gap-2 pl-4.5 text-[10px]">
-                        <span className="tabular-nums text-[var(--brand)]">
-                          {formatBRL(totals.wantedCents)}
-                        </span>
-                        <span className="tabular-nums text-[var(--muted)]">
-                          {totals.itemsWanted}{" "}
-                          {totals.itemsWanted === 1 ? "item" : "itens"}
-                        </span>
-                        {totals.itemsBought > 0 && (
-                          <span className="tabular-nums text-[var(--success)]">
-                            {totals.itemsBought} ✓
-                          </span>
-                        )}
-                      </div>
-                    )
-                  ) : (
-                    progress.total > 0 && (
-                      <div className="mt-1.5 flex items-center gap-2 pl-4.5">
-                        <div
-                          className="h-1 flex-1 overflow-hidden rounded-full bg-[var(--surface3)]"
-                          role="progressbar"
-                          aria-valuenow={progress.percent}
-                          aria-valuemin={0}
-                          aria-valuemax={100}
-                          aria-label={`Progresso de ${topic.name}`}
-                        >
-                          <div
-                            className="h-full rounded-full bg-[var(--success)]"
-                            style={{ width: `${progress.percent}%` }}
-                          />
-                        </div>
-                        <span className="shrink-0 tabular-nums text-[10px] text-[var(--muted)]">
-                          {progress.done}/{progress.total}
-                        </span>
-                        {progress.overdue > 0 && (
-                          <span
-                            className="shrink-0 tabular-nums text-[10px] text-[var(--danger)]"
-                            title={`${progress.overdue} atrasadas`}
-                          >
-                            !{progress.overdue}
-                          </span>
-                        )}
-                      </div>
-                    )
-                  )}
-                </div>
-              );
-            })}
               </div>
-            </>
+            )
           )}
 
           {archivedTopics.length > 0 && (
@@ -450,7 +387,7 @@ export function Sidebar({
 
         <form onSubmit={handleAddTopic} className="border-t border-[var(--border)] p-3">
           <div className="mb-1.5 flex gap-1">
-            {(["project", "wishlist"] as TopicKind[]).map((k) => (
+            {(["project", "work", "wishlist"] as TopicKind[]).map((k) => (
               <button
                 key={k}
                 type="button"
@@ -462,7 +399,7 @@ export function Sidebar({
                     : "bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface2)]"
                 }`}
               >
-                {k === "project" ? "Projeto" : "Desejos"}
+                {KIND_LABEL[k]}
               </button>
             ))}
           </div>
@@ -471,7 +408,11 @@ export function Sidebar({
               value={newTopic}
               onChange={(e) => setNewTopic(e.target.value)}
               placeholder={
-                newTopicKind === "wishlist" ? "Nova lista de desejos..." : "Novo tópico..."
+                newTopicKind === "wishlist"
+                  ? "Nova lista de desejos..."
+                  : newTopicKind === "work"
+                    ? "Nova pasta de trabalho..."
+                    : "Novo projeto..."
               }
               aria-label="Nome do novo tópico"
               className="min-h-[40px] min-w-0 flex-1 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 text-sm text-[var(--foreground)] outline-none placeholder:text-[var(--muted)] focus:border-[var(--focus)]"

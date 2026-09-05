@@ -3,11 +3,12 @@ export type TaskPriority = "critical" | "high" | "medium" | "low";
 export type TaskEnergy = "deep" | "normal" | "quick";
 
 /**
- * Um tópico é uma pasta de trabalho ("projeto") ou uma pasta de coisas que
- * quero comprar ("lista de desejos"). Muda os rótulos de status, os campos
- * do item e o resumo da pasta — o modelo de dados por baixo é o mesmo.
+ * A vertente de uma pasta: um projeto pessoal, o trabalho do dia a dia, ou
+ * uma lista de coisas que quero comprar. Muda os rótulos de status, os
+ * campos do item e o resumo da pasta — o modelo de dados por baixo é o
+ * mesmo, e por isso trocar a vertente nunca perde nada.
  */
-export type TopicKind = "project" | "wishlist";
+export type TopicKind = "project" | "work" | "wishlist";
 
 export interface ChecklistItem {
   id: string;
@@ -115,6 +116,20 @@ export interface ScheduleBlock {
   accumulatedMs: number;
   completedAt?: string;
   order: number;
+  /**
+   * Projeto a que este bloco pertence, e a tarefa criada junto com ele.
+   *
+   * "Chamar leads" é ao mesmo tempo um bloco de 40 min no cronograma de hoje
+   * e uma tarefa do projeto — escrever nos dois lugares era trabalho
+   * duplicado. Escolher o projeto ao criar o bloco cria a tarefa e guarda o
+   * vínculo aqui.
+   *
+   * Os dois campos são opcionais: bloco solto (sem projeto) continua sendo o
+   * caso normal, e um vínculo pode ficar órfão se a tarefa for apagada — por
+   * isso quem lê sempre confere se a tarefa ainda existe.
+   */
+  topicId?: string;
+  taskId?: string;
 }
 
 export interface Board {

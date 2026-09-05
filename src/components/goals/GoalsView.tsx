@@ -8,7 +8,7 @@ import { calculateTopicProgress } from "@/lib/task-utils";
 import { formatBRL } from "@/lib/money";
 
 /**
- * A metade "Objetivos" do app: as pastas do que quero conquistar ou comprar.
+ * A metade "Projetos" do app: as pastas onde as tarefas e os desejos moram.
  * É só uma porta de entrada — cada pasta abre na visão de projeto, que já
  * tem tudo. Aqui só importa bater o olho e escolher onde entrar.
  */
@@ -32,10 +32,10 @@ export function GoalsView({ onOpenTopic }: { onOpenTopic: (id: string) => void }
     <div className="mx-auto max-w-2xl space-y-4 p-4">
       <header>
         <h1 className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--foreground)]">
-          Objetivos
+          Projetos
         </h1>
         <p className="mt-0.5 text-xs text-[var(--muted)]">
-          O que você quer conquistar ou comprar. Toque numa pasta pra ver os itens.
+          Onde suas tarefas ficam guardadas. Toque numa pasta pra ver o que tem dentro.
         </p>
       </header>
 

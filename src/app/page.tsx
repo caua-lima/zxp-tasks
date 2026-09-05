@@ -50,7 +50,7 @@ function HomeInner() {
 
   const title = useMemo(() => {
     if (view === "schedule") return "Cronograma";
-    if (view === "goals") return "Objetivos";
+    if (view === "goals") return "Projetos";
     if (view === "today") return "Hoje";
     if (view === "review") return "Revisão semanal";
     if (view === "project") return selectedTopic?.name ?? "Projeto";
@@ -132,7 +132,7 @@ function HomeInner() {
     () => [
       { id: "new", label: "Nova tarefa", hint: "N", run: openNewTask },
       { id: "schedule", label: "Ir para Cronograma", hint: "G C", run: () => setView("schedule") },
-      { id: "goals", label: "Ir para Objetivos", hint: "G O", run: () => setView("goals") },
+      { id: "goals", label: "Ir para Projetos", hint: "G P", run: () => setView("goals") },
       { id: "today", label: "Ir para Hoje (foco)", hint: "G H", run: () => setView("today") },
       { id: "kanban", label: "Ir para Kanban", hint: "G K", run: () => setView("kanban") },
       { id: "mind", label: "Ir para Mapa mental", hint: "G M", run: () => setView("mindmap") },

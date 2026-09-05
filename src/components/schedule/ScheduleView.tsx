@@ -15,6 +15,7 @@ import {
   scheduleTotals,
 } from "@/lib/schedule";
 import { addDaysISO, todayISO } from "@/lib/date-utils";
+import { topicKind } from "@/lib/wishlist";
 import {
   agendarFim,
   avisarInicio,
@@ -28,6 +29,7 @@ import { ConfirmDialog } from "../shared/ConfirmDialog";
 
 function BlockRow({
   block,
+  projeto,
   now,
   onStart,
   onPause,
@@ -37,6 +39,7 @@ function BlockRow({
 }: {
   block: ScheduleBlock;
   now: number;
+  projeto?: string;
   onStart: () => void;
   onPause: () => void;
   onFinish: () => void;
@@ -76,6 +79,9 @@ function BlockRow({
             {block.plannedMinutes} min planejados
             {spent > 0 && ` · ${formatDuration(spent)} feitos`}
           </p>
+          {projeto && (
+            <p className="mt-0.5 truncate text-[11px] text-[var(--brand)]">{projeto}</p>
+          )}
         </div>
 
         <div className="shrink-0 text-right">
@@ -162,6 +168,9 @@ function BlockRow({
 export function ScheduleView() {
   const {
     schedule,
+    topics,
+    tasks,
+    setTaskStatus,
     addBlock,
     removeBlock,
     startTimer,
@@ -175,9 +184,22 @@ export function ScheduleView() {
   const [date, setDate] = useState(todayISO());
   const [title, setTitle] = useState("");
   const [minutes, setMinutes] = useState(40);
+  const [topicId, setTopicId] = useState("");
+  const [semTitulo, setSemTitulo] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState<ScheduleBlock | null>(null);
 
   const blocks = useMemo(() => blocksOfDay(schedule, date), [schedule, date]);
+
+  // Lista de desejos não recebe bloco de tempo: "comprar uma calça" não é
+  // uma sessão de trabalho cronometrada.
+  const projetosDisponiveis = useMemo(
+    () => topics.filter((t) => !t.archivedAt && topicKind(t) !== "wishlist"),
+    [topics]
+  );
+  const nomeDoProjeto = useMemo(() => {
+    const mapa = new Map(topics.map((t) => [t.id, t.name]));
+    return (id: string | undefined) => (id ? mapa.get(id) : undefined);
+  }, [topics]);
   const anyRunning = blocks.some(isRunning);
 
   // Relógio da tela: só liga quando algo está rodando. O tempo em si vem do
@@ -225,9 +247,16 @@ export function ScheduleView() {
   function handleAdd(e: React.FormEvent) {
     e.preventDefault();
     const t = title.trim();
-    if (!t) return;
-    addBlock(date, t, minutes);
+    // Antes o clique em Add simplesmente não fazia nada quando faltava o
+    // nome — dava a impressão de que o botão tinha falhado.
+    if (!t) {
+      setSemTitulo(true);
+      showToast("Escreva o que vai fazer antes de adicionar.");
+      return;
+    }
+    addBlock(date, t, minutes, topicId || undefined);
     setTitle("");
+    setSemTitulo(false);
   }
 
   return (
@@ -286,10 +315,16 @@ export function ScheduleView() {
         <div className="flex gap-2">
           <input
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              setSemTitulo(false);
+            }}
             placeholder="O que vai fazer? Ex: Chamar leads"
             aria-label="Nome do bloco"
-            className="min-h-[44px] min-w-0 flex-1 rounded-md border border-[var(--border)] bg-[var(--surface2)] px-3 text-sm text-[var(--foreground)] outline-none placeholder:text-[var(--muted)] focus:border-[var(--focus)]"
+            aria-invalid={semTitulo}
+            className={`min-h-[44px] min-w-0 flex-1 rounded-md border bg-[var(--surface2)] px-3 text-sm text-[var(--foreground)] outline-none placeholder:text-[var(--muted)] focus:border-[var(--focus)] ${
+              semTitulo ? "border-[var(--danger)]" : "border-[var(--border)]"
+            }`}
           />
           <button
             type="submit"
@@ -324,6 +359,30 @@ export function ScheduleView() {
             className="min-h-[36px] w-20 rounded-md border border-[var(--border)] bg-[var(--surface2)] px-2 text-xs tabular-nums text-[var(--foreground)] outline-none focus:border-[var(--focus)]"
           />
         </div>
+
+        {projetosDisponiveis.length > 0 && (
+          <div className="mt-2">
+            <select
+              value={topicId}
+              onChange={(e) => setTopicId(e.target.value)}
+              aria-label="Projeto do bloco"
+              className="min-h-[36px] w-full rounded-md border border-[var(--border)] bg-[var(--surface2)] px-2 text-xs text-[var(--foreground)] outline-none focus:border-[var(--focus)]"
+            >
+              <option value="">Sem projeto</option>
+              {projetosDisponiveis.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+            {topicId && (
+              <p className="mt-1 text-[11px] text-[var(--muted)]">
+                A tarefa também vai ser criada dentro do projeto — não precisa
+                escrever nos dois lugares.
+              </p>
+            )}
+          </div>
+        )}
       </form>
 
       {blocks.length === 0 ? (
@@ -354,6 +413,7 @@ export function ScheduleView() {
               key={block.id}
               block={block}
               now={now}
+              projeto={nomeDoProjeto(block.topicId)}
               onStart={() => iniciarComAviso(block)}
               onPause={() => {
                 pauseTimer(block.id);
@@ -361,10 +421,23 @@ export function ScheduleView() {
                 limparAvisoDeInicio();
               }}
               onFinish={() => {
+                // Olha a tarefa ANTES de concluir: depois ela já estará feita
+                // e não daria pra saber se foi este bloco que a fechou.
+                const vinculada = block.taskId
+                  ? tasks.find((t) => t.id === block.taskId && t.status !== "done")
+                  : undefined;
                 finishBlock(block.id);
                 cancelarFim(block.id);
                 limparAvisoDeInicio();
-                showToast("Bloco concluído.");
+                showToast(
+                  vinculada
+                    ? "Bloco concluído — e a tarefa no projeto também."
+                    : "Bloco concluído.",
+                  // Um bloco pode ser só uma sessão de uma tarefa maior; nesse
+                  // caso concluir a tarefa é errado, e desfazer tem que ser um
+                  // toque.
+                  vinculada ? () => setTaskStatus(vinculada.id, "todo") : undefined
+                );
               }}
               onReopen={() => reopenTimer(block.id)}
               onRemove={() => setConfirmRemove(block)}
