@@ -75,6 +75,12 @@ export function Sidebar({
 
   const activeTopics = topics.filter((t) => !t.archivedAt);
   const archivedTopics = topics.filter((t) => t.archivedAt);
+  // Duas naturezas diferentes de pasta, e por isso duas seções: coisas de
+  // trabalho/projeto e coisas que quero conquistar/comprar. Misturar as
+  // duas numa lista só faz "comprar uma roupa" competir visualmente com
+  // "Mentoria RUMO", que não é a mesma decisão.
+  const objetivos = activeTopics.filter((t) => !isWishlist(t));
+  const conquistas = activeTopics.filter((t) => isWishlist(t));
 
   function handleAddTopic(e: React.FormEvent) {
     e.preventDefault();
@@ -190,8 +196,9 @@ export function Sidebar({
             Ver todos
           </button>
 
-          <div className="space-y-0.5 pb-3">
-            {activeTopics.map((topic) => {
+          {objetivos.length > 0 && (
+            <div className="space-y-0.5 pb-2">
+              {objetivos.map((topic) => {
               const progress = calculateTopicProgress(tasks, topic.id);
               const wishlist = isWishlist(topic);
               const totals = wishlist ? wishlistTotals(tasks, topic.id) : null;
@@ -298,7 +305,125 @@ export function Sidebar({
                 </div>
               );
             })}
-          </div>
+            </div>
+          )}
+
+          {conquistas.length > 0 && (
+            <>
+              <p className="mb-1.5 mt-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                Conquistas pessoais
+              </p>
+              <div className="space-y-0.5 pb-3">
+                {conquistas.map((topic) => {
+              const progress = calculateTopicProgress(tasks, topic.id);
+              const wishlist = isWishlist(topic);
+              const totals = wishlist ? wishlistTotals(tasks, topic.id) : null;
+              return (
+                <div
+                  key={topic.id}
+                  className={`group rounded-md px-2 py-2 transition ${
+                    selectedTopicId === topic.id
+                      ? "bg-[var(--surface2)]"
+                      : "hover:bg-[var(--surface)]"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 text-sm">
+                    <span
+                      className="h-2.5 w-2.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: topic.color }}
+                      aria-hidden="true"
+                    />
+                    {editingId === topic.id ? (
+                      <input
+                        autoFocus
+                        value={editingName}
+                        onChange={(e) => setEditingName(e.target.value)}
+                        onBlur={commitEdit}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") commitEdit();
+                          if (e.key === "Escape") setEditingId(null);
+                        }}
+                        aria-label={`Renomear ${topic.name}`}
+                        className="min-w-0 flex-1 rounded border border-[var(--border)] bg-transparent px-1 py-0.5 text-sm text-[var(--foreground)] outline-none focus:border-[var(--focus)]"
+                      />
+                    ) : (
+                      <button
+                        onClick={() => selectTopic(topic.id)}
+                        onDoubleClick={() => {
+                          setEditingId(topic.id);
+                          setEditingName(topic.name);
+                        }}
+                        className={`min-w-0 flex-1 truncate text-left ${
+                          selectedTopicId === topic.id
+                            ? "text-[var(--foreground)]"
+                            : "text-[var(--muted)]"
+                        }`}
+                        title="Clique duplo para renomear"
+                      >
+                        {topic.name}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setConfirmDelete(topic.id)}
+                      aria-label={`Excluir tópico ${topic.name}`}
+                      className="hidden shrink-0 px-1 text-[var(--muted)] hover:text-[var(--danger)] group-hover:block"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  {totals ? (
+                    totals.itemsWanted + totals.itemsBought > 0 && (
+                      <div className="mt-1 flex items-center gap-2 pl-4.5 text-[10px]">
+                        <span className="tabular-nums text-[var(--brand)]">
+                          {formatBRL(totals.wantedCents)}
+                        </span>
+                        <span className="tabular-nums text-[var(--muted)]">
+                          {totals.itemsWanted}{" "}
+                          {totals.itemsWanted === 1 ? "item" : "itens"}
+                        </span>
+                        {totals.itemsBought > 0 && (
+                          <span className="tabular-nums text-[var(--success)]">
+                            {totals.itemsBought} ✓
+                          </span>
+                        )}
+                      </div>
+                    )
+                  ) : (
+                    progress.total > 0 && (
+                      <div className="mt-1.5 flex items-center gap-2 pl-4.5">
+                        <div
+                          className="h-1 flex-1 overflow-hidden rounded-full bg-[var(--surface3)]"
+                          role="progressbar"
+                          aria-valuenow={progress.percent}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-label={`Progresso de ${topic.name}`}
+                        >
+                          <div
+                            className="h-full rounded-full bg-[var(--success)]"
+                            style={{ width: `${progress.percent}%` }}
+                          />
+                        </div>
+                        <span className="shrink-0 tabular-nums text-[10px] text-[var(--muted)]">
+                          {progress.done}/{progress.total}
+                        </span>
+                        {progress.overdue > 0 && (
+                          <span
+                            className="shrink-0 tabular-nums text-[10px] text-[var(--danger)]"
+                            title={`${progress.overdue} atrasadas`}
+                          >
+                            !{progress.overdue}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  )}
+                </div>
+              );
+            })}
+              </div>
+            </>
+          )}
 
           {archivedTopics.length > 0 && (
             <div className="pb-3">

@@ -20,9 +20,28 @@ export function ServiceWorkerRegister() {
   );
 
   useEffect(() => {
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    if (!("serviceWorker" in navigator)) return;
+
+    /**
+     * Em desenvolvimento o service worker é desregistrado, não instalado.
+     *
+     * Os chunks do dev server reaproveitam o mesmo nome de arquivo com
+     * conteúdo diferente a cada recompilação — o `/_next/static/` que em
+     * produção é imutável e pode ser servido do cache, aqui não é. Com o SW
+     * ligado, editar um componente e recarregar continuava mostrando o código
+     * antigo, sem nenhum erro: silencioso e caro de descobrir.
+     */
+    if (process.env.NODE_ENV !== "production") {
+      navigator.serviceWorker.getRegistrations().then((regs) => {
+        for (const reg of regs) reg.unregister();
+      });
+      if (typeof caches !== "undefined") {
+        caches.keys().then((keys) => keys.forEach((k) => caches.delete(k)));
+      }
+      return;
     }
+
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
   }, []);
 
   if (online) return null;

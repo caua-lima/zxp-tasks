@@ -15,7 +15,6 @@ import { ProjectView } from "@/components/projects/ProjectView";
 import { TaskModal } from "@/components/TaskModal";
 import { DataPanel } from "@/components/shared/DataPanel";
 import { AccountPanel } from "@/components/shared/AccountPanel";
-import { SyncConflictDialog } from "@/components/shared/SyncConflictDialog";
 import { CommandPalette, Command } from "@/components/shared/CommandPalette";
 import { ShortcutsHelp } from "@/components/shared/ShortcutsHelp";
 import { ToastProvider, useToast } from "@/components/shared/Toast";
@@ -252,7 +251,6 @@ function HomeInner() {
       {dataOpen && <DataPanel onClose={() => setDataOpen(false)} />}
       {accountOpen && <AccountPanel onClose={() => setAccountOpen(false)} />}
       {helpOpen && <ShortcutsHelp onClose={() => setHelpOpen(false)} />}
-      <SyncConflictDialog />
 
       {quickOpen && (
         <TaskModal

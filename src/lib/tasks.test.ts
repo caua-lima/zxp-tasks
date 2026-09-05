@@ -14,7 +14,7 @@ import {
   suggestFocusTasks,
 } from "./task-utils";
 import { filterTasks, sortTasks } from "./task-filters";
-import { validateBackup, mergeImportedData } from "./task-backup";
+import { validateBackup, mergeImportedData, mergeBoards } from "./task-backup";
 import { calculateWeeklyMetrics } from "./weekly-review";
 import { addDaysISO, startOfWeekISO, localDayOf, daysBetween } from "./date-utils";
 import {
@@ -1171,5 +1171,98 @@ describe("mensagens de erro de login/cadastro", () => {
 
   test("não depende de maiúsculas/minúsculas do texto original", () => {
     assert.equal(traduzErroAuth(new Error("INVALID LOGIN CREDENTIALS")), "E-mail ou senha incorretos.");
+  });
+});
+
+describe("mescla automática entre aparelhos", () => {
+  function board(p: Partial<ReturnType<typeof emptyBoard>> = {}) {
+    return { ...emptyBoard(), ...p };
+  }
+  function bloco(id: string, title = "Bloco"): ScheduleBlock {
+    return { id, date: "2026-09-05", title, plannedMinutes: 40, accumulatedMs: 0, order: 0 };
+  }
+  function revisao(id: string, weekStart: string) {
+    return {
+      id, weekStart, stuck: "", toArchive: "", nextPriority: "", wastingTime: "",
+      createdAt: "2026-09-01T10:00:00Z",
+    };
+  }
+
+  test("junta tarefas e tópicos dos dois lados", () => {
+    const local = board({ topics: [topic({ id: "a" })], tasks: [task({ id: "1", topicId: "a" })] });
+    const remoto = board({
+      topics: [topic({ id: "b", name: "Outro" })],
+      tasks: [task({ id: "2", topicId: "b" })],
+    });
+    const { board: r, report } = mergeBoards(local, remoto);
+    assert.equal(r.topics.length, 2);
+    assert.equal(r.tasks.length, 2);
+    assert.equal(report.topicsAdded, 1);
+    assert.equal(report.tasksAdded, 1);
+  });
+
+  test("NÃO perde o cronograma do outro aparelho (o bug que a mescla antiga tinha)", () => {
+    const local = board({ schedule: [bloco("1", "Leads")] });
+    const remoto = board({ schedule: [bloco("2", "Mercado Livre")] });
+    const { board: r } = mergeBoards(local, remoto);
+    assert.deepEqual(r.schedule.map((b) => b.title).sort(), ["Leads", "Mercado Livre"]);
+  });
+
+  test("não perde revisões semanais do outro aparelho", () => {
+    const local = board({ weeklyReviews: [revisao("a", "2026-08-31")] });
+    const remoto = board({ weeklyReviews: [revisao("b", "2026-09-07")] });
+    const { board: r } = mergeBoards(local, remoto);
+    assert.equal(r.weeklyReviews.length, 2);
+  });
+
+  test("revisão da MESMA semana não duplica, mesmo com ids diferentes", () => {
+    const local = board({ weeklyReviews: [revisao("a", "2026-08-31")] });
+    const remoto = board({ weeklyReviews: [revisao("outro-id", "2026-08-31")] });
+    const { board: r } = mergeBoards(local, remoto);
+    assert.equal(r.weeklyReviews.length, 1);
+    assert.equal(r.weeklyReviews[0].id, "a");
+  });
+
+  test("id repetido mantém a versão local, sem duplicar", () => {
+    const local = board({ topics: [topic({ id: "a", name: "Local" })] });
+    const remoto = board({ topics: [topic({ id: "a", name: "Remoto" })] });
+    const { board: r } = mergeBoards(local, remoto);
+    assert.equal(r.topics.length, 1);
+    assert.equal(r.topics[0].name, "Local");
+  });
+
+  test("tarefa remota órfã (tópico inexistente) não entra e viraria invisível", () => {
+    const local = board({ topics: [topic({ id: "a" })] });
+    const remoto = board({ tasks: [task({ id: "x", topicId: "nao-existe" })] });
+    const { board: r } = mergeBoards(local, remoto);
+    assert.equal(r.tasks.length, 0);
+  });
+
+  test("foco do dia: dia só do remoto entra, dia em comum fica com o local", () => {
+    const local = board({ dailyFocus: { "2026-09-05": ["t1"] } });
+    const remoto = board({ dailyFocus: { "2026-09-05": ["t9"], "2026-09-04": ["t2"] } });
+    const { board: r } = mergeBoards(local, remoto);
+    assert.deepEqual(r.dailyFocus["2026-09-05"], ["t1"]);
+    assert.deepEqual(r.dailyFocus["2026-09-04"], ["t2"]);
+  });
+
+  test("mesclar com nuvem vazia não muda nada nem quebra", () => {
+    const local = board({ topics: [topic()], tasks: [task({})], schedule: [bloco("1")] });
+    const { board: r } = mergeBoards(local, emptyBoard());
+    assert.equal(r.topics.length, 1);
+    assert.equal(r.tasks.length, 1);
+    assert.equal(r.schedule.length, 1);
+  });
+
+  test("aparelho novo (local vazio) recebe tudo da nuvem", () => {
+    const remoto = board({
+      topics: [topic({ id: "a" })],
+      tasks: [task({ id: "1", topicId: "a" })],
+      schedule: [bloco("b1")],
+    });
+    const { board: r } = mergeBoards(emptyBoard(), remoto);
+    assert.equal(r.topics.length, 1);
+    assert.equal(r.tasks.length, 1);
+    assert.equal(r.schedule.length, 1);
   });
 });

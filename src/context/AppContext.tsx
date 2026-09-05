@@ -23,7 +23,7 @@ import {
 import { loadBoard, pushBackup, saveBoard } from "@/lib/storage";
 import { nextTopicColor } from "@/lib/colors";
 import { migrateBoard } from "@/lib/task-migrations";
-import { mergeImportedData, MergeReport, validateBackup } from "@/lib/task-backup";
+import { mergeBoards, mergeImportedData, MergeReport, validateBackup } from "@/lib/task-backup";
 import { createRecurringTask, skipOccurrence } from "@/lib/recurrence";
 import { todayISO } from "@/lib/date-utils";
 import { useAuth } from "./AuthContext";
@@ -84,13 +84,6 @@ interface AppContextValue {
   /** Sincronização com a nuvem (opcional — só ativa com usuário logado). */
   syncStatus: SyncStatus;
   lastSyncedAt: string | null;
-  /**
-   * Não nulo só na primeira sincronização de um login, quando a nuvem já
-   * tem dados diferentes dos locais — precisa de uma decisão explícita
-   * antes de qualquer coisa ser sobrescrita.
-   */
-  cloudConflict: Board | null;
-  resolveConflict: (choice: "keep-cloud" | "merge" | "replace-cloud") => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -115,56 +108,48 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("offline");
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
-  const [cloudConflict, setCloudConflict] = useState<Board | null>(null);
   // Só true depois que a primeira reconciliação de UM login termina — antes
-  // disso, o efeito de push não pode rodar, senão sobrescreveria a nuvem
-  // com o board local antes de perguntar o que fazer com o conflito.
+  // disso o push não pode rodar, senão a nuvem seria sobrescrita pelo board
+  // local antes de a mescla acontecer.
   const initialSyncDone = useRef(false);
-  // Board local no instante em que a nuvem respondeu, capturado fora do
-  // React state pra `resolveConflict` não depender de closure velha do
-  // `board` (o efeito de assinatura só roda de novo quando `user` muda).
-  const localBoardAtConflict = useRef<Board | null>(null);
+
+  // Identidade estável do login. O objeto `user` do Supabase é recriado a
+  // cada evento de auth (refresh de token, foco na janela), e usá-lo como
+  // dependência do efeito reiniciava a "primeira sincronização" o tempo
+  // todo — era isso que fazia a reconciliação acontecer repetidamente.
+  const userId = user?.id ?? null;
 
   useEffect(() => {
-    if (!user) {
+    if (!userId) {
       // Sincroniza o estado local com o estado externo (login) — o caso que
       // a própria regra recomenda resolver com um efeito, não com derivação.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSyncStatus("offline");
-      setCloudConflict(null);
       initialSyncDone.current = false;
       return;
     }
 
     setSyncStatus("syncing");
     const unsubscribe = subscribeToCloudBoard(
-      user.id,
+      userId,
       (cloud) => {
         if (!initialSyncDone.current) {
           initialSyncDone.current = true;
-          if (cloud === "empty") {
-            // Conta nova: semeia a nuvem com o que já existe neste aparelho.
-            setBoard((current) => {
-              pushBoardToCloud(user.id, current).catch(() => {});
-              return current;
-            });
-            setSyncStatus("synced");
-            setLastSyncedAt(new Date().toISOString());
-            return;
-          }
           setBoard((current) => {
-            const localHasData = current.topics.length > 0 || current.tasks.length > 0;
-            if (!localHasData) {
-              setSyncStatus("synced");
-              setLastSyncedAt(new Date().toISOString());
-              return cloud;
+            if (cloud === "empty") {
+              // Conta nova: semeia a nuvem com o que já existe aqui.
+              pushBoardToCloud(userId, current).catch(() => {});
+              return current;
             }
-            // Nuvem e local têm dado de verdade — pergunta antes de decidir.
-            localBoardAtConflict.current = current;
-            setCloudConflict(cloud);
-            setSyncStatus("synced");
-            return current;
+            // Une os dois lados sem perguntar e sem descartar nada — o
+            // objetivo é o aparelho novo simplesmente ficar igual aos
+            // outros, não abrir uma negociação a cada login.
+            const merged = mergeBoards(current, cloud).board;
+            pushBoardToCloud(userId, merged).catch(() => {});
+            return merged;
           });
+          setSyncStatus("synced");
+          setLastSyncedAt(new Date().toISOString());
           return;
         }
         setBoard(cloud === "empty" ? emptyBoard() : cloud);
@@ -178,13 +163,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       unsubscribe();
       initialSyncDone.current = false;
     };
-  }, [user]);
+  }, [userId]);
 
   useEffect(() => {
-    if (!ready || !user || !initialSyncDone.current || cloudConflict) return;
+    if (!ready || !userId || !initialSyncDone.current) return;
     setSyncStatus("syncing");
     const timeout = setTimeout(() => {
-      pushBoardToCloud(user.id, board)
+      pushBoardToCloud(userId, board)
         .then(() => {
           setSyncStatus("synced");
           setLastSyncedAt(new Date().toISOString());
@@ -192,29 +177,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         .catch(() => setSyncStatus("error"));
     }, 1200);
     return () => clearTimeout(timeout);
-  }, [board, ready, user, cloudConflict]);
-
-  const resolveConflict = useCallback(
-    (choice: "keep-cloud" | "merge" | "replace-cloud") => {
-      if (!cloudConflict) return;
-      const localBoard = localBoardAtConflict.current ?? board;
-      // Snapshot local antes de qualquer escolha que descarta um dos lados —
-      // "keep-cloud" descarta o local, "replace-cloud" descarta a nuvem (só
-      // temos essa cópia da nuvem agora, em memória; depois de sobrescrever
-      // não tem mais como recuperar pelo app).
-      if (choice === "keep-cloud") {
-        pushBackup(localBoard, "conflito de sincronização (usar nuvem)");
-        setBoard(cloudConflict);
-      } else if (choice === "merge") {
-        pushBackup(localBoard, "conflito de sincronização (mesclar)");
-        setBoard(mergeImportedData(localBoard, cloudConflict).board);
-      } else {
-        pushBackup(cloudConflict, "conflito de sincronização (usar este aparelho)");
-      }
-      setCloudConflict(null);
-    },
-    [cloudConflict, board]
-  );
+  }, [board, ready, userId]);
 
   const addTopic = useCallback(
     (name: string, kind: TopicKind = "project") => {
@@ -601,8 +564,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       importData,
       syncStatus,
       lastSyncedAt,
-      cloudConflict,
-      resolveConflict,
     }),
     [
       board,
@@ -640,8 +601,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       importData,
       syncStatus,
       lastSyncedAt,
-      cloudConflict,
-      resolveConflict,
     ]
   );
 

@@ -18,6 +18,7 @@ import { formatBRL } from "@/lib/money";
 import { TaskModal } from "../TaskModal";
 import { TaskRow } from "../today/TaskRow";
 import { MindMap } from "../MindMap";
+import { KanbanBoard } from "../KanbanBoard";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
 import { useToast } from "../shared/Toast";
 
@@ -57,7 +58,8 @@ export function ProjectView({ topicId }: { topicId: string }) {
   const { showToast } = useToast();
   const [modalTask, setModalTask] = useState<Task | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
-  const [showMap, setShowMap] = useState(false);
+  // Quadro aberto por padrão: é a visão que responde "o que falta aqui".
+  const [visual, setVisual] = useState<"kanban" | "mapa" | "nenhum">("kanban");
   const [confirmArchive, setConfirmArchive] = useState(false);
   const [editingDescription, setEditingDescription] = useState(false);
   const [descriptionDraft, setDescriptionDraft] = useState("");
@@ -421,19 +423,40 @@ export function ProjectView({ topicId }: { topicId: string }) {
         )}
       </Block>
 
-      <Block title={wishlist ? "Mapa da lista" : "Mapa mental do tópico"}>
-        <button
-          onClick={() => setShowMap((v) => !v)}
-          className="mb-3 min-h-[36px] rounded-md border border-[var(--border)] px-3 text-xs font-medium text-[var(--muted)] hover:bg-[var(--surface2)]"
-        >
-          {showMap ? "Ocultar mapa" : "Mostrar mapa"}
-        </button>
-        {showMap && (
-          <div className="h-[420px] overflow-hidden rounded-lg border border-[var(--border)]">
+      <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+        <div className="flex flex-wrap items-center gap-1 border-b border-[var(--border)] p-2">
+          {(
+            [
+              ["kanban", wishlist ? "Quadro" : "Kanban"],
+              ["mapa", "Mapa mental"],
+            ] as const
+          ).map(([chave, rotulo]) => (
+            <button
+              key={chave}
+              onClick={() => setVisual(visual === chave ? "nenhum" : chave)}
+              aria-pressed={visual === chave}
+              className={`min-h-[40px] rounded-md px-3 text-sm font-medium transition ${
+                visual === chave
+                  ? "bg-[var(--brand)] text-[var(--accent-ink)]"
+                  : "text-[var(--muted)] hover:bg-[var(--surface2)]"
+              }`}
+            >
+              {rotulo}
+            </button>
+          ))}
+        </div>
+
+        {visual === "kanban" && (
+          <div className="h-[560px] overflow-hidden">
+            <KanbanBoard topicId={topicId} filters={{}} sortKey="priority" />
+          </div>
+        )}
+        {visual === "mapa" && (
+          <div className="h-[480px] overflow-hidden">
             <MindMap topicId={topicId} filters={{}} />
           </div>
         )}
-      </Block>
+      </section>
 
       {modalOpen && (
         <TaskModal

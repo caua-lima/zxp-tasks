@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/context/AppContext";
-import { Task } from "@/lib/types";
+import { Task, Topic } from "@/lib/types";
 import { TaskFilters, filterTasks } from "@/lib/task-filters";
 import { checklistProgress, isTaskOverdue } from "@/lib/task-utils";
 import { PRIORITY_COLOR, PRIORITY_LABEL } from "@/lib/priority";
@@ -20,6 +20,18 @@ const STATUS_COLOR: Record<string, string> = {
   doing: "#F0A74A",
   done: "#36B37E",
 };
+
+/** Distância vertical entre duas tarefas da mesma coluna. */
+const ESPACO_LINHA = 52;
+/** Respiro entre as faixas de dois tópicos do mesmo lado. */
+const ESPACO_ENTRE_GRUPOS = 56;
+/** Distância horizontal do hub até o tópico e do tópico até suas tarefas. */
+const DISTANCIA_TOPICO = 200;
+const DISTANCIA_TAREFA = 250;
+
+/** Caixa dos nós, usada pra calcular o enquadramento inicial. */
+const CARTAO = { w: 156, h: 38 };
+const PILULA = { w: 148, h: 42 };
 
 /** Acima disso o SVG vira sopa; melhor pedir filtro do que desenhar tudo. */
 const MAX_NODES = 60;
@@ -93,42 +105,136 @@ export function MindMap({ topicId, filters }: MindMapProps) {
   }, [tasks, tooMany]);
 
   const layout = useMemo(() => {
-    // Raio proporcional ao painel: no embed estreito da visão de projeto
-    // (420px de altura), usar sempre 260/150 fixos jogaria nó pra fora da
-    // área visível mesmo com o hub centralizado. Painel grande (mapa em
-    // tela cheia) mantém o alcance de sempre.
-    const reach = Math.max(60, Math.min(center.x, center.y) - 70);
-    const R1 = Math.min(260, reach);
-    const R2 = Math.min(150, topicId ? reach : reach * 0.55);
+    /**
+     * Layout de árvore, não de leque: os ramos saem pros lados e as tarefas
+     * de cada tópico ficam empilhadas em coluna.
+     *
+     * A versão anterior espalhava as tarefas num arco ao redor do tópico. Só
+     * que os cartões são largos (156px) e fixos: em qualquer arco, dois
+     * vizinhos com poucos graus de diferença se sobrepõem na horizontal, e
+     * aumentar o raio até resolver jogava o resto do mapa longe demais. Em
+     * coluna a distância entre vizinhos é conhecida e a sobreposição é
+     * impossível por construção — que é como mapa mental de verdade se
+     * organiza.
+     *
+     * Tudo é calculado em coordenadas próprias, sem olhar o tamanho do
+     * painel; encaixar na tela é trabalho do zoom automático mais abaixo.
+     */
     const topicNodes = new Map<string, Node & { angle: number }>();
     const taskNodes = new Map<string, Node>();
 
-    const angleStep = (2 * Math.PI) / Math.max(visibleTopics.length, 1);
-    visibleTopics.forEach((topic, i) => {
-      const angle = topicId ? -Math.PI / 2 : i * angleStep - Math.PI / 2;
-      const x = topicId ? 0 : R1 * Math.cos(angle);
-      const y = topicId ? 0 : R1 * Math.sin(angle);
-      topicNodes.set(topic.id, { x, y, angle });
+    const tarefasDe = (id: string) => rendered.filter((t) => t.topicId === id);
 
-      const topicTasks = rendered.filter((t) => t.topicId === topic.id);
-      const isFullCircle = !!topicId;
-      const arc = isFullCircle ? 2 * Math.PI : (Math.PI * 2) / 3;
-      const start = angle - arc / 2;
-      // Círculo completo (um só tópico aberto) não pode fechar o laço: dividir
-      // por (n-1) faz o primeiro e o último nó caírem no mesmo ângulo — 360°
-      // voltam pro ponto de partida. Arco parcial (vários tópicos) continua
-      // dividindo por (n-1) de propósito, pra ocupar as pontas do leque.
-      const denom = isFullCircle
-        ? Math.max(topicTasks.length, 1)
-        : Math.max(topicTasks.length - 1, 1);
-      topicTasks.forEach((task, j) => {
-        const a = topicTasks.length === 1 ? angle : start + (arc * j) / denom;
-        taskNodes.set(task.id, { x: x + R2 * Math.cos(a), y: y + R2 * Math.sin(a) });
+    if (topicId) {
+      // Um tópico só: ele é o centro e as tarefas descem em duas colunas,
+      // uma de cada lado, alternando pra manter o desenho equilibrado.
+      const topic = visibleTopics[0];
+      if (!topic) return { topicNodes, taskNodes };
+      topicNodes.set(topic.id, { x: 0, y: 0, angle: 0 });
+
+      const lista = tarefasDe(topic.id);
+      const colunas: Task[][] = [[], []];
+      lista.forEach((t, i) => colunas[i % 2].push(t));
+      colunas.forEach((coluna, lado) => {
+        const dir = lado === 0 ? 1 : -1;
+        const alturaTotal = (coluna.length - 1) * ESPACO_LINHA;
+        coluna.forEach((task, j) => {
+          taskNodes.set(task.id, {
+            x: dir * DISTANCIA_TAREFA,
+            y: j * ESPACO_LINHA - alturaTotal / 2,
+          });
+        });
+      });
+      return { topicNodes, taskNodes };
+    }
+
+    // Vários tópicos: hub no meio, tópicos alternando entre o lado direito e
+    // o esquerdo. Cada tópico reserva uma faixa vertical do tamanho da sua
+    // lista, e as faixas de um mesmo lado são empilhadas sem se tocar.
+    const lados: Topic[][] = [[], []];
+    visibleTopics.forEach((t, i) => lados[i % 2].push(t));
+
+    lados.forEach((doLado, lado) => {
+      const dir = lado === 0 ? 1 : -1;
+      const alturas = doLado.map((t) =>
+        Math.max(1, tarefasDe(t.id).length) * ESPACO_LINHA
+      );
+      const total =
+        alturas.reduce((a, b) => a + b, 0) +
+        Math.max(0, doLado.length - 1) * ESPACO_ENTRE_GRUPOS;
+
+      let topo = -total / 2;
+      doLado.forEach((topic, i) => {
+        const altura = alturas[i];
+        const meio = topo + altura / 2;
+        topicNodes.set(topic.id, { x: dir * DISTANCIA_TOPICO, y: meio, angle: 0 });
+
+        tarefasDe(topic.id).forEach((task, j) => {
+          taskNodes.set(task.id, {
+            x: dir * (DISTANCIA_TOPICO + DISTANCIA_TAREFA),
+            y: topo + j * ESPACO_LINHA + ESPACO_LINHA / 2,
+          });
+        });
+
+        topo += altura + ESPACO_ENTRE_GRUPOS;
       });
     });
 
     return { topicNodes, taskNodes };
-  }, [visibleTopics, rendered, topicId, center]);
+  }, [visibleTopics, rendered, topicId]);
+
+  /**
+   * Enquadramento inicial: calcula a caixa que contém todos os nós e devolve
+   * a transformação que a encaixa no painel. Sem isso o mapa sempre abria em
+   * escala 1 e, num painel pequeno (ou com muitas tarefas), metade dele
+   * nascia fora da área visível — a pessoa tinha que arrastar pra descobrir
+   * que havia mais coisa ali.
+   */
+  const enquadramento = useMemo(() => {
+    const caixas: { x: number; y: number; w: number; h: number }[] = [];
+    layout.topicNodes.forEach((n) => caixas.push({ ...PILULA, x: n.x, y: n.y }));
+    layout.taskNodes.forEach((n) => caixas.push({ ...CARTAO, x: n.x, y: n.y }));
+    if (caixas.length === 0) return { x: 0, y: 0, scale: 1 };
+
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (const c of caixas) {
+      minX = Math.min(minX, c.x - c.w / 2);
+      maxX = Math.max(maxX, c.x + c.w / 2);
+      minY = Math.min(minY, c.y - c.h / 2);
+      maxY = Math.max(maxY, c.y + c.h / 2);
+    }
+
+    const larguraUtil = Math.max(1, center.x * 2 - 32);
+    const alturaUtil = Math.max(1, center.y * 2 - 96); // barra de ações + legenda
+    const escala = Math.min(
+      1,
+      larguraUtil / Math.max(1, maxX - minX),
+      alturaUtil / Math.max(1, maxY - minY)
+    );
+    // Abaixo disso o texto do cartão vira borrão; melhor caber por arrasto.
+    const scale = Math.max(0.3, escala);
+
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    return {
+      x: center.x * (1 - scale) - scale * cx,
+      y: center.y * (1 - scale) - scale * cy,
+      scale,
+    };
+  }, [layout, center]);
+
+  // Reenquadra quando o conteúdo ou o tamanho do painel muda — não a cada
+  // render, senão anularia o arrasto/zoom que a pessoa acabou de fazer.
+  const chaveEnquadramento = `${Math.round(center.x)}x${Math.round(center.y)}|${topicId ?? ""}|${rendered.length}|${visibleTopics.length}`;
+  const ultimoEnquadramento = useRef("");
+  useEffect(() => {
+    if (ultimoEnquadramento.current === chaveEnquadramento) return;
+    ultimoEnquadramento.current = chaveEnquadramento;
+    setTransform(enquadramento);
+  }, [chaveEnquadramento, enquadramento]);
 
   function onPointerDown(e: React.PointerEvent) {
     dragState.current = { x: e.clientX - transform.x, y: e.clientY - transform.y };
@@ -182,7 +288,7 @@ export function MindMap({ topicId, filters }: MindMapProps) {
               −
             </button>
             <button
-              onClick={() => setTransform({ x: 0, y: 0, scale: 1 })}
+              onClick={() => setTransform(enquadramento)}
               className="min-h-[36px] rounded-md bg-[var(--surface)] px-2.5 text-xs font-medium text-[var(--foreground)] shadow hover:bg-[var(--surface2)]"
             >
               Resetar
@@ -272,38 +378,49 @@ export function MindMap({ topicId, filters }: MindMapProps) {
                 return (
                   <g key={topic.id}>
                     {!topicId && (
-                      <line
-                        x1={0}
-                        y1={0}
-                        x2={node.x}
-                        y2={node.y}
+                      <path
+                        d={`M 0 0 C ${node.x / 2} 0, ${node.x / 2} ${node.y}, ${node.x} ${node.y}`}
+                        fill="none"
                         stroke={topic.color}
-                        strokeWidth={2}
-                        opacity={0.5}
+                        strokeWidth={2.5}
+                        opacity={0.55}
                       />
                     )}
                     {topicTasks.map((task) => {
                       const tNode = layout.taskNodes.get(task.id);
                       if (!tNode) return null;
                       return (
-                        <line
+                        <path
                           key={task.id}
-                          x1={node.x}
-                          y1={node.y}
-                          x2={tNode.x}
-                          y2={tNode.y}
+                          // Curva em vez de reta: num mapa mental as ligações
+                          // retas viram um "sol" de raios que embaralha a
+                          // leitura quando há muitos nós.
+                          d={`M ${node.x} ${node.y} C ${(node.x + tNode.x) / 2} ${node.y}, ${(node.x + tNode.x) / 2} ${tNode.y}, ${tNode.x} ${tNode.y}`}
+                          fill="none"
                           stroke={topic.color}
-                          strokeWidth={1.25}
-                          opacity={0.35}
+                          strokeWidth={1.5}
+                          opacity={task.completedAt ? 0.18 : 0.4}
                         />
                       );
                     })}
 
                     <g transform={`translate(${node.x}, ${node.y})`}>
-                      <circle r={34} fill={topic.color} />
-                      <foreignObject x={-60} y={-34} width={120} height={68}>
-                        <div className="flex h-full w-full items-center justify-center px-1 text-center text-[11px] font-semibold text-[#10100E]">
-                          {topic.name}
+                      <rect
+                        x={-74}
+                        y={-21}
+                        width={148}
+                        height={42}
+                        rx={21}
+                        fill={topic.color}
+                      />
+                      <foreignObject x={-74} y={-21} width={148} height={42}>
+                        <div className="flex h-full w-full items-center justify-center gap-1.5 px-3 text-center">
+                          <span className="truncate font-[family-name:var(--font-display)] text-[12px] font-semibold text-[#10100E]">
+                            {topic.name}
+                          </span>
+                          <span className="shrink-0 rounded-full bg-[#10100E]/20 px-1.5 text-[10px] font-semibold tabular-nums text-[#10100E]">
+                            {topicTasks.length}
+                          </span>
                         </div>
                       </foreignObject>
                     </g>
@@ -326,27 +443,69 @@ export function MindMap({ topicId, filters }: MindMapProps) {
                             {task.dueDate ? `, prazo ${formatDateShort(task.dueDate)}` : ""}
                             {overdue ? ", atrasada" : ""}
                           </title>
-                          <circle
-                            r={8}
-                            fill={STATUS_COLOR[task.status]}
-                            stroke={overdue ? "var(--danger)" : "var(--color-ivory)"}
-                            strokeWidth={overdue ? 3 : 1.5}
+                          {/*
+                            Cartão em vez de bolinha com legenda solta: o nó
+                            precisa dizer o que é sem o olho ter que casar um
+                            ponto com um rótulo ao lado. A faixa da esquerda
+                            carrega a prioridade, e a borda vermelha marca
+                            atraso — cor nunca sozinha, sempre com texto.
+                          */}
+                          <rect
+                            x={-78}
+                            y={-19}
+                            width={156}
+                            height={38}
+                            rx={9}
+                            fill="var(--surface2)"
+                            stroke={overdue ? "var(--danger)" : "var(--border)"}
+                            strokeWidth={overdue ? 2 : 1}
+                            opacity={task.completedAt ? 0.55 : 1}
                           />
-                          <circle
-                            r={3}
-                            cy={-14}
+                          <path
+                            d="M -78 -10 L -78 10 A 9 9 0 0 1 -78 -10 Z"
                             fill={PRIORITY_COLOR[task.priority]}
                           />
-                          <foreignObject x={-70} y={12} width={140} height={44}>
-                            <div className="pointer-events-none rounded bg-[var(--surface2)] px-1.5 py-0.5 text-center text-[10px] font-medium leading-tight text-[var(--foreground)] shadow-sm">
-                              <span className="block truncate">{task.title}</span>
-                              {(task.dueDate || total > 0) && (
-                                <span className="block tabular-nums text-[9px] text-[var(--muted)]">
-                                  {overdue && "! "}
-                                  {task.dueDate && formatDateShort(task.dueDate)}
-                                  {total > 0 && ` ☑${done}/${total}`}
-                                </span>
-                              )}
+                          <rect
+                            x={-78}
+                            y={-19}
+                            width={4}
+                            height={38}
+                            fill={PRIORITY_COLOR[task.priority]}
+                            opacity={task.completedAt ? 0.5 : 1}
+                          />
+                          <foreignObject x={-72} y={-19} width={148} height={38}>
+                            <div
+                              className="pointer-events-none flex h-full flex-col justify-center px-2"
+                              style={{ opacity: task.completedAt ? 0.6 : 1 }}
+                            >
+                              <span
+                                className={`truncate text-[11px] font-medium leading-tight text-[var(--foreground)] ${
+                                  task.completedAt ? "line-through" : ""
+                                }`}
+                              >
+                                {task.title}
+                              </span>
+                              <span className="flex items-center gap-1 truncate text-[9px] leading-tight text-[var(--muted)]">
+                                <span
+                                  className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+                                  style={{ backgroundColor: STATUS_COLOR[task.status] }}
+                                />
+                                {STATUS_LABEL[task.status]}
+                                {task.dueDate && (
+                                  <span
+                                    className="tabular-nums"
+                                    style={overdue ? { color: "var(--danger)" } : undefined}
+                                  >
+                                    · {overdue ? "! " : ""}
+                                    {formatDateShort(task.dueDate)}
+                                  </span>
+                                )}
+                                {total > 0 && (
+                                  <span className="tabular-nums">
+                                    · {done}/{total}
+                                  </span>
+                                )}
+                              </span>
                             </div>
                           </foreignObject>
                         </g>
