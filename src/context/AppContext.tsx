@@ -12,6 +12,7 @@ import {
 import { v4 as uuid } from "uuid";
 import {
   Board,
+  BoardSettings,
   ScheduleBlock,
   Task,
   TaskStatus,
@@ -80,6 +81,9 @@ interface AppContextValue {
   addBreak: (date: string, minutos: number) => void;
   /** Estica o tempo planejado do bloco (o "+" do intervalo). */
   extendPlanned: (id: string, minutos: number) => void;
+  /** Preferências do quadro (sincronizam junto com o resto). */
+  settings: BoardSettings;
+  setParallelTimers: (valor: boolean) => void;
   startTimer: (id: string) => void;
   pauseTimer: (id: string) => void;
   /** Conclui o bloco e, se houver, a tarefa do projeto vinculada a ele. */
@@ -504,15 +508,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return {
         ...b,
         // Descansar pausa o que estava rodando — senão o trabalho continuaria
-        // contando durante o café.
+        // contando durante o café. Em modo paralelo a decisão é de quem está
+        // usando, e aqui também não se pausa nada por conta própria.
         schedule: [
           ...b.schedule.map((x) =>
-            x.startedAt && !x.completedAt ? pauseBlock(x, nowMs) : x
+            !b.settings.parallelTimers && x.startedAt && !x.completedAt
+              ? pauseBlock(x, nowMs)
+              : x
           ),
           bloco,
         ],
       };
     });
+  }, []);
+
+  const setParallelTimers = useCallback((valor: boolean) => {
+    setBoard((b) => ({ ...b, settings: { ...b.settings, parallelTimers: valor } }));
   }, []);
 
   const extendPlanned = useCallback((id: string, minutos: number) => {
@@ -527,14 +538,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   /**
-   * Só um cronômetro roda por vez: startar um bloco pausa o que estiver
-   * rodando. Dois relógios correndo juntos contariam o mesmo minuto duas
-   * vezes, e o total do dia deixaria de significar alguma coisa.
+   * Liga o cronômetro de um bloco.
+   *
+   * Por padrão pausa o que estiver rodando: quem aperta "Começar" quase
+   * sempre está TROCANDO de tarefa, e dois relógios somando o mesmo minuto
+   * fariam o total do dia significar menos. Mas trabalhar em duas coisas de
+   * verdade ao mesmo tempo existe — com `parallelTimers` ligado nada é
+   * pausado, e a tela avisa que o total passou a somar em paralelo.
    */
   const startTimer = useCallback((id: string) => {
     const nowIso = new Date().toISOString();
     const nowMs = Date.now();
     setBoard((b) => {
+      const paralelo = b.settings.parallelTimers;
       const block = b.schedule.find((x) => x.id === id);
       // Ligar o cronômetro move a tarefa do projeto pra "Fazendo": é a mesma
       // informação dita duas vezes, e arrastar o cartão à mão depois de já
@@ -547,6 +563,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ...b,
         schedule: b.schedule.map((x) => {
           if (x.id === id) return startBlock(x, nowIso);
+          if (paralelo) return x;
           return x.startedAt && !x.completedAt ? pauseBlock(x, nowMs) : x;
         }),
         tasks: vinculada
@@ -686,6 +703,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       addBlock,
       addBreak,
       extendPlanned,
+      setParallelTimers,
+      settings: board.settings,
       updateBlock,
       removeBlock,
       startTimer,
@@ -725,6 +744,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       addBlock,
       addBreak,
       extendPlanned,
+      setParallelTimers,
       updateBlock,
       removeBlock,
       startTimer,

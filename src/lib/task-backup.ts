@@ -140,6 +140,8 @@ export function mergeBoards(
       // comum ficam com a versão local (o limite de 3 não pode ser furado
       // por uma união cega).
       dailyFocus: { ...remote.dailyFocus, ...local.dailyFocus },
+      // Preferência é do aparelho que está na mão da pessoa agora.
+      settings: local.settings,
     },
     report: {
       topicsAdded: novosTopicos.length,

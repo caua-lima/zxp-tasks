@@ -1438,3 +1438,31 @@ test("extendBlock estica o planejado e nunca deixa zerar", () => {
   assert.equal(extendBlock(b, 5).plannedMinutes, 15);
   assert.equal(extendBlock(b, -100).plannedMinutes, 1);
 });
+
+test("scheduleTotals lista todos os cronômetros em andamento", () => {
+  const T0 = new Date("2026-09-06T10:00:00.000Z").getTime();
+  const a = { ...bloco({ id: "a", date: "d" }), startedAt: new Date(T0 - 60_000).toISOString() };
+  const b = { ...bloco({ id: "b", date: "d" }), startedAt: new Date(T0 - 30_000).toISOString() };
+  const t = scheduleTotals([a, b, bloco({ id: "c", date: "d" })], T0);
+  assert.deepEqual(t.runningIds, ["a", "b"]);
+  assert.equal(t.runningId, "a");
+  // Dois relógios somam: 60s + 30s. É proposital — o total vira "tempo
+  // dedicado", não "tempo de relógio" — e a tela avisa quando acontece.
+  assert.equal(t.elapsedMs, 90_000);
+});
+
+test("migração assume um cronômetro por vez em board antigo", () => {
+  const board = migrateBoard({ topics: [], tasks: [] });
+  assert.equal(board.settings.parallelTimers, false);
+});
+
+test("migração preserva a preferência de cronômetros paralelos", () => {
+  const board = migrateBoard({ topics: [], tasks: [], settings: { parallelTimers: true } });
+  assert.equal(board.settings.parallelTimers, true);
+});
+
+test("mergeBoards mantém a preferência do aparelho local", () => {
+  const local = { ...emptyBoard(), settings: { parallelTimers: true } };
+  const remote = { ...emptyBoard(), settings: { parallelTimers: false } };
+  assert.equal(mergeBoards(local, remote).board.settings.parallelTimers, true);
+});

@@ -97,6 +97,8 @@ export interface ScheduleTotals {
   doneCount: number;
   total: number;
   runningId: string | null;
+  /** Todos os que estão correndo — pode ser mais de um em modo paralelo. */
+  runningIds: string[];
 }
 
 export function scheduleTotals(
@@ -106,16 +108,23 @@ export function scheduleTotals(
   let planned = 0;
   let elapsed = 0;
   let doneCount = 0;
-  let runningId: string | null = null;
+  const runningIds: string[] = [];
 
   for (const b of blocks) {
     planned += plannedMs(b);
     elapsed += elapsedMs(b, now);
     if (b.completedAt) doneCount++;
-    if (isRunning(b)) runningId = b.id;
+    if (isRunning(b)) runningIds.push(b.id);
   }
 
-  return { plannedMs: planned, elapsedMs: elapsed, doneCount, total: blocks.length, runningId };
+  return {
+    plannedMs: planned,
+    elapsedMs: elapsed,
+    doneCount,
+    total: blocks.length,
+    runningId: runningIds[0] ?? null,
+    runningIds,
+  };
 }
 
 export function blocksOfDay(blocks: ScheduleBlock[], date: string): ScheduleBlock[] {

@@ -221,5 +221,13 @@ export function migrateBoard(raw: unknown): Board {
     schedule,
     dailyFocus,
     weeklyReviews,
+    // Board salvo antes das preferências não tem `settings`; o padrão é o
+    // comportamento antigo (um cronômetro por vez).
+    settings: {
+      parallelTimers:
+        typeof r.settings === "object" &&
+        r.settings !== null &&
+        (r.settings as Record<string, unknown>).parallelTimers === true,
+    },
   };
 }

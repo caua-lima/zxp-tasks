@@ -138,6 +138,19 @@ export interface ScheduleBlock {
   isBreak?: boolean;
 }
 
+export interface BoardSettings {
+  /**
+   * Deixa mais de um cronômetro correr ao mesmo tempo.
+   *
+   * Desligado, começar um bloco pausa o que estiver rodando — bom pra quem
+   * troca de tarefa. Ligado, os cronômetros somam em paralelo: dez minutos
+   * de relógio com dois blocos ligados viram vinte minutos no total do dia.
+   * Isso é proposital (o total passa a significar "tempo dedicado", não
+   * "tempo de relógio"), e a tela avisa quando está acontecendo.
+   */
+  parallelTimers: boolean;
+}
+
 export interface Board {
   schemaVersion: number;
   topics: Topic[];
@@ -145,6 +158,7 @@ export interface Board {
   schedule: ScheduleBlock[];
   dailyFocus: Record<string, string[]>;
   weeklyReviews: WeeklyReviewNote[];
+  settings: BoardSettings;
 }
 
 export const CURRENT_SCHEMA_VERSION = 4;
@@ -157,5 +171,6 @@ export function emptyBoard(): Board {
     schedule: [],
     dailyFocus: {},
     weeklyReviews: [],
+    settings: { parallelTimers: false },
   };
 }

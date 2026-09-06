@@ -205,6 +205,8 @@ export function ScheduleView() {
     addBlock,
     addBreak,
     extendPlanned,
+    settings,
+    setParallelTimers,
     removeBlock,
     startTimer,
     pauseTimer,
@@ -288,6 +290,10 @@ export function ScheduleView() {
     () => scheduleTotals(blocks.filter((b) => !b.isBreak), now),
     [blocks, now]
   );
+  // Conta TODOS os cronômetros do dia, intervalo incluído: um intervalo
+  // correndo junto com uma tarefa distorce o total do mesmo jeito, e o
+  // aviso existe justamente pra isso não passar batido.
+  const rodandoAgora = useMemo(() => blocks.filter(isRunning).length, [blocks]);
   const intervaloMs = useMemo(
     () =>
       blocks.filter((b) => b.isBreak).reduce((soma, b) => soma + elapsedMs(b, now), 0),
@@ -391,6 +397,23 @@ export function ScheduleView() {
             )}
           </div>
         )}
+
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] pt-3">
+          <label className="flex cursor-pointer items-center gap-2 text-xs text-[var(--muted)]">
+            <input
+              type="checkbox"
+              checked={settings.parallelTimers}
+              onChange={(e) => setParallelTimers(e.target.checked)}
+              className="accent-[var(--brand)]"
+            />
+            Deixar mais de um cronômetro rodando
+          </label>
+          {rodandoAgora > 1 && (
+            <span className="tabular-nums text-[11px] font-medium text-[var(--warning)]">
+              {rodandoAgora} cronômetros rodando — o total soma todos
+            </span>
+          )}
+        </div>
       </header>
 
       <form
