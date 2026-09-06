@@ -31,6 +31,8 @@ export interface DiaDoRelatorio {
   elapsedMs: number;
   intervaloMs: number;
   blocosFeitos: number;
+  /** Encerrados como "não fiz" — fechados, mas não produtividade. */
+  blocosNaoFeitos: number;
   blocosTotal: number;
   /** Tarefas cujo `completedAt` cai neste dia local. */
   tarefasConcluidas: number;
@@ -45,6 +47,7 @@ export interface Relatorio {
   totalTrabalhadoMs: number;
   totalIntervaloMs: number;
   blocosFeitos: number;
+  blocosNaoFeitos: number;
   blocosTotal: number;
   tarefasConcluidas: number;
   viradas: ViradaDeDia[];
@@ -109,6 +112,7 @@ export function montarRelatorio(
       elapsedMs: trabalho.reduce((soma, b) => soma + elapsedMs(b, agora), 0),
       intervaloMs: intervalos.reduce((soma, b) => soma + elapsedMs(b, agora), 0),
       blocosFeitos: trabalho.filter((b) => b.completedAt).length,
+      blocosNaoFeitos: trabalho.filter((b) => b.skippedAt).length,
       blocosTotal: trabalho.length,
       tarefasConcluidas: concluidasPorDia.get(date) ?? 0,
       viradas: blocos.filter(ehVirada).map((b) => ({
@@ -138,6 +142,7 @@ export function montarRelatorio(
     totalTrabalhadoMs: soma((d) => d.elapsedMs),
     totalIntervaloMs: soma((d) => d.intervaloMs),
     blocosFeitos: soma((d) => d.blocosFeitos),
+    blocosNaoFeitos: soma((d) => d.blocosNaoFeitos),
     blocosTotal: soma((d) => d.blocosTotal),
     tarefasConcluidas: soma((d) => d.tarefasConcluidas),
     viradas: linhas.flatMap((d) => d.viradas),

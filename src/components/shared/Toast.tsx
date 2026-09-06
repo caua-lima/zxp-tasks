@@ -6,10 +6,12 @@ interface ToastState {
   id: number;
   message: string;
   undo?: () => void;
+  /** Rótulo do botão. Padrão "Desfazer" — nem toda ação é um arrependimento. */
+  acaoLabel?: string;
 }
 
 interface ToastContextValue {
-  showToast: (message: string, undo?: () => void) => void;
+  showToast: (message: string, undo?: () => void, acaoLabel?: string) => void;
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -17,9 +19,12 @@ const ToastContext = createContext<ToastContextValue | null>(null);
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toast, setToast] = useState<ToastState | null>(null);
 
-  const showToast = useCallback((message: string, undo?: () => void) => {
-    setToast({ id: Date.now(), message, undo });
-  }, []);
+  const showToast = useCallback(
+    (message: string, undo?: () => void, acaoLabel?: string) => {
+      setToast({ id: Date.now(), message, undo, acaoLabel });
+    },
+    []
+  );
 
   useEffect(() => {
     if (!toast) return;
@@ -47,7 +52,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               }}
               className="font-semibold text-[var(--brand)] hover:underline"
             >
-              Desfazer
+              {toast.acaoLabel ?? "Desfazer"}
             </button>
           )}
         </div>

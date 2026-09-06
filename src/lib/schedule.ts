@@ -6,7 +6,12 @@ export const MINUTE_MS = 60_000;
 export const DURATION_PRESETS = [20, 30, 40, 60, 90];
 
 export function isRunning(block: ScheduleBlock): boolean {
-  return !!block.startedAt && !block.completedAt;
+  return !!block.startedAt && !isFinished(block);
+}
+
+/** Concluído OU marcado como não feito — os dois encerram o bloco. */
+export function isFinished(block: ScheduleBlock): boolean {
+  return !!block.completedAt || !!block.skippedAt;
 }
 
 /**
@@ -79,22 +84,44 @@ export function completeBlock(
   nowIso: string = new Date().toISOString()
 ): ScheduleBlock {
   const frozen = pauseBlock(block, new Date(nowIso).getTime());
-  return { ...frozen, completedAt: block.completedAt ?? nowIso };
+  // Concluir depois de ter marcado "não fiz" limpa a marca: o bloco não
+  // pode estar nos dois estados ao mesmo tempo.
+  return { ...frozen, completedAt: block.completedAt ?? nowIso, skippedAt: undefined };
+}
+
+/**
+ * Encerra o bloco sem ter feito. Congela o cronômetro igual a concluir — o
+ * tempo que já foi gasto tentando é real e continua valendo.
+ */
+export function skipBlock(
+  block: ScheduleBlock,
+  nowIso: string = new Date().toISOString()
+): ScheduleBlock {
+  const frozen = pauseBlock(block, new Date(nowIso).getTime());
+  return { ...frozen, skippedAt: block.skippedAt ?? nowIso, completedAt: undefined };
 }
 
 export function reopenBlock(block: ScheduleBlock): ScheduleBlock {
-  return { ...block, completedAt: undefined };
+  return { ...block, completedAt: undefined, skippedAt: undefined };
 }
 
 /** Zera o cronômetro sem apagar o bloco. */
 export function resetBlock(block: ScheduleBlock): ScheduleBlock {
-  return { ...block, accumulatedMs: 0, startedAt: undefined, completedAt: undefined };
+  return {
+    ...block,
+    accumulatedMs: 0,
+    startedAt: undefined,
+    completedAt: undefined,
+    skippedAt: undefined,
+  };
 }
 
 export interface ScheduleTotals {
   plannedMs: number;
   elapsedMs: number;
   doneCount: number;
+  /** Encerrados sem terem sido feitos. */
+  skippedCount: number;
   total: number;
   runningId: string | null;
   /** Todos os que estão correndo — pode ser mais de um em modo paralelo. */
@@ -108,12 +135,14 @@ export function scheduleTotals(
   let planned = 0;
   let elapsed = 0;
   let doneCount = 0;
+  let skippedCount = 0;
   const runningIds: string[] = [];
 
   for (const b of blocks) {
     planned += plannedMs(b);
     elapsed += elapsedMs(b, now);
     if (b.completedAt) doneCount++;
+    else if (b.skippedAt) skippedCount++;
     if (isRunning(b)) runningIds.push(b.id);
   }
 
@@ -121,6 +150,7 @@ export function scheduleTotals(
     plannedMs: planned,
     elapsedMs: elapsed,
     doneCount,
+    skippedCount,
     total: blocks.length,
     runningId: runningIds[0] ?? null,
     runningIds,
@@ -142,8 +172,8 @@ export function blocksOfDay(blocks: ScheduleBlock[], date: string): ScheduleBloc
  */
 export function ordenarParaExibicao(blocks: ScheduleBlock[]): ScheduleBlock[] {
   return [...blocks].sort((a, b) => {
-    const feitoA = a.completedAt ? 1 : 0;
-    const feitoB = b.completedAt ? 1 : 0;
+    const feitoA = isFinished(a) ? 1 : 0;
+    const feitoB = isFinished(b) ? 1 : 0;
     if (feitoA !== feitoB) return feitoA - feitoB;
     return a.order - b.order;
   });

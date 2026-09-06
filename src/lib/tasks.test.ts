@@ -13,7 +13,7 @@ import assert from "node:assert/strict";
 import { Board, ScheduleBlock, Task, Topic, emptyBoard } from "./types";
 import { migrateBoard } from "./task-migrations";
 import { montarRelatorio } from "./report";
-import { extendBlock, ordenarParaExibicao } from "./schedule";
+import { extendBlock, isFinished, ordenarParaExibicao, skipBlock } from "./schedule";
 import {
   isTaskOverdue,
   getTasksDueToday,
@@ -49,6 +49,7 @@ import {
   pauseBlock,
   progressPercent,
   remainingMs,
+  reopenBlock,
   resetBlock,
   scheduleTotals,
   startBlock,
@@ -1465,4 +1466,53 @@ test("mergeBoards mantém a preferência do aparelho local", () => {
   const local = { ...emptyBoard(), settings: { parallelTimers: true } };
   const remote = { ...emptyBoard(), settings: { parallelTimers: false } };
   assert.equal(mergeBoards(local, remote).board.settings.parallelTimers, true);
+});
+
+test("skipBlock encerra sem virar produtividade e congela o tempo", () => {
+  const inicio = new Date("2026-09-06T10:00:00.000Z").toISOString();
+  const b = { ...bloco({ id: "a", date: "2026-09-06" }), startedAt: inicio, accumulatedMs: 0 };
+  const s = skipBlock(b, "2026-09-06T10:05:00.000Z");
+  assert.equal(s.skippedAt, "2026-09-06T10:05:00.000Z");
+  assert.equal(s.completedAt, undefined);
+  assert.equal(s.startedAt, undefined);
+  // O tempo gasto tentando é real e continua valendo.
+  assert.equal(s.accumulatedMs, 5 * 60_000);
+  assert.equal(isRunning(s), false);
+  assert.equal(isFinished(s), true);
+});
+
+test("um bloco nunca fica concluído e não feito ao mesmo tempo", () => {
+  const b = bloco({ id: "a", date: "d", skippedAt: "2026-09-06T10:00:00.000Z" });
+  assert.equal(completeBlock(b, "2026-09-06T11:00:00.000Z").skippedAt, undefined);
+  const feito = bloco({ id: "b", date: "d", completedAt: "2026-09-06T10:00:00.000Z" });
+  assert.equal(skipBlock(feito, "2026-09-06T11:00:00.000Z").completedAt, undefined);
+});
+
+test("reabrir limpa os dois desfechos", () => {
+  const b = bloco({ id: "a", date: "d", skippedAt: "2026-09-06T10:00:00.000Z" });
+  const r = reopenBlock(b);
+  assert.equal(r.skippedAt, undefined);
+  assert.equal(r.completedAt, undefined);
+  assert.equal(isFinished(r), false);
+});
+
+test("não feito também vai pro fim da lista do dia", () => {
+  const blocos = [
+    bloco({ id: "a", date: "d", order: 0, skippedAt: "2026-09-06T10:00:00.000Z" }),
+    bloco({ id: "b", date: "d", order: 1 }),
+  ];
+  assert.deepEqual(ordenarParaExibicao(blocos).map((x) => x.id), ["b", "a"]);
+});
+
+test("relatório separa 'não fiz' de 'concluído'", () => {
+  const board = { ...emptyBoard(), schedule: [
+    bloco({ id: "a", date: "2026-09-06", completedAt: "2026-09-06T12:00:00.000Z" }),
+    bloco({ id: "b", date: "2026-09-06", skippedAt: "2026-09-06T23:00:00.000Z" }),
+  ]};
+  const r = montarRelatorio(board, "2026-09-06", "2026-09-06");
+  assert.equal(r.blocosFeitos, 1);
+  assert.equal(r.blocosNaoFeitos, 1);
+  assert.equal(r.blocosTotal, 2);
+  // "Não fiz" não é conclusão: não pode entrar na seção de virada de dia.
+  assert.equal(r.viradas.length, 0);
 });

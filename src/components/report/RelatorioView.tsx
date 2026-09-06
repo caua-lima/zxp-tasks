@@ -20,10 +20,21 @@ function diaLegivel(iso: string): string {
   });
 }
 
-function Cartao({ valor, rotulo }: { valor: string; rotulo: string }) {
+function Cartao({
+  valor,
+  rotulo,
+  destaque,
+}: {
+  valor: string;
+  rotulo: string;
+  destaque?: string;
+}) {
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
-      <p className="font-[family-name:var(--font-display)] text-xl font-semibold tabular-nums text-[var(--foreground)]">
+      <p
+        className="font-[family-name:var(--font-display)] text-xl font-semibold tabular-nums"
+        style={{ color: destaque ?? "var(--foreground)" }}
+      >
         {valor}
       </p>
       <p className="mt-0.5 text-[11px] text-[var(--muted)]">{rotulo}</p>
@@ -90,7 +101,11 @@ export function RelatorioView() {
           rotulo="blocos concluídos"
         />
         <Cartao valor={String(relatorio.tarefasConcluidas)} rotulo="tarefas feitas" />
-        <Cartao valor={formatDuration(relatorio.totalIntervaloMs)} rotulo="em intervalo" />
+        <Cartao
+          valor={String(relatorio.blocosNaoFeitos)}
+          rotulo="não fiz"
+          destaque={relatorio.blocosNaoFeitos > 0 ? "var(--warning)" : undefined}
+        />
       </div>
 
       {relatorio.viradas.length > 0 && (
@@ -143,15 +158,22 @@ export function RelatorioView() {
               >
                 {d.tarefasConcluidas > 0 ? `${d.tarefasConcluidas}✓` : ""}
               </span>
+              <span
+                className="w-8 shrink-0 text-right tabular-nums text-[var(--warning)]"
+                title={`${d.blocosNaoFeitos} blocos não feitos`}
+              >
+                {d.blocosNaoFeitos > 0 ? `${d.blocosNaoFeitos}✕` : ""}
+              </span>
             </li>
           ))}
         </ul>
-        {relatorio.melhorDia && (
-          <p className="mt-2 text-[11px] text-[var(--muted)]">
-            Melhor dia: {diaLegivel(relatorio.melhorDia.date)} com{" "}
-            {formatDuration(relatorio.melhorDia.elapsedMs)}.
-          </p>
-        )}
+        <p className="mt-2 text-[11px] text-[var(--muted)]">
+          {relatorio.melhorDia &&
+            `Melhor dia: ${diaLegivel(relatorio.melhorDia.date)} com ${formatDuration(
+              relatorio.melhorDia.elapsedMs
+            )}. `}
+          {formatDuration(relatorio.totalIntervaloMs)} em intervalo no período.
+        </p>
       </section>
 
       <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">

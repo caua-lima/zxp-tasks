@@ -36,6 +36,7 @@ import {
   pauseBlock,
   reopenBlock,
   resetBlock,
+  skipBlock,
   startBlock,
 } from "@/lib/schedule";
 
@@ -88,6 +89,8 @@ interface AppContextValue {
   pauseTimer: (id: string) => void;
   /** Conclui o bloco e, se houver, a tarefa do projeto vinculada a ele. */
   finishBlock: (id: string) => void;
+  /** Encerra o bloco como "não fiz" — sem mexer na tarefa do projeto. */
+  skipBlockToday: (id: string) => void;
   reopenTimer: (id: string) => void;
   resetTimer: (id: string) => void;
   copyDay: (fromDate: string, toDate: string) => number;
@@ -512,7 +515,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // usando, e aqui também não se pausa nada por conta própria.
         schedule: [
           ...b.schedule.map((x) =>
-            !b.settings.parallelTimers && x.startedAt && !x.completedAt
+            b.settings?.parallelTimers !== true && x.startedAt && !x.completedAt
               ? pauseBlock(x, nowMs)
               : x
           ),
@@ -550,7 +553,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const nowIso = new Date().toISOString();
     const nowMs = Date.now();
     setBoard((b) => {
-      const paralelo = b.settings.parallelTimers;
+      // Acesso defensivo: um board que por qualquer motivo chegue sem
+      // `settings` faria este updater lançar, e o efeito visível seria o
+      // "Começar" parar de funcionar sem nenhum erro na tela.
+      const paralelo = b.settings?.parallelTimers === true;
       const block = b.schedule.find((x) => x.id === id);
       // Ligar o cronômetro move a tarefa do projeto pra "Fazendo": é a mesma
       // informação dita duas vezes, e arrastar o cartão à mão depois de já
@@ -612,6 +618,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           : b.tasks,
       };
     });
+  }, []);
+
+  /**
+   * "Não fiz" encerra o bloco sem tocar na tarefa do projeto.
+   *
+   * Concluir move a tarefa pra "Feito"; aqui não há nada a mover — a tarefa
+   * continua exatamente onde estava, esperando outro dia. Zerar o status de
+   * volta pra "A fazer" também seria errado: se o cronômetro chegou a rodar,
+   * a tarefa começou de verdade.
+   */
+  const skipBlockToday = useCallback((id: string) => {
+    const nowIso = new Date().toISOString();
+    setBoard((b) => ({
+      ...b,
+      schedule: b.schedule.map((x) => (x.id === id ? skipBlock(x, nowIso) : x)),
+    }));
   }, []);
 
   const reopenTimer = useCallback((id: string) => {
@@ -704,12 +726,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       addBreak,
       extendPlanned,
       setParallelTimers,
-      settings: board.settings,
+      settings: board.settings ?? { parallelTimers: false },
       updateBlock,
       removeBlock,
       startTimer,
       pauseTimer,
       finishBlock,
+      skipBlockToday,
       reopenTimer,
       resetTimer,
       copyDay,
@@ -750,6 +773,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       startTimer,
       pauseTimer,
       finishBlock,
+      skipBlockToday,
       reopenTimer,
       resetTimer,
       copyDay,

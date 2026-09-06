@@ -165,6 +165,7 @@ function migrateScheduleBlock(raw: unknown): ScheduleBlock | null {
         ? r.accumulatedMs
         : 0,
     completedAt: asString(r.completedAt),
+    skippedAt: asString(r.skippedAt),
     order: typeof r.order === "number" && Number.isFinite(r.order) ? r.order : 0,
     topicId: asString(r.topicId),
     taskId: asString(r.taskId),

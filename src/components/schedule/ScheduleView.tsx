@@ -41,6 +41,7 @@ function BlockRow({
   onStart,
   onPause,
   onFinish,
+  onSkip,
   onReopen,
   onRemove,
 }: {
@@ -52,16 +53,22 @@ function BlockRow({
   onExtend: () => void;
   onPause: () => void;
   onFinish: () => void;
+  onSkip: () => void;
   onReopen: () => void;
   onRemove: () => void;
 }) {
   const running = isRunning(block);
   const done = !!block.completedAt;
+  const naoFeito = !!block.skippedAt;
+  // "Encerrado" cobre os dois desfechos; só o aberto ainda aceita cronômetro.
+  const encerrado = done || naoFeito;
   const over = isOvertime(block, now);
   const remaining = remainingMs(block, now);
   const spent = elapsedMs(block, now);
 
-  const timeColor = done
+  const timeColor = naoFeito
+    ? "var(--muted)"
+    : done
     ? "var(--success)"
     : over
       ? "var(--danger)"
@@ -73,13 +80,19 @@ function BlockRow({
     <li
       className={`rounded-xl border p-3 transition ${
         block.isBreak ? "bg-[var(--surface2)]" : "bg-[var(--surface)]"
-      } ${running ? "border-[var(--brand)]" : "border-[var(--border)]"}`}
+      } ${
+        running
+          ? "border-[var(--brand)]"
+          : naoFeito
+            ? "border-dashed border-[var(--border)] opacity-70"
+            : "border-[var(--border)]"
+      }`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p
             className={`text-sm font-medium ${
-              done ? "text-[var(--muted)] line-through" : "text-[var(--foreground)]"
+              encerrado ? "text-[var(--muted)] line-through" : "text-[var(--foreground)]"
             }`}
           >
             {block.isBreak && "☕ "}
@@ -95,7 +108,7 @@ function BlockRow({
         </div>
 
         <div className="flex shrink-0 items-start gap-1">
-          {!done && (
+          {!encerrado && (
             <button
               onClick={onExtend}
               aria-label={`Somar ${EXTEND_MINUTES} minutos em ${block.title}`}
@@ -120,16 +133,23 @@ function BlockRow({
             className="font-[family-name:var(--font-display)] text-2xl font-semibold tabular-nums"
             style={{ color: timeColor }}
             aria-label={
-              done
-                ? `Concluído em ${formatDuration(spent)}`
-                : over
+              naoFeito
+                ? `Não feito. ${formatDuration(spent)} gastos`
+                : done
+                  ? `Concluído em ${formatDuration(spent)}`
+                  : over
                   ? `Passou ${formatDuration(-remaining)} do tempo`
                   : `Faltam ${formatDuration(remaining)}`
             }
           >
-            {over && !done ? `+${formatDuration(-remaining)}` : formatDuration(Math.max(0, remaining))}
+            {over && !encerrado
+              ? `+${formatDuration(-remaining)}`
+              : formatDuration(Math.max(0, remaining))}
           </p>
-          {over && !done && (
+          {naoFeito && (
+            <p className="text-[10px] font-medium text-[var(--muted)]">não fiz</p>
+          )}
+          {over && !encerrado && (
             <p className="text-[10px] font-medium text-[var(--danger)]">passou do tempo</p>
           )}
         </div>
@@ -147,13 +167,19 @@ function BlockRow({
           className="h-full rounded-full transition-[width]"
           style={{
             width: `${progressPercent(block, now)}%`,
-            backgroundColor: done ? "var(--success)" : over ? "var(--danger)" : "var(--brand)",
+            backgroundColor: naoFeito
+              ? "var(--surface3)"
+              : done
+                ? "var(--success)"
+                : over
+                  ? "var(--danger)"
+                  : "var(--brand)",
           }}
         />
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2">
-        {!done && !running && (
+        {!encerrado && !running && (
           <button
             onClick={onStart}
             className="min-h-[44px] flex-1 rounded-md bg-[var(--brand)] px-4 text-sm font-semibold text-[var(--accent-ink)] hover:bg-[var(--accent-hover)]"
@@ -169,13 +195,22 @@ function BlockRow({
             Pausar
           </button>
         )}
-        {!done ? (
-          <button
-            onClick={onFinish}
-            className="min-h-[44px] rounded-md border border-[var(--border)] px-4 text-sm font-medium text-[var(--muted)] hover:bg-[var(--surface2)]"
-          >
-            Concluir
-          </button>
+        {!encerrado ? (
+          <>
+            <button
+              onClick={onFinish}
+              className="min-h-[44px] rounded-md border border-[var(--border)] px-4 text-sm font-medium text-[var(--muted)] hover:bg-[var(--surface2)]"
+            >
+              Concluir
+            </button>
+            <button
+              onClick={onSkip}
+              title="Encerra o bloco sem ter feito"
+              className="min-h-[44px] rounded-md border border-[var(--border)] px-3 text-sm font-medium text-[var(--muted)] hover:bg-[var(--surface2)]"
+            >
+              Não fiz
+            </button>
+          </>
         ) : (
           <button
             onClick={onReopen}
@@ -211,6 +246,7 @@ export function ScheduleView() {
     startTimer,
     pauseTimer,
     finishBlock,
+    skipBlockToday,
     reopenTimer,
     copyDay,
   } = useApp();
@@ -309,7 +345,26 @@ export function ScheduleView() {
    * nenhum aceita o pedido fora de um gesto do usuário.
    */
   async function iniciarComAviso(block: ScheduleBlock) {
+    // Quem estava rodando ANTES do clique — depois já é tarde pra saber.
+    const pausados = settings.parallelTimers
+      ? []
+      : blocks.filter((b) => b.id !== block.id && isRunning(b));
+
     startTimer(block.id);
+
+    if (pausados.length > 0) {
+      // Pausar por baixo dos panos é o que fazia parecer que rodar duas
+      // coisas juntas era impossível. Agora o app diz o que fez e oferece a
+      // opção no mesmo toque, em vez de esperar que a caixinha seja achada.
+      showToast(
+        `Pausei "${pausados[0].title}" pra começar esta.`,
+        () => {
+          setParallelTimers(true);
+          pausados.forEach((b) => startTimer(b.id));
+        },
+        "Rodar as duas"
+      );
+    }
 
     const restanteMs = Math.max(0, remainingMs(block));
     // Usa o resultado do pedido em vez de reler a permissão: no iPhone a
@@ -585,6 +640,12 @@ export function ScheduleView() {
                   // toque.
                   vinculada ? () => setTaskStatus(vinculada.id, "todo") : undefined
                 );
+              }}
+              onSkip={() => {
+                skipBlockToday(block.id);
+                cancelarFim(block.id);
+                limparAvisoDeInicio();
+                showToast("Marcado como não feito.", () => reopenTimer(block.id));
               }}
               onReopen={() => reopenTimer(block.id)}
               onRemove={() => setConfirmRemove(block)}

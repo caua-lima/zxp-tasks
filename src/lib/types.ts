@@ -115,6 +115,13 @@ export interface ScheduleBlock {
   /** Tempo somado das vezes em que já foi pausado. */
   accumulatedMs: number;
   completedAt?: string;
+  /**
+   * Marcado como "não fiz". É um encerramento tão legítimo quanto concluir:
+   * o dia acabou e isto não aconteceu. Guardado separado de `completedAt`
+   * porque um bloco fechado sem ter sido feito não pode virar produtividade
+   * no relatório.
+   */
+  skippedAt?: string;
   order: number;
   /**
    * Projeto a que este bloco pertence, e a tarefa criada junto com ele.
