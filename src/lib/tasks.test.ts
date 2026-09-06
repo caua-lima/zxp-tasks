@@ -1,7 +1,19 @@
+/**
+ * Fuso fixo, antes de qualquer `Date`.
+ *
+ * Boa parte deste app depende de "que dia local é este instante" — concluir
+ * às 21h no Brasil é hoje, mas já é amanhã em UTC. Sem fixar o fuso, os
+ * testes que protegem exatamente isso passariam ou falhariam conforme a
+ * máquina de quem roda, que é a pior forma de um teste mentir.
+ */
+process.env.TZ = "America/Sao_Paulo";
+
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { ScheduleBlock, Task, Topic, emptyBoard } from "./types";
+import { Board, ScheduleBlock, Task, Topic, emptyBoard } from "./types";
 import { migrateBoard } from "./task-migrations";
+import { montarRelatorio } from "./report";
+import { extendBlock, ordenarParaExibicao } from "./schedule";
 import {
   isTaskOverdue,
   getTasksDueToday,
@@ -1314,4 +1326,115 @@ test("vertente desconhecida vira projeto em vez de quebrar", () => {
     tasks: [],
   });
   assert.equal(board.topics[0].kind, "project");
+});
+
+// ── Relatório ─────────────────────────────────────────────────────────────
+
+function boardDeTeste(over: Partial<Board> = {}): Board {
+  return { ...emptyBoard(), ...over };
+}
+
+function bloco(over: Partial<ScheduleBlock> & { id: string; date: string }): ScheduleBlock {
+  return {
+    title: "Bloco",
+    plannedMinutes: 30,
+    accumulatedMs: 0,
+    order: 0,
+    ...over,
+  };
+}
+
+test("relatório separa tempo de trabalho do tempo de intervalo", () => {
+  const board = boardDeTeste({
+    schedule: [
+      bloco({ id: "a", date: "2026-09-06", accumulatedMs: 30 * 60_000 }),
+      bloco({ id: "b", date: "2026-09-06", accumulatedMs: 10 * 60_000, isBreak: true }),
+    ],
+  });
+  const r = montarRelatorio(board, "2026-09-06", "2026-09-06");
+  assert.equal(r.totalTrabalhadoMs, 30 * 60_000);
+  assert.equal(r.totalIntervaloMs, 10 * 60_000);
+  // Intervalo não pode entrar na contagem de blocos de trabalho.
+  assert.equal(r.blocosTotal, 1);
+});
+
+test("bloco concluído depois da meia-noite aparece como virada de dia", () => {
+  const board = boardDeTeste({
+    schedule: [
+      bloco({
+        id: "a",
+        date: "2026-09-06",
+        title: "Gravar aula",
+        accumulatedMs: 40 * 60_000,
+        // 00:20 do dia 07, no horário de Brasília.
+        completedAt: "2026-09-07T03:20:00.000Z",
+      }),
+    ],
+  });
+  const r = montarRelatorio(board, "2026-09-06", "2026-09-07");
+  assert.equal(r.viradas.length, 1);
+  assert.equal(r.viradas[0].diaDoBloco, "2026-09-06");
+  assert.equal(r.viradas[0].diaDaConclusao, "2026-09-07");
+  // O tempo continua contando no dia em que o bloco foi planejado.
+  assert.equal(r.dias[0].elapsedMs, 40 * 60_000);
+  assert.equal(r.dias[1].elapsedMs, 0);
+});
+
+test("bloco concluído no mesmo dia não vira virada", () => {
+  const board = boardDeTeste({
+    schedule: [
+      bloco({ id: "a", date: "2026-09-06", completedAt: "2026-09-06T18:00:00.000Z" }),
+    ],
+  });
+  assert.equal(montarRelatorio(board, "2026-09-06", "2026-09-06").viradas.length, 0);
+});
+
+test("tarefa é contada no dia local em que foi concluída, não em UTC", () => {
+  const board = boardDeTeste({
+    topics: [{ id: "t1", name: "P", color: "#000", createdAt: "2026-09-01" }],
+    tasks: [
+      {
+        id: "k1",
+        topicId: "t1",
+        title: "X",
+        description: "",
+        status: "done",
+        priority: "medium",
+        tags: [],
+        checklist: [],
+        createdAt: "2026-09-06T10:00:00.000Z",
+        updatedAt: "2026-09-06T10:00:00.000Z",
+        // 21h do dia 06 em Brasília — em UTC já é dia 07.
+        completedAt: "2026-09-07T00:00:00.000Z",
+      },
+    ],
+  });
+  const r = montarRelatorio(board, "2026-09-06", "2026-09-07");
+  assert.equal(r.dias[0].tarefasConcluidas, 1);
+  assert.equal(r.dias[1].tarefasConcluidas, 0);
+});
+
+test("relatório com intervalo de datas invertido não trava", () => {
+  const r = montarRelatorio(boardDeTeste(), "2026-09-10", "2026-09-01");
+  assert.equal(r.dias.length, 0);
+  assert.equal(r.melhorDia, null);
+});
+
+test("ordenarParaExibicao joga os concluídos pro fim mantendo a ordem do plano", () => {
+  const blocos = [
+    bloco({ id: "a", date: "d", order: 0, completedAt: "2026-09-06T12:00:00.000Z" }),
+    bloco({ id: "b", date: "d", order: 1 }),
+    bloco({ id: "c", date: "d", order: 2, completedAt: "2026-09-06T11:00:00.000Z" }),
+    bloco({ id: "d", date: "d", order: 3 }),
+  ];
+  assert.deepEqual(
+    ordenarParaExibicao(blocos).map((b) => b.id),
+    ["b", "d", "a", "c"]
+  );
+});
+
+test("extendBlock estica o planejado e nunca deixa zerar", () => {
+  const b = bloco({ id: "a", date: "d", plannedMinutes: 10 });
+  assert.equal(extendBlock(b, 5).plannedMinutes, 15);
+  assert.equal(extendBlock(b, -100).plannedMinutes, 1);
 });

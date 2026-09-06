@@ -130,6 +130,12 @@ export interface ScheduleBlock {
    */
   topicId?: string;
   taskId?: string;
+  /**
+   * Bloco de descanso, não de trabalho. Conta no relógio do dia, mas fora
+   * do total de trabalho — somar o almoço às horas produzidas faria o
+   * número do dia mentir na direção mais fácil de acreditar.
+   */
+  isBreak?: boolean;
 }
 
 export interface Board {

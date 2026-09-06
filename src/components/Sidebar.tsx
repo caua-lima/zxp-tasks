@@ -21,6 +21,7 @@ const SYNC_DOT_COLOR: Record<string, string> = {
 export type ViewKey =
   | "schedule"
   | "goals"
+  | "report"
   | "today"
   | "kanban"
   | "mindmap"
@@ -39,6 +40,7 @@ const VIEWS: { key: ViewKey; label: string }[] = [
 
 const EXTRA_VIEWS: { key: ViewKey; label: string }[] = [
   { key: "today", label: "Hoje (foco)" },
+  { key: "report", label: "Relatório" },
   { key: "kanban", label: "Kanban" },
   { key: "mindmap", label: "Mapa mental" },
   { key: "review", label: "Revisão semanal" },

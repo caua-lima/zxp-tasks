@@ -121,3 +121,31 @@ export function scheduleTotals(
 export function blocksOfDay(blocks: ScheduleBlock[], date: string): ScheduleBlock[] {
   return blocks.filter((b) => b.date === date).sort((a, b) => a.order - b.order);
 }
+
+/**
+ * Ordem de exibição do dia: o que ainda não foi feito primeiro, o concluído
+ * no fim.
+ *
+ * Um bloco concluído no meio da lista empurra pra baixo justamente o que
+ * ainda importa, e a cada tarefa terminada a próxima ficava mais escondida.
+ * A `order` original é preservada dentro de cada grupo — reordenar tudo por
+ * horário de conclusão embaralharia o plano do dia.
+ */
+export function ordenarParaExibicao(blocks: ScheduleBlock[]): ScheduleBlock[] {
+  return [...blocks].sort((a, b) => {
+    const feitoA = a.completedAt ? 1 : 0;
+    const feitoB = b.completedAt ? 1 : 0;
+    if (feitoA !== feitoB) return feitoA - feitoB;
+    return a.order - b.order;
+  });
+}
+
+/** Estica o tempo planejado do bloco. Nunca encolhe abaixo de 1 minuto. */
+export function extendBlock(block: ScheduleBlock, minutos: number): ScheduleBlock {
+  return { ...block, plannedMinutes: Math.max(1, block.plannedMinutes + minutos) };
+}
+
+/** Minutos padrão de um intervalo — o "10 minutinhos off". */
+export const BREAK_MINUTES = 10;
+/** Quanto cada toque no "+" acrescenta. */
+export const EXTEND_MINUTES = 5;

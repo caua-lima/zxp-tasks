@@ -5,12 +5,15 @@ import { useApp } from "@/context/AppContext";
 import { ScheduleBlock } from "@/lib/types";
 import {
   DURATION_PRESETS,
+  BREAK_MINUTES,
+  EXTEND_MINUTES,
   blocksOfDay,
   elapsedMs,
   formatDuration,
   isOvertime,
   isRunning,
   progressPercent,
+  ordenarParaExibicao,
   remainingMs,
   scheduleTotals,
 } from "@/lib/schedule";
@@ -33,6 +36,7 @@ function BlockRow({
   block,
   projeto,
   onEdit,
+  onExtend,
   now,
   onStart,
   onPause,
@@ -45,6 +49,7 @@ function BlockRow({
   projeto?: string;
   onStart: () => void;
   onEdit: () => void;
+  onExtend: () => void;
   onPause: () => void;
   onFinish: () => void;
   onReopen: () => void;
@@ -66,9 +71,9 @@ function BlockRow({
 
   return (
     <li
-      className={`rounded-xl border bg-[var(--surface)] p-3 transition ${
-        running ? "border-[var(--brand)]" : "border-[var(--border)]"
-      }`}
+      className={`rounded-xl border p-3 transition ${
+        block.isBreak ? "bg-[var(--surface2)]" : "bg-[var(--surface)]"
+      } ${running ? "border-[var(--brand)]" : "border-[var(--border)]"}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
@@ -77,6 +82,7 @@ function BlockRow({
               done ? "text-[var(--muted)] line-through" : "text-[var(--foreground)]"
             }`}
           >
+            {block.isBreak && "☕ "}
             {block.title}
           </p>
           <p className="mt-0.5 text-[11px] tabular-nums text-[var(--muted)]">
@@ -89,6 +95,16 @@ function BlockRow({
         </div>
 
         <div className="flex shrink-0 items-start gap-1">
+          {!done && (
+            <button
+              onClick={onExtend}
+              aria-label={`Somar ${EXTEND_MINUTES} minutos em ${block.title}`}
+              title={`+${EXTEND_MINUTES} min`}
+              className="min-h-[32px] rounded-md px-1.5 text-xs font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] hover:text-[var(--brand)]"
+            >
+              +{EXTEND_MINUTES}
+            </button>
+          )}
           <button
             onClick={onEdit}
             aria-label={`Editar ${block.title}`}
@@ -187,6 +203,8 @@ export function ScheduleView() {
     tasks,
     setTaskStatus,
     addBlock,
+    addBreak,
+    extendPlanned,
     removeBlock,
     startTimer,
     pauseTimer,
@@ -205,7 +223,10 @@ export function ScheduleView() {
   const [confirmRemove, setConfirmRemove] = useState<ScheduleBlock | null>(null);
   const [editando, setEditando] = useState<ScheduleBlock | null>(null);
 
-  const blocks = useMemo(() => blocksOfDay(schedule, date), [schedule, date]);
+  const blocks = useMemo(
+    () => ordenarParaExibicao(blocksOfDay(schedule, date)),
+    [schedule, date]
+  );
 
   // Lista de desejos não recebe bloco de tempo: "comprar uma calça" não é
   // uma sessão de trabalho cronometrada.
@@ -261,7 +282,17 @@ export function ScheduleView() {
     };
   }, []);
 
-  const totals = useMemo(() => scheduleTotals(blocks, now), [blocks, now]);
+  // Intervalo tem seu próprio total: somar o café às horas produzidas faria
+  // o número do dia mentir na direção mais fácil de acreditar.
+  const totals = useMemo(
+    () => scheduleTotals(blocks.filter((b) => !b.isBreak), now),
+    [blocks, now]
+  );
+  const intervaloMs = useMemo(
+    () =>
+      blocks.filter((b) => b.isBreak).reduce((soma, b) => soma + elapsedMs(b, now), 0),
+    [blocks, now]
+  );
   const isToday = date === todayISO();
 
   /**
@@ -350,6 +381,14 @@ export function ScheduleView() {
               </strong>{" "}
               blocos
             </span>
+            {intervaloMs > 0 && (
+              <span className="tabular-nums text-[var(--muted)]">
+                <strong className="text-[var(--foreground)]">
+                  {formatDuration(intervaloMs)}
+                </strong>{" "}
+                de intervalo
+              </span>
+            )}
           </div>
         )}
       </header>
@@ -457,6 +496,17 @@ export function ScheduleView() {
         <BotaoNotificacoes />
       </form>
 
+      <button
+        type="button"
+        onClick={() => {
+          addBreak(date, BREAK_MINUTES);
+          showToast(`Intervalo de ${BREAK_MINUTES} min começou. Use o + pra esticar.`);
+        }}
+        className="min-h-[44px] w-full rounded-xl border border-dashed border-[var(--border)] text-sm font-medium text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--foreground)]"
+      >
+        ☕ Intervalo de {BREAK_MINUTES} min
+      </button>
+
       {blocks.length === 0 ? (
         <div className="rounded-xl border border-dashed border-[var(--border)] p-6 text-center">
           <p className="text-sm text-[var(--muted)]">
@@ -487,6 +537,7 @@ export function ScheduleView() {
               now={now}
               projeto={nomeDoProjeto(block.topicId)}
               onEdit={() => setEditando(block)}
+              onExtend={() => extendPlanned(block.id, EXTEND_MINUTES)}
               onStart={() => iniciarComAviso(block)}
               onPause={() => {
                 pauseTimer(block.id);

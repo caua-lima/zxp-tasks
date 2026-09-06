@@ -11,6 +11,7 @@ import { TodayView } from "@/components/today/TodayView";
 import { ScheduleView } from "@/components/schedule/ScheduleView";
 import { GoalsView } from "@/components/goals/GoalsView";
 import { WeeklyReview } from "@/components/review/WeeklyReview";
+import { RelatorioView } from "@/components/report/RelatorioView";
 import { ProjectView } from "@/components/projects/ProjectView";
 import { TaskModal } from "@/components/TaskModal";
 import { DataPanel } from "@/components/shared/DataPanel";
@@ -54,6 +55,7 @@ function HomeInner() {
     if (view === "goals") return "Projetos";
     if (view === "today") return "Hoje";
     if (view === "review") return "Revisão semanal";
+    if (view === "report") return "Relatório";
     if (view === "project") return selectedTopic?.name ?? "Projeto";
     if (!selectedTopicId) return "Todos os tópicos";
     return selectedTopic?.name ?? "Todos os tópicos";
@@ -88,6 +90,7 @@ function HomeInner() {
           k: "kanban",
           m: "mindmap",
           r: "review",
+          l: "report",
         };
         const alvo = destino[e.key.toLowerCase()];
         if (alvo) {
@@ -142,6 +145,12 @@ function HomeInner() {
         label: "Ir para Revisão semanal",
         hint: "G R",
         run: () => setView("review"),
+      },
+      {
+        id: "report",
+        label: "Ir para Relatório",
+        hint: "G L",
+        run: () => setView("report"),
       },
       { id: "data", label: "Abrir dados e backup", run: () => setDataOpen(true) },
       {
@@ -230,6 +239,7 @@ function HomeInner() {
           )}
           {view === "mindmap" && <MindMap topicId={selectedTopicId} filters={filters} />}
           {view === "review" && <WeeklyReview />}
+          {view === "report" && <RelatorioView />}
           {view === "project" &&
             (selectedTopicId ? (
               <ProjectView topicId={selectedTopicId} />

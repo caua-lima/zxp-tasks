@@ -31,6 +31,7 @@ import { pushBoardToCloud, subscribeToCloudBoard } from "@/lib/cloud-sync";
 import { createTask, NewTaskInput } from "@/lib/task-factory";
 import {
   completeBlock,
+  extendBlock,
   pauseBlock,
   reopenBlock,
   resetBlock,
@@ -75,6 +76,10 @@ interface AppContextValue {
   ) => void;
   updateBlock: (id: string, patch: Partial<Omit<ScheduleBlock, "id">>) => void;
   removeBlock: (id: string) => void;
+  /** Cria e já inicia um bloco de descanso no dia. */
+  addBreak: (date: string, minutos: number) => void;
+  /** Estica o tempo planejado do bloco (o "+" do intervalo). */
+  extendPlanned: (id: string, minutos: number) => void;
   startTimer: (id: string) => void;
   pauseTimer: (id: string) => void;
   /** Conclui o bloco e, se houver, a tarefa do projeto vinculada a ele. */
@@ -474,6 +479,49 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
+  /**
+   * Intervalo: cria o bloco de descanso e já liga o cronômetro, porque quem
+   * aperta "Intervalo" já está de pé — pedir um segundo toque pra começar
+   * seria contar errado justamente os primeiros minutos.
+   */
+  const addBreak = useCallback((date: string, minutos: number) => {
+    const id = uuid();
+    const nowIso = new Date().toISOString();
+    const nowMs = Date.now();
+    setBoard((b) => {
+      const doDia = b.schedule.filter((x) => x.date === date);
+      const nextOrder = doDia.length === 0 ? 0 : Math.max(...doDia.map((x) => x.order)) + 1;
+      const bloco: ScheduleBlock = {
+        id,
+        date,
+        title: "Intervalo",
+        plannedMinutes: minutos,
+        accumulatedMs: 0,
+        order: nextOrder,
+        isBreak: true,
+        startedAt: nowIso,
+      };
+      return {
+        ...b,
+        // Descansar pausa o que estava rodando — senão o trabalho continuaria
+        // contando durante o café.
+        schedule: [
+          ...b.schedule.map((x) =>
+            x.startedAt && !x.completedAt ? pauseBlock(x, nowMs) : x
+          ),
+          bloco,
+        ],
+      };
+    });
+  }, []);
+
+  const extendPlanned = useCallback((id: string, minutos: number) => {
+    setBoard((b) => ({
+      ...b,
+      schedule: b.schedule.map((x) => (x.id === id ? extendBlock(x, minutos) : x)),
+    }));
+  }, []);
+
   const removeBlock = useCallback((id: string) => {
     setBoard((b) => ({ ...b, schedule: b.schedule.filter((x) => x.id !== id) }));
   }, []);
@@ -636,6 +684,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       saveWeeklyReview,
       schedule: board.schedule,
       addBlock,
+      addBreak,
+      extendPlanned,
       updateBlock,
       removeBlock,
       startTimer,
@@ -673,6 +723,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       toggleFocus,
       saveWeeklyReview,
       addBlock,
+      addBreak,
+      extendPlanned,
       updateBlock,
       removeBlock,
       startTimer,

@@ -168,6 +168,7 @@ function migrateScheduleBlock(raw: unknown): ScheduleBlock | null {
     order: typeof r.order === "number" && Number.isFinite(r.order) ? r.order : 0,
     topicId: asString(r.topicId),
     taskId: asString(r.taskId),
+    isBreak: r.isBreak === true,
   };
 }
 
