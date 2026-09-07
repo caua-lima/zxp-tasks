@@ -99,6 +99,11 @@ interface AppContextValue {
   finishBlock: (id: string) => void;
   /** Encerra o bloco como "não fiz" — sem mexer na tarefa do projeto. */
   skipBlockToday: (id: string) => void;
+  /**
+   * Começa a tarefa agora: cria (ou reaproveita) o bloco de hoje e liga o
+   * cronômetro. Devolve false se a tarefa não existir mais.
+   */
+  startTaskNow: (taskId: string) => boolean;
   reopenTimer: (id: string) => void;
   resetTimer: (id: string) => void;
   copyDay: (fromDate: string, toDate: string) => number;
@@ -648,6 +653,74 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
    * volta pra "A fazer" também seria errado: se o cronômetro chegou a rodar,
    * a tarefa começou de verdade.
    */
+  /**
+   * O caminho inverso do "escolher tarefa no cronograma": a tarefa mora no
+   * projeto até o dia de fazer, e nesse dia um toque em "Iniciar" a coloca no
+   * cronograma de hoje já rodando.
+   *
+   * Sem estimativa, o bloco nasce de tempo livre: uma duração inventada aqui
+   * viraria "passou do tempo" quinze minutos depois, sem que ninguém tivesse
+   * combinado quinze minutos.
+   */
+  const startTaskNow = useCallback((taskId: string) => {
+    const nowIso = new Date().toISOString();
+    const nowMs = Date.now();
+    const hoje = todayISO();
+    const novoBlocoId = uuid();
+    let criou = false;
+
+    setBoard((b) => {
+      const task = b.tasks.find((t) => t.id === taskId && !t.deletedAt);
+      if (!task) return b;
+      criou = true;
+
+      const paralelo = b.settings?.parallelTimers === true;
+      // Reaproveita o bloco de hoje que já existe pra esta tarefa: criar
+      // outro faria dois cronômetros contarem o mesmo trabalho.
+      const existente = b.schedule.find(
+        (x) => x.date === hoje && x.taskId === taskId && !x.completedAt && !x.skippedAt
+      );
+      const alvo = existente?.id ?? novoBlocoId;
+
+      const doDia = b.schedule.filter((x) => x.date === hoje);
+      const proximaOrdem = doDia.length === 0 ? 0 : Math.max(...doDia.map((x) => x.order)) + 1;
+
+      const schedule = existente
+        ? b.schedule
+        : [
+            ...b.schedule,
+            {
+              id: novoBlocoId,
+              date: hoje,
+              title: task.title,
+              plannedMinutes: task.estimatedMinutes ?? 30,
+              accumulatedMs: 0,
+              order: proximaOrdem,
+              topicId: task.topicId,
+              taskId: task.id,
+              openEnded: task.estimatedMinutes === undefined ? true : undefined,
+            } satisfies ScheduleBlock,
+          ];
+
+      return {
+        ...b,
+        schedule: schedule.map((x) => {
+          if (x.id === alvo) return startBlock(x, nowIso);
+          if (paralelo) return x;
+          return x.startedAt && !x.completedAt ? pauseBlock(x, nowMs) : x;
+        }),
+        tasks:
+          task.status === "todo"
+            ? b.tasks.map((t) =>
+                t.id === taskId ? { ...t, status: "doing" as const, updatedAt: nowIso } : t
+              )
+            : b.tasks,
+      };
+    });
+
+    return criou;
+  }, []);
+
   const skipBlockToday = useCallback((id: string) => {
     const nowIso = new Date().toISOString();
     setBoard((b) => ({
@@ -753,6 +826,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       pauseTimer,
       finishBlock,
       skipBlockToday,
+      startTaskNow,
       reopenTimer,
       resetTimer,
       copyDay,
@@ -794,6 +868,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       pauseTimer,
       finishBlock,
       skipBlockToday,
+      startTaskNow,
       reopenTimer,
       resetTimer,
       copyDay,

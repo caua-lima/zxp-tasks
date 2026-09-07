@@ -14,6 +14,8 @@ interface TaskCardProps {
   onClick: () => void;
   onDragStart: (e: React.DragEvent) => void;
   onMove?: (direction: -1 | 1) => void;
+  /** Ausente quando não faz sentido cronometrar (item já feito, desejo). */
+  onStart?: () => void;
 }
 
 export function TaskCard({
@@ -23,6 +25,7 @@ export function TaskCard({
   onClick,
   onDragStart,
   onMove,
+  onStart,
 }: TaskCardProps) {
   const overdue = isTaskOverdue(task);
   const { done, total } = checklistProgress(task);
@@ -143,8 +146,24 @@ export function TaskCard({
         )}
       </div>
 
-      {onMove && (
-        <div className="mt-2 flex gap-1 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
+      {(onMove || onStart) && (
+        // Sempre visível no celular: passar o mouse não existe lá, e com
+        // `opacity-0` estes botões eram inalcançáveis por toque.
+        <div className="mt-2 flex gap-1 opacity-100 transition md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+          {onStart && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onStart();
+              }}
+              title="Põe no cronograma de hoje e liga o cronômetro"
+              className="rounded border border-[var(--brand)] px-2 py-1 text-[11px] font-semibold text-[var(--brand)] hover:bg-[var(--brand)] hover:text-[var(--accent-ink)]"
+            >
+              ▶ Iniciar
+            </button>
+          )}
+          {onMove && (
+            <>
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -165,6 +184,8 @@ export function TaskCard({
           >
             →
           </button>
+            </>
+          )}
         </div>
       )}
     </div>

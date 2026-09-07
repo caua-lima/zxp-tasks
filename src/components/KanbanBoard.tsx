@@ -18,7 +18,7 @@ interface KanbanBoardProps {
 }
 
 export function KanbanBoard({ topicId, filters, sortKey }: KanbanBoardProps) {
-  const { topics, tasks, setTaskStatus } = useApp();
+  const { topics, tasks, setTaskStatus, startTaskNow } = useApp();
   const { showToast } = useToast();
   const [modalTask, setModalTask] = useState<Task | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -151,6 +151,19 @@ export function KanbanBoard({ topicId, filters, sortKey }: KanbanBoardProps) {
                     }}
                     onDragStart={(e) => e.dataTransfer.setData("text/task-id", task.id)}
                     onMove={(dir) => moveByOffset(task, dir)}
+                    onStart={
+                      // Cronometrar só faz sentido pro que ainda está em
+                      // aberto e é trabalho — "comprar uma calça" não é
+                      // uma sessão de trabalho.
+                      task.status !== "done" &&
+                      topicKind(topicMap[task.topicId]) !== "wishlist"
+                        ? () => {
+                            if (startTaskNow(task.id)) {
+                              showToast(`"${task.title}" está rodando no Cronograma.`);
+                            }
+                          }
+                        : undefined
+                    }
                   />
                 ))}
               </div>
