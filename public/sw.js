@@ -1,4 +1,4 @@
-const CACHE = "zxp-tasks-v4";
+const CACHE = "zxp-tasks-v5";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -71,6 +71,32 @@ self.addEventListener("notificationclick", (event) => {
         if ("focus" in client) return client.focus();
       }
       return self.clients.openWindow("/");
+    })
+  );
+});
+
+/**
+ * Aviso vindo de outro aparelho (Web Push).
+ *
+ * Este handler roda mesmo com o app fechado — é o que faz "iniciei no PC"
+ * chegar no celular. O `tag` é o mesmo dos avisos locais pra que um
+ * substitua o outro em vez de empilhar dois cartões da mesma coisa.
+ */
+self.addEventListener("push", (event) => {
+  let dados = { titulo: "ZXP Tasks", corpo: "" };
+  try {
+    if (event.data) dados = { ...dados, ...event.data.json() };
+  } catch {
+    // Carga que não é JSON não pode derrubar o aviso inteiro.
+    if (event.data) dados.corpo = event.data.text();
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(dados.titulo, {
+      body: dados.corpo,
+      icon: "/manifest-icon-192",
+      badge: "/manifest-icon-192",
+      tag: "zxp-bloco-rodando",
     })
   );
 });

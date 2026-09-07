@@ -29,6 +29,7 @@ import { createRecurringTask, skipOccurrence } from "@/lib/recurrence";
 import { todayISO } from "@/lib/date-utils";
 import { useAuth } from "./AuthContext";
 import { pushBoardToCloud, subscribeToCloudBoard } from "@/lib/cloud-sync";
+import { registrarAparelho } from "@/lib/push";
 import { createTask, NewTaskInput } from "@/lib/task-factory";
 import {
   completeBlock,
@@ -194,6 +195,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       unsubscribe();
       initialSyncDone.current = false;
     };
+  }, [userId]);
+
+  /**
+   * Inscreve este aparelho no push assim que houver login e permissão.
+   *
+   * Não basta inscrever no botão "Ativar notificações": quem já concedeu a
+   * permissão antes deste recurso existir nunca vê o botão, e sem esta
+   * inscrição o aparelho jamais receberia o que foi iniciado nos outros.
+   * `registrarAparelho` é idempotente — reaproveita a inscrição existente.
+   */
+  useEffect(() => {
+    if (!userId) return;
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+    if (Notification.permission !== "granted") return;
+    void registrarAparelho();
   }, [userId]);
 
   useEffect(() => {

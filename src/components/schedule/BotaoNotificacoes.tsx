@@ -8,6 +8,7 @@ import {
   pedirPermissao,
   permissaoAtual,
 } from "@/lib/notifications";
+import { registrarAparelho } from "@/lib/push";
 
 /**
  * Liga os avisos do cronômetro, num botão só.
@@ -37,7 +38,11 @@ export function BotaoNotificacoes() {
     setEstado(resultado);
     // Usa o resultado do pedido, não uma releitura: no iPhone o valor lido
     // logo depois do prompt ainda vinha "default".
-    if (resultado === "granted") avisarTeste(resultado);
+    if (resultado === "granted") {
+      avisarTeste(resultado);
+      // Inscreve este aparelho pra receber o que for iniciado nos outros.
+      void registrarAparelho();
+    }
   }
 
   if (estado === "denied") {

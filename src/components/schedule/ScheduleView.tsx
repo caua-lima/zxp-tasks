@@ -31,6 +31,7 @@ import {
 import { BotaoNotificacoes } from "./BotaoNotificacoes";
 import { EditarBloco } from "./EditarBloco";
 import { BotaoDeVoz } from "./BotaoDeVoz";
+import { avisarOutrosAparelhos } from "@/lib/push";
 import { useToast } from "../shared/Toast";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
 
@@ -388,10 +389,15 @@ export function ScheduleView() {
       // Sem tempo combinado não há hora de fim pra prometer nem alarme pra
       // agendar — só o aviso de que começou.
       avisarInicioLivre(block.title, permissao);
+      void avisarOutrosAparelhos(`▶ ${block.title}`, "Em andamento, sem tempo definido.");
       return;
     }
     avisarInicio(block.title, block.plannedMinutes, restanteMs, permissao);
     agendarFim(block.id, block.title, block.plannedMinutes, restanteMs);
+    void avisarOutrosAparelhos(
+      `▶ ${block.title}`,
+      `Tarefa de ${block.plannedMinutes} min iniciada em outro aparelho.`
+    );
   }
 
   function handleAdd(e: React.FormEvent) {
