@@ -13,7 +13,15 @@ import assert from "node:assert/strict";
 import { Board, ScheduleBlock, Task, Topic, emptyBoard } from "./types";
 import { migrateBoard } from "./task-migrations";
 import { montarRelatorio } from "./report";
-import { extendBlock, isFinished, ordenarParaExibicao, skipBlock } from "./schedule";
+import { interpretarComandoDeVoz } from "./voice-command";
+import {
+  completedBlockData,
+  extendBlock,
+  isFinished,
+  ordenarParaExibicao,
+  plannedMs,
+  skipBlock,
+} from "./schedule";
 import {
   isTaskOverdue,
   getTasksDueToday,
@@ -1515,4 +1523,94 @@ test("relatório separa 'não fiz' de 'concluído'", () => {
   assert.equal(r.blocosTotal, 2);
   // "Não fiz" não é conclusão: não pode entrar na seção de virada de dia.
   assert.equal(r.viradas.length, 0);
+});
+
+// ── Comando de voz ────────────────────────────────────────────────────────
+
+test("entende o comando ditado do exemplo", () => {
+  assert.deepEqual(interpretarComandoDeVoz("Tarefa Chamar Leads por 40 minutos"), {
+    titulo: "Chamar Leads",
+    minutos: 40,
+  });
+});
+
+test("aceita as formas que uma pessoa fala de verdade", () => {
+  const casos: [string, string, number | undefined][] = [
+    ["chamar leads 30 min", "Chamar leads", 30],
+    ["nova tarefa gravar aula de 1 hora", "Gravar aula", 60],
+    ["criar tarefa revisar contrato durante 20 minutos", "Revisar contrato", 20],
+    ["tarefa alinhamento por 2 horas", "Alinhamento", 120],
+    ["responder e-mails por quinze minutos", "Responder e-mails", 15],
+    ["tarefa reunião de meia hora", "Reunião", 30],
+  ];
+  for (const [fala, titulo, minutos] of casos) {
+    assert.deepEqual(interpretarComandoDeVoz(fala), { titulo, minutos }, fala);
+  }
+});
+
+test("sem duração ditada, devolve só o título", () => {
+  assert.deepEqual(interpretarComandoDeVoz("tarefa atender a pronix"), {
+    titulo: "Atender a pronix",
+  });
+});
+
+test("acento no título não desalinha o corte da duração", () => {
+  // O corte usa índices achados no texto sem acento; se o tamanho mudasse,
+  // o título sairia picotado.
+  assert.deepEqual(interpretarComandoDeVoz("tarefa negociação com João por 25 minutos"), {
+    titulo: "Negociação com João",
+    minutos: 25,
+  });
+});
+
+test("duração no meio da frase não deixa preposição sobrando", () => {
+  assert.deepEqual(interpretarComandoDeVoz("Chamar leads por 40 minutos"), {
+    titulo: "Chamar leads",
+    minutos: 40,
+  });
+});
+
+test("fala sem título nenhum é recusada em vez de virar tarefa vazia", () => {
+  assert.equal(interpretarComandoDeVoz(""), null);
+  assert.equal(interpretarComandoDeVoz("   "), null);
+  assert.equal(interpretarComandoDeVoz("tarefa"), null);
+  assert.equal(interpretarComandoDeVoz("tarefa de 40 minutos"), null);
+});
+
+test("número dentro do nome não é confundido com duração", () => {
+  assert.deepEqual(interpretarComandoDeVoz("tarefa revisar módulo 3"), {
+    titulo: "Revisar módulo 3",
+  });
+});
+
+test("bloco sem tempo combinado não tem meta nem estouro", () => {
+  const livre = { ...bloco({ id: "a", date: "d", plannedMinutes: 30 }), openEnded: true,
+    accumulatedMs: 90 * 60_000 };
+  // Nada foi combinado: não entra como tempo planejado no relatório...
+  assert.equal(plannedMs(livre), 0);
+  // ...e correr 90 min não é "passou do tempo".
+  assert.equal(isOvertime(livre, 0), false);
+  assert.equal(progressPercent(livre, 0), 0);
+  // O tempo gasto continua valendo normalmente.
+  assert.equal(elapsedMs(livre, 0), 90 * 60_000);
+});
+
+test("completedBlockData registra o que já foi feito, sem cronômetro", () => {
+  const d = completedBlockData(40, "2026-09-06T18:00:00.000Z");
+  assert.equal(d.plannedMinutes, 40);
+  assert.equal(d.accumulatedMs, 40 * 60_000);
+  assert.equal(d.completedAt, "2026-09-06T18:00:00.000Z");
+  // Registrar depois nunca cria bloco de duração zero.
+  assert.equal(completedBlockData(0, "2026-09-06T18:00:00.000Z").plannedMinutes, 1);
+});
+
+test("relatório ignora tempo planejado de bloco livre mas conta o trabalhado", () => {
+  const board = { ...emptyBoard(), schedule: [
+    { ...bloco({ id: "a", date: "2026-09-06", plannedMinutes: 30 }), openEnded: true,
+      accumulatedMs: 2 * 60 * 60_000, completedAt: "2026-09-06T20:00:00.000Z" },
+  ]};
+  const r = montarRelatorio(board, "2026-09-06", "2026-09-06");
+  assert.equal(r.totalPlanejadoMs, 0);
+  assert.equal(r.totalTrabalhadoMs, 2 * 60 * 60_000);
+  assert.equal(r.blocosFeitos, 1);
 });

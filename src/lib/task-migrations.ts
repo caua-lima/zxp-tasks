@@ -170,6 +170,7 @@ function migrateScheduleBlock(raw: unknown): ScheduleBlock | null {
     topicId: asString(r.topicId),
     taskId: asString(r.taskId),
     isBreak: r.isBreak === true,
+    openEnded: r.openEnded === true,
   };
 }
 

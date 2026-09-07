@@ -26,8 +26,9 @@ export function elapsedMs(block: ScheduleBlock, now: number = Date.now()): numbe
   return block.accumulatedMs + Math.max(0, running);
 }
 
+/** Tempo combinado. Zero quando o bloco é de tempo livre — nada foi combinado. */
 export function plannedMs(block: ScheduleBlock): number {
-  return block.plannedMinutes * MINUTE_MS;
+  return block.openEnded ? 0 : block.plannedMinutes * MINUTE_MS;
 }
 
 /** Positivo = tempo restante. Negativo = passou do combinado. */
@@ -36,6 +37,8 @@ export function remainingMs(block: ScheduleBlock, now: number = Date.now()): num
 }
 
 export function isOvertime(block: ScheduleBlock, now: number = Date.now()): boolean {
+  // Sem tempo combinado não há como passar do tempo.
+  if (block.openEnded) return false;
   return remainingMs(block, now) < 0;
 }
 
@@ -182,6 +185,22 @@ export function ordenarParaExibicao(blocks: ScheduleBlock[]): ScheduleBlock[] {
 /** Estica o tempo planejado do bloco. Nunca encolhe abaixo de 1 minuto. */
 export function extendBlock(block: ScheduleBlock, minutos: number): ScheduleBlock {
   return { ...block, plannedMinutes: Math.max(1, block.plannedMinutes + minutos) };
+}
+
+/**
+ * Cria um bloco já concluído, pro que foi feito sem cronômetro ligado.
+ *
+ * `minutosGastos` vira tempo acumulado E tempo planejado: registrar depois
+ * significa que o combinado e o realizado são a mesma coisa, e inventar uma
+ * diferença entre eles só sujaria o relatório.
+ */
+export function completedBlockData(minutosGastos: number, nowIso: string) {
+  const minutos = Math.max(1, Math.round(minutosGastos));
+  return {
+    plannedMinutes: minutos,
+    accumulatedMs: minutos * MINUTE_MS,
+    completedAt: nowIso,
+  };
 }
 
 /** Minutos padrão de um intervalo — o "10 minutinhos off". */

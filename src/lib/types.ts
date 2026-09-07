@@ -143,6 +143,15 @@ export interface ScheduleBlock {
    * número do dia mentir na direção mais fácil de acreditar.
    */
   isBreak?: boolean;
+  /**
+   * Bloco sem tempo combinado: o cronômetro conta pra cima e não existe
+   * "passou do tempo". É o expediente que não se planeja em fatias — dá pra
+   * medir quanto durou sem ter que fingir uma previsão antes de começar.
+   *
+   * `plannedMinutes` continua preenchido (um palpite qualquer) só pra não
+   * quebrar quem lê o campo; quem decide é esta marca.
+   */
+  openEnded?: boolean;
 }
 
 export interface BoardSettings {

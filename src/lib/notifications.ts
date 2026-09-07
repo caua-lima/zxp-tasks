@@ -139,6 +139,15 @@ export function avisarInicio(
   );
 }
 
+/** Bloco sem tempo combinado: não há hora de fim a prometer. */
+export function avisarInicioLivre(titulo: string, permissao?: EstadoNotificacao): void {
+  void mostrar(
+    `▶ ${titulo}`,
+    { ...BASE, body: "Em andamento, sem tempo definido.", silent: true },
+    permissao
+  );
+}
+
 export function avisarFim(titulo: string, minutos: number): void {
   void mostrar(`⏱ ${titulo}`, {
     ...BASE,

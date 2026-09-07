@@ -32,6 +32,7 @@ import { pushBoardToCloud, subscribeToCloudBoard } from "@/lib/cloud-sync";
 import { createTask, NewTaskInput } from "@/lib/task-factory";
 import {
   completeBlock,
+  completedBlockData,
   extendBlock,
   pauseBlock,
   reopenBlock,
@@ -74,7 +75,14 @@ interface AppContextValue {
     date: string,
     title: string,
     plannedMinutes: number,
-    vinculo?: { topicId?: string; taskId?: string }
+    opcoes?: {
+      topicId?: string;
+      taskId?: string;
+      /** Sem tempo combinado: o cronômetro conta pra cima. */
+      openEnded?: boolean;
+      /** Já foi feito — entra concluído, com `plannedMinutes` como tempo gasto. */
+      jaFeito?: boolean;
+    }
   ) => void;
   updateBlock: (id: string, patch: Partial<Omit<ScheduleBlock, "id">>) => void;
   removeBlock: (id: string) => void;
@@ -428,7 +436,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       date: string,
       title: string,
       plannedMinutes: number,
-      vinculo?: { topicId?: string; taskId?: string }
+      opcoes?: {
+        topicId?: string;
+        taskId?: string;
+        openEnded?: boolean;
+        jaFeito?: boolean;
+      }
     ) => {
       const blockId = uuid();
       const novaTarefaId = uuid();
@@ -439,11 +452,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const nextOrder = doDia.length === 0 ? 0 : Math.max(...doDia.map((x) => x.order)) + 1;
         // Projeto ou tarefa que sumiram entre escolher e salvar não podem
         // virar vínculo quebrado — sem eles o bloco fica simplesmente solto.
-        const topico = vinculo?.topicId
-          ? b.topics.find((t) => t.id === vinculo.topicId)
+        const topico = opcoes?.topicId
+          ? b.topics.find((t) => t.id === opcoes.topicId)
           : undefined;
-        const existente = vinculo?.taskId
-          ? b.tasks.find((t) => t.id === vinculo.taskId && !t.deletedAt)
+        const existente = opcoes?.taskId
+          ? b.tasks.find((t) => t.id === opcoes.taskId && !t.deletedAt)
           : undefined;
 
         const criarTarefa = !!topico && !existente;
@@ -456,6 +469,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           order: nextOrder,
           topicId: existente?.topicId ?? topico?.id,
           taskId: existente?.id ?? (criarTarefa ? novaTarefaId : undefined),
+          openEnded: opcoes?.openEnded ? true : undefined,
+          // Registrar o que já foi feito: o bloco nasce concluído, com o
+          // tempo informado já contado.
+          ...(opcoes?.jaFeito ? completedBlockData(plannedMinutes, now) : {}),
         };
 
         if (!criarTarefa) return { ...b, schedule: [...b.schedule, block] };
@@ -464,13 +481,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           {
             topicId: topico.id,
             title: title.trim(),
-            status: "todo",
-            estimatedMinutes: plannedMinutes,
+            // Bloco registrado depois já nasce feito dos dois lados: separar
+            // obrigaria a marcar de novo no projeto o que já aconteceu.
+            status: opcoes?.jaFeito ? "done" : "todo",
+            estimatedMinutes: opcoes?.openEnded ? undefined : plannedMinutes,
           },
           novaTarefaId,
           now
         );
-        return { ...b, tasks: [...b.tasks, task], schedule: [...b.schedule, block] };
+        const tarefaFinal = opcoes?.jaFeito ? { ...task, completedAt: now } : task;
+        return { ...b, tasks: [...b.tasks, tarefaFinal], schedule: [...b.schedule, block] };
       });
     },
     []

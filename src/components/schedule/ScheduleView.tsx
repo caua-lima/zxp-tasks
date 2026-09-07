@@ -22,6 +22,7 @@ import { topicKind } from "@/lib/wishlist";
 import {
   agendarFim,
   avisarInicio,
+  avisarInicioLivre,
   cancelarFim,
   limparAvisoDeInicio,
   pedirPermissao,
@@ -29,6 +30,7 @@ import {
 } from "@/lib/notifications";
 import { BotaoNotificacoes } from "./BotaoNotificacoes";
 import { EditarBloco } from "./EditarBloco";
+import { BotaoDeVoz } from "./BotaoDeVoz";
 import { useToast } from "../shared/Toast";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
 
@@ -60,6 +62,7 @@ function BlockRow({
   const running = isRunning(block);
   const done = !!block.completedAt;
   const naoFeito = !!block.skippedAt;
+  const semTempo = !!block.openEnded;
   // "Encerrado" cobre os dois desfechos; só o aberto ainda aceita cronômetro.
   const encerrado = done || naoFeito;
   const over = isOvertime(block, now);
@@ -99,8 +102,8 @@ function BlockRow({
             {block.title}
           </p>
           <p className="mt-0.5 text-[11px] tabular-nums text-[var(--muted)]">
-            {block.plannedMinutes} min planejados
-            {spent > 0 && ` · ${formatDuration(spent)} feitos`}
+            {semTempo ? "sem tempo definido" : `${block.plannedMinutes} min planejados`}
+            {spent > 0 && !semTempo && ` · ${formatDuration(spent)} feitos`}
           </p>
           {projeto && (
             <p className="mt-0.5 truncate text-[11px] text-[var(--brand)]">{projeto}</p>
@@ -108,7 +111,7 @@ function BlockRow({
         </div>
 
         <div className="flex shrink-0 items-start gap-1">
-          {!encerrado && (
+          {!encerrado && !semTempo && (
             <button
               onClick={onExtend}
               aria-label={`Somar ${EXTEND_MINUTES} minutos em ${block.title}`}
@@ -133,7 +136,9 @@ function BlockRow({
             className="font-[family-name:var(--font-display)] text-2xl font-semibold tabular-nums"
             style={{ color: timeColor }}
             aria-label={
-              naoFeito
+              semTempo
+                ? `${formatDuration(spent)} corridos, sem tempo combinado`
+                : naoFeito
                 ? `Não feito. ${formatDuration(spent)} gastos`
                 : done
                   ? `Concluído em ${formatDuration(spent)}`
@@ -142,9 +147,11 @@ function BlockRow({
                   : `Faltam ${formatDuration(remaining)}`
             }
           >
-            {over && !encerrado
-              ? `+${formatDuration(-remaining)}`
-              : formatDuration(Math.max(0, remaining))}
+            {semTempo
+              ? formatDuration(spent)
+              : over && !encerrado
+                ? `+${formatDuration(-remaining)}`
+                : formatDuration(Math.max(0, remaining))}
           </p>
           {naoFeito && (
             <p className="text-[10px] font-medium text-[var(--muted)]">não fiz</p>
@@ -156,7 +163,9 @@ function BlockRow({
       </div>
 
       <div
-        className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--surface3)]"
+        className={`mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--surface3)] ${
+          semTempo ? "invisible" : ""
+        }`}
         role="progressbar"
         aria-valuenow={progressPercent(block, now)}
         aria-valuemin={0}
@@ -258,6 +267,7 @@ export function ScheduleView() {
   const [topicId, setTopicId] = useState("");
   const [tarefaExistenteId, setTarefaExistenteId] = useState("");
   const [semTitulo, setSemTitulo] = useState(false);
+  const [tempoLivre, setTempoLivre] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState<ScheduleBlock | null>(null);
   const [editando, setEditando] = useState<ScheduleBlock | null>(null);
 
@@ -374,6 +384,12 @@ export function ScheduleView() {
       permissaoAtual() === "default" ? await pedirPermissao() : permissaoAtual();
     if (permissao !== "granted") return;
 
+    if (block.openEnded) {
+      // Sem tempo combinado não há hora de fim pra prometer nem alarme pra
+      // agendar — só o aviso de que começou.
+      avisarInicioLivre(block.title, permissao);
+      return;
+    }
     avisarInicio(block.title, block.plannedMinutes, restanteMs, permissao);
     agendarFim(block.id, block.title, block.plannedMinutes, restanteMs);
   }
@@ -388,9 +404,18 @@ export function ScheduleView() {
       showToast("Escreva o que vai fazer antes de adicionar.");
       return;
     }
-    addBlock(date, t, minutes, {
+    criar(t, { jaFeito: false });
+  }
+
+  /** Caminho único de criação — usado pelo Add, pelo "Já fiz" e pela voz. */
+  function criar(t: string, { jaFeito }: { jaFeito: boolean }, minutosDitados?: number) {
+    addBlock(date, t, minutosDitados ?? minutes, {
       topicId: topicId || undefined,
       taskId: tarefaExistenteId || undefined,
+      // "Já fiz" precisa de um tempo pra registrar; tempo livre só faz
+      // sentido enquanto o cronômetro ainda vai rodar.
+      openEnded: tempoLivre && !jaFeito && minutosDitados === undefined,
+      jaFeito,
     });
     setTitle("");
     setTarefaExistenteId("");
@@ -489,6 +514,19 @@ export function ScheduleView() {
               semTitulo ? "border-[var(--danger)]" : "border-[var(--border)]"
             }`}
           />
+          <BotaoDeVoz
+            onComando={(c) => {
+              // Ditar já cria: repetir o toque no Add depois de falar
+              // desfaria o sentido de ter falado.
+              criar(c.titulo, { jaFeito: false }, c.minutos);
+              showToast(
+                c.minutos
+                  ? `"${c.titulo}" — ${c.minutos} min.`
+                  : `"${c.titulo}" — sem tempo definido.`
+              );
+            }}
+            onErro={(m) => showToast(m)}
+          />
           <button
             type="submit"
             className="min-h-[44px] shrink-0 rounded-md bg-[var(--brand)] px-4 text-sm font-semibold text-[var(--accent-ink)] hover:bg-[var(--accent-hover)]"
@@ -496,13 +534,18 @@ export function ScheduleView() {
             Add
           </button>
         </div>
+
+
         <div className="mt-2 flex flex-wrap gap-1.5">
           {DURATION_PRESETS.map((m) => (
             <button
               key={m}
               type="button"
-              onClick={() => setMinutes(m)}
-              aria-pressed={minutes === m}
+              onClick={() => {
+                setMinutes(m);
+                setTempoLivre(false);
+              }}
+              aria-pressed={minutes === m && !tempoLivre}
               className={`min-h-[36px] rounded-md border px-3 text-xs font-medium transition ${
                 minutes === m
                   ? "border-[var(--brand)] bg-[var(--brand)] text-[var(--accent-ink)]"
@@ -516,12 +559,45 @@ export function ScheduleView() {
             type="number"
             min={1}
             value={DURATION_PRESETS.includes(minutes) ? "" : minutes}
-            onChange={(e) => setMinutes(Math.max(1, Number(e.target.value) || 1))}
+            onChange={(e) => {
+              setMinutes(Math.max(1, Number(e.target.value) || 1));
+              setTempoLivre(false);
+            }}
             placeholder="outro"
             aria-label="Duração personalizada em minutos"
             className="min-h-[36px] w-20 rounded-md border border-[var(--border)] bg-[var(--surface2)] px-2 text-xs tabular-nums text-[var(--foreground)] outline-none focus:border-[var(--focus)]"
           />
+          <button
+            type="button"
+            onClick={() => setTempoLivre((v) => !v)}
+            aria-pressed={tempoLivre}
+            title="Cronômetro conta pra cima, sem tempo combinado"
+            className={`min-h-[36px] rounded-md border px-3 text-xs font-medium transition ${
+              tempoLivre
+                ? "border-[var(--brand)] bg-[var(--brand)] text-[var(--accent-ink)]"
+                : "border-[var(--border)] text-[var(--muted)] hover:bg-[var(--surface2)]"
+            }`}
+          >
+            sem tempo
+          </button>
         </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            const t = title.trim();
+            if (!t) {
+              setSemTitulo(true);
+              showToast("Escreva o que você fez antes de registrar.");
+              return;
+            }
+            criar(t, { jaFeito: true });
+            showToast(`"${t}" registrado como feito (${minutes} min).`);
+          }}
+          className="mt-2 w-full rounded-md border border-dashed border-[var(--border)] py-2 text-xs font-medium text-[var(--muted)] hover:bg-[var(--surface2)] hover:text-[var(--foreground)]"
+        >
+          ✓ Já fiz — registrar {minutes} min sem cronômetro
+        </button>
 
         {projetosDisponiveis.length > 0 && (
           <div className="mt-2">
