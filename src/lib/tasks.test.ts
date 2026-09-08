@@ -12,7 +12,7 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { Board, ScheduleBlock, Task, Topic, emptyBoard } from "./types";
 import { migrateBoard } from "./task-migrations";
-import { montarRelatorio } from "./report";
+import { montarRelatorio, tempoPorProjeto } from "./report";
 import { interpretarComandoDeVoz } from "./voice-command";
 import {
   completedBlockData,
@@ -1613,4 +1613,40 @@ test("relatório ignora tempo planejado de bloco livre mas conta o trabalhado", 
   assert.equal(r.totalPlanejadoMs, 0);
   assert.equal(r.totalTrabalhadoMs, 2 * 60 * 60_000);
   assert.equal(r.blocosFeitos, 1);
+});
+
+test("tempoPorProjeto soma por projeto, do maior pro menor", () => {
+  const board = { ...emptyBoard(), schedule: [
+    bloco({ id: "a", date: "2026-09-01", topicId: "t1", accumulatedMs: 60 * 60_000 }),
+    bloco({ id: "b", date: "2026-09-02", topicId: "t2", accumulatedMs: 30 * 60_000 }),
+    bloco({ id: "c", date: "2026-09-03", topicId: "t1", accumulatedMs: 90 * 60_000 }),
+  ]};
+  assert.deepEqual(tempoPorProjeto(board, "2026-09-01", "2026-09-07"), [
+    { topicId: "t1", elapsedMs: 150 * 60_000 },
+    { topicId: "t2", elapsedMs: 30 * 60_000 },
+  ]);
+});
+
+test("tempoPorProjeto mantém o tempo sem projeto e ignora intervalo", () => {
+  const board = { ...emptyBoard(), schedule: [
+    bloco({ id: "a", date: "2026-09-01", topicId: "t1", accumulatedMs: 60 * 60_000 }),
+    bloco({ id: "b", date: "2026-09-01", accumulatedMs: 20 * 60_000 }),
+    bloco({ id: "c", date: "2026-09-01", accumulatedMs: 15 * 60_000, isBreak: true }),
+  ]};
+  const fatias = tempoPorProjeto(board, "2026-09-01", "2026-09-07");
+  assert.deepEqual(fatias, [
+    { topicId: "t1", elapsedMs: 60 * 60_000 },
+    { topicId: null, elapsedMs: 20 * 60_000 },
+  ]);
+  // A soma das fatias tem que fechar com o total trabalhado do relatório.
+  const total = montarRelatorio(board, "2026-09-01", "2026-09-07").totalTrabalhadoMs;
+  assert.equal(fatias.reduce((a, f) => a + f.elapsedMs, 0), total);
+});
+
+test("tempoPorProjeto ignora dias fora do período", () => {
+  const board = { ...emptyBoard(), schedule: [
+    bloco({ id: "a", date: "2026-08-31", topicId: "t1", accumulatedMs: 60 * 60_000 }),
+    bloco({ id: "b", date: "2026-09-08", topicId: "t1", accumulatedMs: 60 * 60_000 }),
+  ]};
+  assert.deepEqual(tempoPorProjeto(board, "2026-09-01", "2026-09-07"), []);
 });

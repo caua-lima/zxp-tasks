@@ -168,3 +168,39 @@ export function tarefasConcluidasNoPeriodo(
     .filter((x) => x.dia >= de && x.dia <= ate)
     .sort((a, b) => (b.task.completedAt! < a.task.completedAt! ? -1 : 1));
 }
+
+export interface TempoDeProjeto {
+  topicId: string | null;
+  elapsedMs: number;
+}
+
+/**
+ * Onde o tempo do período foi parar, por projeto, do maior pro menor.
+ *
+ * Blocos sem projeto entram como `topicId: null` em vez de sumir — esconder
+ * o tempo solto faria a soma das fatias não bater com o total da semana, e
+ * um gráfico que não fecha é pior que nenhum gráfico.
+ *
+ * Intervalo fica de fora: café não é trabalho de projeto nenhum.
+ */
+export function tempoPorProjeto(
+  board: Board,
+  de: string,
+  ate: string = todayISO()
+): TempoDeProjeto[] {
+  const agora = Date.now();
+  const soma = new Map<string | null, number>();
+
+  for (const b of board.schedule) {
+    if (b.isBreak) continue;
+    if (b.date < de || b.date > ate) continue;
+    const gasto = elapsedMs(b, agora);
+    if (gasto <= 0) continue;
+    const chave = b.topicId ?? null;
+    soma.set(chave, (soma.get(chave) ?? 0) + gasto);
+  }
+
+  return [...soma.entries()]
+    .map(([topicId, elapsedMs]) => ({ topicId, elapsedMs }))
+    .sort((a, b) => b.elapsedMs - a.elapsedMs);
+}

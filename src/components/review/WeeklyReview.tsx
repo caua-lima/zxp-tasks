@@ -2,9 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
-import { calculateWeeklyMetrics, formatMinutes } from "@/lib/weekly-review";
-import { startOfWeekISO, todayISO, formatDateShort } from "@/lib/date-utils";
+import { calculateWeeklyMetrics } from "@/lib/weekly-review";
+import { addDaysISO, startOfWeekISO, todayISO, formatDateShort } from "@/lib/date-utils";
 import { useToast } from "../shared/Toast";
+import { CartaoDaSemana } from "./CartaoDaSemana";
 
 function Stat({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
@@ -27,11 +28,20 @@ export function WeeklyReview() {
   const { tasks, topics, board, saveWeeklyReview } = useApp();
   const { showToast } = useToast();
   const today = todayISO();
-  const weekStart = startOfWeekISO(today);
+  const semanaAtual = startOfWeekISO(today);
+  // Dá pra voltar semanas: a foto que a pessoa quer postar costuma ser a da
+  // semana que acabou, não a que mal começou.
+  const [weekStart, setWeekStart] = useState(semanaAtual);
+  const ehSemanaAtual = weekStart === semanaAtual;
+  // Modo foto: esconde tudo menos o cartão, pra o print sair limpo.
+  const [modoFoto, setModoFoto] = useState(false);
 
   const metrics = useMemo(
-    () => calculateWeeklyMetrics(tasks, topics, today),
-    [tasks, topics, today]
+    // A revisão de uma semana passada usa o último dia daquela semana como
+    // "hoje": calcular com a data de agora contaria atrasos que ainda nem
+    // existiam quando a semana fechou.
+    () => calculateWeeklyMetrics(tasks, topics, ehSemanaAtual ? today : addDaysISO(weekStart, 6)),
+    [tasks, topics, today, weekStart, ehSemanaAtual]
   );
 
   const existing = board.weeklyReviews.find((w) => w.weekStart === weekStart);
@@ -52,17 +62,63 @@ export function WeeklyReview() {
   const lastReview = previous[0];
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4 p-4">
-      <header>
-        <h1 className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--foreground)]">
-          Revisão semanal
-        </h1>
-        <p className="mt-0.5 text-xs text-[var(--muted)]">
-          Semana de {formatDateShort(metrics.weekStart)} a {formatDateShort(metrics.weekEnd)}
-        </p>
+    <div
+      className={
+        modoFoto
+          ? "mx-auto max-w-lg p-4"
+          : "mx-auto max-w-3xl space-y-4 p-4"
+      }
+    >
+      <header className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setWeekStart((w) => addDaysISO(w, -7))}
+            aria-label="Semana anterior"
+            className="min-h-[36px] rounded-md border border-[var(--border)] px-2.5 text-sm text-[var(--muted)] hover:bg-[var(--surface)]"
+          >
+            ←
+          </button>
+          <button
+            onClick={() => setWeekStart((w) => addDaysISO(w, 7))}
+            disabled={ehSemanaAtual}
+            aria-label="Próxima semana"
+            className="min-h-[36px] rounded-md border border-[var(--border)] px-2.5 text-sm text-[var(--muted)] hover:bg-[var(--surface)] disabled:opacity-30"
+          >
+            →
+          </button>
+          {!ehSemanaAtual && (
+            <button
+              onClick={() => setWeekStart(semanaAtual)}
+              className="ml-1 min-h-[36px] rounded-md px-2 text-xs font-medium text-[var(--brand)] hover:underline"
+            >
+              Voltar pra esta semana
+            </button>
+          )}
+        </div>
+        <button
+          onClick={() => setModoFoto((v) => !v)}
+          aria-pressed={modoFoto}
+          className={`min-h-[36px] rounded-md border px-3 text-xs font-semibold transition ${
+            modoFoto
+              ? "border-[var(--brand)] bg-[var(--brand)] text-[var(--accent-ink)]"
+              : "border-[var(--border)] text-[var(--muted)] hover:bg-[var(--surface)]"
+          }`}
+        >
+          {modoFoto ? "✕ Sair do modo foto" : "📷 Modo foto"}
+        </button>
       </header>
 
-      {lastReview?.nextPriority && (
+      <div className={modoFoto ? "mt-4" : undefined}>
+        <CartaoDaSemana weekStart={weekStart} />
+      </div>
+
+      {modoFoto && (
+        <p className="mt-3 text-center text-[11px] text-[var(--muted)]">
+          Tire o print e recorte no cartão. Toque de novo no botão pra voltar.
+        </p>
+      )}
+
+      {!modoFoto && lastReview?.nextPriority && (
         <section className="rounded-lg border border-[var(--planning)] bg-[var(--surface2)] p-3">
           <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--planning)]">
             Você definiu como prioridade desta semana
@@ -74,6 +130,8 @@ export function WeeklyReview() {
         </section>
       )}
 
+      {!modoFoto && (
+        <>
       <section>
         <h2 className="mb-2 text-sm font-semibold text-[var(--foreground)]">Execução</h2>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -128,23 +186,11 @@ export function WeeklyReview() {
         </div>
       </section>
 
-      <section>
-        <h2 className="mb-2 text-sm font-semibold text-[var(--foreground)]">Tempo estimado</h2>
-        <p className="mb-2 text-xs text-[var(--muted)]">
-          Soma das estimativas que você preencheu — não é tempo medido.
-        </p>
-        <div className="grid grid-cols-2 gap-2">
-          <Stat
-            label="Estimado das concluídas"
-            value={formatMinutes(metrics.estimatedMinutesCompleted)}
-          />
-          <Stat
-            label="Estimado das pendentes"
-            value={formatMinutes(metrics.estimatedMinutesPending)}
-          />
-        </div>
-      </section>
-
+      {/* A seção "Tempo estimado" saiu daqui. Ela somava as estimativas que
+          a pessoa digitou, e agora aparecia logo abaixo de um cartão com
+          tempo MEDIDO pelo cronômetro — duas horas diferentes na mesma tela,
+          com a pior das duas parecendo desmentir a melhor. As estimativas
+          continuam vivas na tarefa e no planejamento do dia. */}
       <section>
         <h2 className="mb-2 text-sm font-semibold text-[var(--foreground)]">
           Perguntas da semana
@@ -226,6 +272,8 @@ export function WeeklyReview() {
             ))}
           </div>
         </section>
+      )}
+        </>
       )}
     </div>
   );
