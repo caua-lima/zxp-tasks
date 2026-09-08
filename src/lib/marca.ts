@@ -13,7 +13,12 @@
  */
 
 export const MARCA_ONYX = "#10100E";
-export const MARCA_DOURADO = "#F4B942";
+/**
+ * Cor de assinatura do ZXP Tasks. A geometria do "Z" é idêntica à dos
+ * outros apps da família — o que muda entre eles é só esta cor (dourado no
+ * Market, esmeralda no Finance, azul aqui).
+ */
+export const MARCA_AZUL = "#3D8BFF";
 export const MARCA_MARFIM = "#F6F3E8";
 
 /** Traço do "Z" — idêntico ao arquivo de marca, sem reescalar. */
@@ -21,16 +26,20 @@ const TRACO = 'points="30,47 170,47 30,153 170,153" fill="none" stroke-width="34
 
 /** Ícone do app: fundo onyx, Z dourado, cantos arredondados. */
 export function svgAppIcon(): string {
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><rect width="200" height="200" rx="44" fill="${MARCA_ONYX}"/><g transform="translate(24,24) scale(0.76)"><polyline ${TRACO} stroke="${MARCA_DOURADO}"/></g></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><rect width="200" height="200" rx="44" fill="${MARCA_ONYX}"/><g transform="translate(24,24) scale(0.76)"><polyline ${TRACO} stroke="${MARCA_AZUL}"/></g></svg>`;
 }
 
 /**
- * Favicon: INVERTIDO de propósito (fundo dourado, Z onyx). Em 16-32px o Z
- * vazado sobre fundo escuro perde peso na aba do navegador; o bloco dourado
- * cheio garante a leitura.
+ * Favicon: mesma construção do ícone do app — traço azul sobre contêiner
+ * onyx —, como manda o documento de identidade.
+ *
+ * A versão anterior era invertida (fundo cheio, Z vazado) porque em 16px o
+ * traço perde peso na aba. O documento define a construção única pra
+ * família inteira, e coerência entre os quatro apps pesa mais do que esse
+ * ganho de nitidez num tamanho só.
  */
 export function svgFavicon(): string {
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><rect width="200" height="200" rx="26" fill="${MARCA_DOURADO}"/><polyline ${TRACO} stroke="${MARCA_ONYX}"/></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><rect width="200" height="200" rx="26" fill="${MARCA_ONYX}"/><polyline ${TRACO} stroke="${MARCA_AZUL}"/></svg>`;
 }
 
 /** Data URI pronto pra usar em <img src=...> dentro do ImageResponse. */

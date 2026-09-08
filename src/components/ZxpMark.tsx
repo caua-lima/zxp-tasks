@@ -1,6 +1,6 @@
 "use client";
 
-import { MARCA_DOURADO, MARCA_ONYX } from "@/lib/marca";
+import { MARCA_AZUL, MARCA_ONYX } from "@/lib/marca";
 
 /**
  * Logomark oficial da ZXP Solutions — mesmo componente do ZXP Market
@@ -22,7 +22,7 @@ export function ZxpMark({ size = 30, radius = 24 }: { size?: number; radius?: nu
       <polyline
         points="30,47 170,47 30,153 170,153"
         fill="none"
-        stroke={MARCA_DOURADO}
+        stroke={MARCA_AZUL}
         strokeWidth="34"
         strokeLinejoin="miter"
         strokeLinecap="butt"
