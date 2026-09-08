@@ -133,14 +133,14 @@ export function CartaoDaSemana({ weekStart }: { weekStart: string }) {
         // Fundo próprio, mais fundo que o da tela: numa foto o cartão precisa
         // se destacar do app em volta pra o recorte ficar óbvio.
         background:
-          "radial-gradient(120% 90% at 0% 0%, rgba(244,185,66,0.10) 0%, rgba(244,185,66,0) 55%), linear-gradient(160deg, #1b1b16 0%, #101010 100%)",
+          "radial-gradient(120% 90% at 0% 0%, var(--accent-dim) 0%, transparent 55%), linear-gradient(160deg, var(--onyx-2) 0%, var(--onyx) 100%)",
       }}
     >
       <span
         aria-hidden="true"
         className="absolute inset-x-0 top-0 h-[3px]"
         style={{
-          background: "linear-gradient(90deg, var(--accent) 0%, rgba(244,185,66,0) 70%)",
+          background: "linear-gradient(90deg, var(--accent) 0%, transparent 70%)",
         }}
       />
 
@@ -173,7 +173,7 @@ export function CartaoDaSemana({ weekStart }: { weekStart: string }) {
         <div className="mt-1.5 flex items-baseline gap-2">
           <span
             className="font-[family-name:var(--font-display)] text-[52px] font-bold leading-none tracking-tight tabular-nums text-[var(--accent)] sm:text-[64px]"
-            style={{ textShadow: "0 0 40px rgba(244,185,66,0.25)" }}
+            style={{ textShadow: "0 0 40px rgba(61, 139, 255, 0.28)" }}
           >
             {foco.valor}
           </span>
@@ -186,7 +186,9 @@ export function CartaoDaSemana({ weekStart }: { weekStart: string }) {
               style={{
                 color: variacao >= 0 ? "var(--success)" : "var(--muted)",
                 backgroundColor:
-                  variacao >= 0 ? "rgba(54,179,126,0.14)" : "rgba(181,178,166,0.12)",
+                  variacao >= 0
+                    ? "rgba(78, 175, 91, 0.14)"
+                    : "rgba(246, 243, 232, 0.10)",
               }}
             >
               {variacao >= 0 ? "▲" : "▼"} {Math.abs(variacao)}%
@@ -233,9 +235,9 @@ export function CartaoDaSemana({ weekStart }: { weekStart: string }) {
                 style={{
                   height: `${altura}%`,
                   background: melhor
-                    ? "linear-gradient(180deg, #ffd76a 0%, var(--accent) 100%)"
+                    ? "linear-gradient(180deg, var(--focus) 0%, var(--accent) 100%)"
                     : d.elapsedMs > 0
-                      ? "linear-gradient(180deg, rgba(244,185,66,0.55) 0%, rgba(244,185,66,0.3) 100%)"
+                      ? "linear-gradient(180deg, rgba(61, 139, 255, 0.6) 0%, rgba(61, 139, 255, 0.32) 100%)"
                       : "var(--surface3)",
                 }}
               />

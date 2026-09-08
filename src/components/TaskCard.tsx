@@ -1,7 +1,7 @@
 "use client";
 
 import { Task, Topic } from "@/lib/types";
-import { PRIORITY_COLOR, PRIORITY_ICON, formatEstimate } from "@/lib/priority";
+import { PRIORITY_COLOR, PRIORITY_ICON, PRIORITY_TINT, formatEstimate } from "@/lib/priority";
 import { checklistProgress, isTaskOverdue } from "@/lib/task-utils";
 import { formatDateShort } from "@/lib/date-utils";
 import { formatBRL } from "@/lib/money";
@@ -83,7 +83,7 @@ export function TaskCard({
           className="inline-flex items-center gap-1 rounded px-1.5 py-0.5"
           style={{
             color: PRIORITY_COLOR[task.priority],
-            backgroundColor: `${PRIORITY_COLOR[task.priority]}1f`,
+            backgroundColor: PRIORITY_TINT[task.priority],
           }}
         >
           <span aria-hidden="true">{PRIORITY_ICON[task.priority]}</span>

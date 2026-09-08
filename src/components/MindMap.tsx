@@ -15,10 +15,18 @@ const STATUS_LABEL: Record<string, string> = {
   done: "Feito",
 };
 
+/**
+ * Cores de status, espelhando os tokens de `globals.css` (hex porque vão
+ * direto no `fill` de um SVG).
+ *
+ * "Fazendo" passou a usar o azul de assinatura. Antes usava o laranja de
+ * atenção, que significa "atrasado" em todo o resto do app — a mesma cor
+ * dizendo duas coisas opostas na mesma tela.
+ */
 const STATUS_COLOR: Record<string, string> = {
-  todo: "#B5B2A6",
-  doing: "#F0A74A",
-  done: "#36B37E",
+  todo: "#A5A49C",
+  doing: "#3D8BFF",
+  done: "#4EAF5B",
 };
 
 /** Distância vertical entre duas tarefas da mesma coluna. */

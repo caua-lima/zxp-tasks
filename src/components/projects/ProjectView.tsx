@@ -9,7 +9,7 @@ import {
   topicStats,
   topicInsights,
 } from "@/lib/project-utils";
-import { PRIORITY_COLOR, PRIORITY_ORDER } from "@/lib/priority";
+import { PRIORITY_COLOR, PRIORITY_ORDER, PRIORITY_TINT } from "@/lib/priority";
 import { getOverdueTasks } from "@/lib/task-utils";
 import { formatMinutes } from "@/lib/weekly-review";
 import { formatDateShort, localDayOf } from "@/lib/date-utils";
@@ -400,7 +400,7 @@ export function ProjectView({ topicId }: { topicId: string }) {
                   className="inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium tabular-nums"
                   style={{
                     color: PRIORITY_COLOR[p],
-                    backgroundColor: `${PRIORITY_COLOR[p]}1f`,
+                    backgroundColor: PRIORITY_TINT[p],
                   }}
                 >
                   {priorityLabel(p, wishlist ? "wishlist" : "project")}: {insights.byPriority[p]}

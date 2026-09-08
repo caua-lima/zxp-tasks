@@ -128,7 +128,8 @@ function migrateTopic(raw: unknown): Topic | null {
   return {
     id,
     name,
-    color: asString(r.color) ?? "#F4B942",
+    // Tópico sem cor cai na assinatura do app, não no dourado do Market.
+    color: asString(r.color) ?? "#3D8BFF",
     icon: asString(r.icon),
     description: asString(r.description),
     // Tópico salvo antes das listas de desejos não tem `kind` — vira projeto,
