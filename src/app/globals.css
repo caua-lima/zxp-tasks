@@ -1,36 +1,61 @@
 @import "tailwindcss";
 
-/* ── Identidade ZXP Solutions — Onyx Gold ─────────────────────────────
-   Dourado é marca/foco/CTA. Verde é conclusão. Laranja é atenção.
-   Vermelho é atraso/risco. Azul é informação neutra. Roxo é
-   planejamento/insight. Tema único — a marca não alterna. */
+/* ── Identidade ZXP Tasks — Onyx Blue ────────────────────────────────
+   DNA da família ZXP Solutions (vale pros 4 apps): onyx como fundo
+   dominante, marfim como texto, Sora nos títulos e Inter no corpo, e o
+   "Z" de traço. O que distingue cada app é UMA cor de assinatura — o
+   dourado é do Market, o esmeralda é do Finance, o azul é deste.
+
+   Azul de assinatura = ação e destaque. As cores de STATUS são
+   independentes dele de propósito: "concluído" e "atrasado" precisam ser
+   lidos como estado, não como marca, e precisam ficar longe também das
+   assinaturas dos outros apps da família. Tema único — a marca não
+   alterna. */
 :root {
-  --color-onyx: #10100e;
-  --color-gold: #f4b942;
-  --color-ivory: #f6f3e8;
+  --onyx: #10100e;
+  --onyx-2: #1a1916;
+  --onyx-3: #242320;
+  /* Quarto degrau, fora do documento de marca: a interface precisa de um
+     nível acima do onyx-3 pra trilhos e barras vazias. Segue a mesma
+     rampa neutra, sem puxar pro verde como a paleta antiga fazia. */
+  --onyx-4: #2e2d29;
+  --ivory: #f6f3e8;
+  --ivory-dim: rgba(246, 243, 232, 0.65);
 
-  --background: var(--color-onyx);
-  --foreground: var(--color-ivory);
+  --background: var(--onyx);
+  --foreground: var(--ivory);
 
-  --sidebar: #181814;
-  --surface: #22221c;
-  --surface2: #2a2b21;
-  --surface3: #33342a;
-  --border: #393a2d;
-  --muted: #b5b2a6;
+  --sidebar: #161512;
+  --surface: var(--onyx-2);
+  --surface2: var(--onyx-3);
+  --surface3: var(--onyx-4);
+  --border: #35332e;
+  --muted: var(--ivory-dim);
 
-  --brand: var(--color-gold);
-  --accent: var(--color-gold);
-  --accent-hover: #c98218;
-  --accent-ink: var(--color-onyx);
-  --focus: #ffd76a;
+  /* Cor de assinatura do ZXP Tasks. */
+  --accent: #3d8bff;
+  --accent-dark: #2e6fe0;
+  --accent-dim: rgba(61, 139, 255, 0.15);
+  /* Texto SOBRE o azul. Onyx dá 5.5:1 de contraste contra o accent;
+     marfim daria 3.0:1, que só passaria em texto grande. */
+  --accent-ink: var(--onyx);
+  --focus: #7fb2ff;
 
-  --success: #36b37e;
-  --info: #5b8def;
-  --warning: #f0a74a;
-  --danger: #d65a4a;
+  /* ── Status ──────────────────────────────────────────────────────
+     Verde-folha, não esmeralda: o esmeralda é a assinatura do ZXP
+     Finance, e "concluído" não pode parecer marca de outro app. */
+  --status-done: #4eaf5b;
+  /* Laranja puxado pro quente, longe do dourado do ZXP Market. */
+  --status-late: #e8913a;
+  --status-risk: #d65a4a;
+  --status-plan: #9b6bce;
+
+  /* Nomes semânticos usados pela interface. */
+  --success: var(--status-done);
+  --warning: var(--status-late);
+  --danger: var(--status-risk);
   --danger-bg: rgba(214, 90, 74, 0.14);
-  --planning: #9b6bce;
+  --planning: var(--status-plan);
 }
 
 @theme inline {

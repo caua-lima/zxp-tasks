@@ -358,7 +358,7 @@ export function MindMap({ topicId, filters }: MindMapProps) {
             <g transform={`translate(${center.x}, ${center.y})`}>
               {!topicId && (
                 <>
-                  <circle r={44} fill="var(--brand)" />
+                  <circle r={44} fill="var(--accent)" />
                   <text
                     textAnchor="middle"
                     dy="5"

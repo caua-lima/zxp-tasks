@@ -163,7 +163,7 @@ export function TodayView({
               {doneToday} de {Math.max(totalToday, doneToday)} tarefas concluídas hoje
             </p>
             {priorityFilter && (
-              <p className="mt-1 text-xs text-[var(--brand)]">
+              <p className="mt-1 text-xs text-[var(--accent)]">
                 Filtrando por prioridade {PRIORITY_LABEL[priorityFilter].toLowerCase()} — as
                 listas abaixo mostram só essas.
               </p>
@@ -175,7 +175,7 @@ export function TodayView({
                 setModalTask(null);
                 setModalOpen(true);
               }}
-              className="rounded-md bg-[var(--brand)] px-3 py-2 text-sm font-medium text-[var(--accent-ink)] hover:bg-[var(--accent-hover)]"
+              className="rounded-md bg-[var(--accent)] px-3 py-2 text-sm font-medium text-[var(--accent-ink)] hover:bg-[var(--accent-dark)]"
             >
               + Nova tarefa
             </button>
@@ -205,7 +205,7 @@ export function TodayView({
                 <li
                   key={bloco.id}
                   className={`flex items-center gap-3 rounded-lg border px-3 py-2 ${
-                    rodando ? "border-[var(--brand)]" : "border-[var(--border)]"
+                    rodando ? "border-[var(--accent)]" : "border-[var(--border)]"
                   }`}
                 >
                   <span
@@ -223,7 +223,7 @@ export function TodayView({
                       color: feito
                         ? "var(--success)"
                         : rodando
-                          ? "var(--brand)"
+                          ? "var(--accent)"
                           : "var(--muted)",
                     }}
                   >
@@ -292,7 +292,7 @@ export function TodayView({
                       <button
                         onClick={() => toggleFocus(task.id)}
                         disabled={focusToday.length >= 3 && !focusToday.includes(task.id)}
-                        className="shrink-0 rounded px-2 py-1 text-xs font-medium text-[var(--brand)] hover:bg-[var(--surface3)] disabled:opacity-40"
+                        className="shrink-0 rounded px-2 py-1 text-xs font-medium text-[var(--accent)] hover:bg-[var(--surface3)] disabled:opacity-40"
                       >
                         {focusToday.includes(task.id) ? "No foco" : "Focar"}
                       </button>

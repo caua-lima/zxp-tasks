@@ -91,7 +91,7 @@ export function PuxarParaRecarregar({
         <span
           className="mt-2 rounded-full border border-[var(--border)] bg-[var(--surface2)] px-3 py-1 text-[11px] font-medium"
           style={{
-            color: pronto || recarregando ? "var(--brand)" : "var(--muted)",
+            color: pronto || recarregando ? "var(--accent)" : "var(--muted)",
             opacity: recarregando ? 1 : Math.min(1, puxada / LIMITE),
           }}
         >

@@ -42,7 +42,7 @@ export function TaskRow({ task, topic, onOpen, onComplete, actions }: TaskRowPro
             </span>
           )}
           {task.priceCents !== undefined && (
-            <span className="tabular-nums text-[var(--brand)]">
+            <span className="tabular-nums text-[var(--accent)]">
               · {formatBRL(task.priceCents)}
             </span>
           )}

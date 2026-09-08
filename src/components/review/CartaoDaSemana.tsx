@@ -140,7 +140,7 @@ export function CartaoDaSemana({ weekStart }: { weekStart: string }) {
         aria-hidden="true"
         className="absolute inset-x-0 top-0 h-[3px]"
         style={{
-          background: "linear-gradient(90deg, var(--brand) 0%, rgba(244,185,66,0) 70%)",
+          background: "linear-gradient(90deg, var(--accent) 0%, rgba(244,185,66,0) 70%)",
         }}
       />
 
@@ -157,7 +157,7 @@ export function CartaoDaSemana({ weekStart }: { weekStart: string }) {
           </div>
         </div>
         <div className="text-right">
-          <p className="font-[family-name:var(--font-display)] text-sm font-bold leading-none tabular-nums text-[var(--brand)]">
+          <p className="font-[family-name:var(--font-display)] text-sm font-bold leading-none tabular-nums text-[var(--accent)]">
             {intervaloLegivel(weekStart, weekEnd)}
           </p>
           <p className="mt-1 text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--muted)]">
@@ -172,12 +172,12 @@ export function CartaoDaSemana({ weekStart }: { weekStart: string }) {
         </p>
         <div className="mt-1.5 flex items-baseline gap-2">
           <span
-            className="font-[family-name:var(--font-display)] text-[52px] font-bold leading-none tracking-tight tabular-nums text-[var(--brand)] sm:text-[64px]"
+            className="font-[family-name:var(--font-display)] text-[52px] font-bold leading-none tracking-tight tabular-nums text-[var(--accent)] sm:text-[64px]"
             style={{ textShadow: "0 0 40px rgba(244,185,66,0.25)" }}
           >
             {foco.valor}
           </span>
-          <span className="font-[family-name:var(--font-display)] text-xl font-semibold text-[var(--brand)] opacity-70">
+          <span className="font-[family-name:var(--font-display)] text-xl font-semibold text-[var(--accent)] opacity-70">
             {foco.unidade}
           </span>
           {variacao !== null && (
@@ -212,7 +212,7 @@ export function CartaoDaSemana({ weekStart }: { weekStart: string }) {
           valor={`${relatorio.blocosFeitos}/${relatorio.blocosTotal}`}
           rotulo="Blocos"
         />
-        <Metrica valor={`${diasAtivos}/7`} rotulo="Dias" cor="var(--info)" />
+        <Metrica valor={`${diasAtivos}/7`} rotulo="Dias" cor="var(--accent)" />
         <Metrica valor={curto(mediaPorDia)} rotulo="Média/dia" />
       </div>
 
@@ -233,7 +233,7 @@ export function CartaoDaSemana({ weekStart }: { weekStart: string }) {
                 style={{
                   height: `${altura}%`,
                   background: melhor
-                    ? "linear-gradient(180deg, #ffd76a 0%, var(--brand) 100%)"
+                    ? "linear-gradient(180deg, #ffd76a 0%, var(--accent) 100%)"
                     : d.elapsedMs > 0
                       ? "linear-gradient(180deg, rgba(244,185,66,0.55) 0%, rgba(244,185,66,0.3) 100%)"
                       : "var(--surface3)",
@@ -249,7 +249,7 @@ export function CartaoDaSemana({ weekStart }: { weekStart: string }) {
               className="min-w-0 flex-1 text-center text-[9px] font-semibold uppercase tracking-wider"
               style={{
                 color: d.elapsedMs === maiorDia && d.elapsedMs > 0
-                  ? "var(--brand)"
+                  ? "var(--accent)"
                   : "var(--muted)",
               }}
             >
@@ -264,7 +264,7 @@ export function CartaoDaSemana({ weekStart }: { weekStart: string }) {
               {DIAS[relatorio.dias.findIndex((d) => d.date === relatorio.melhorDia!.date)]}
             </span>{" "}
             com{" "}
-            <span className="tabular-nums text-[var(--brand)]">
+            <span className="tabular-nums text-[var(--accent)]">
               {curto(relatorio.melhorDia.elapsedMs)}
             </span>
           </p>

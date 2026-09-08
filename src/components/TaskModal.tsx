@@ -219,7 +219,7 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
                 type="submit"
                 form="task-form"
                 disabled={!topicId}
-                className="rounded-md bg-[var(--brand)] px-3 py-1.5 text-sm font-medium text-[var(--accent-ink)] hover:bg-[var(--accent-hover)] disabled:opacity-40"
+                className="rounded-md bg-[var(--accent)] px-3 py-1.5 text-sm font-medium text-[var(--accent-ink)] hover:bg-[var(--accent-dark)] disabled:opacity-40"
               >
                 Salvar
               </button>
@@ -267,7 +267,7 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
             <button
               type="button"
               onClick={() => setMostrarDescricao(true)}
-              className="text-xs font-medium text-[var(--brand)] hover:underline"
+              className="text-xs font-medium text-[var(--accent)] hover:underline"
             >
               + Adicionar descrição
             </button>
@@ -407,7 +407,7 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
                   aria-pressed={estimate === m}
                   className={`rounded-md border px-2.5 py-1.5 text-xs font-medium transition ${
                     estimate === m
-                      ? "border-[var(--brand)] bg-[var(--brand)] text-[var(--accent-ink)]"
+                      ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-ink)]"
                       : "border-[var(--border)] text-[var(--muted)] hover:bg-[var(--surface)]"
                   }`}
                 >
@@ -437,7 +437,7 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
                   aria-pressed={energy === e}
                   className={`rounded-md border px-2.5 py-1.5 text-xs font-medium transition ${
                     energy === e
-                      ? "border-[var(--brand)] bg-[var(--brand)] text-[var(--accent-ink)]"
+                      ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-ink)]"
                       : "border-[var(--border)] text-[var(--muted)] hover:bg-[var(--surface)]"
                   }`}
                 >
@@ -451,7 +451,7 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
             <button
               type="button"
               onClick={() => setMostrarPassos(true)}
-              className="block text-xs font-medium text-[var(--brand)] hover:underline"
+              className="block text-xs font-medium text-[var(--accent)] hover:underline"
             >
               + Quebrar em passos
             </button>
@@ -478,7 +478,7 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
                     checked={item.completed}
                     onChange={() => toggleItem(item.id)}
                     id={`chk-${item.id}`}
-                    className="accent-[var(--brand)]"
+                    className="accent-[var(--accent)]"
                   />
                   <label
                     htmlFor={`chk-${item.id}`}

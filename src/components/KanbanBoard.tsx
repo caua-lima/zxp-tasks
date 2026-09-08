@@ -91,7 +91,7 @@ export function KanbanBoard({ topicId, filters, sortKey }: KanbanBoardProps) {
               aria-pressed={mobileTab === col.status}
               className={`min-h-[44px] flex-1 rounded-md px-2 text-xs font-medium ${
                 mobileTab === col.status
-                  ? "bg-[var(--brand)] text-[var(--accent-ink)]"
+                  ? "bg-[var(--accent)] text-[var(--accent-ink)]"
                   : "bg-[var(--surface)] text-[var(--muted)]"
               }`}
             >
@@ -115,7 +115,7 @@ export function KanbanBoard({ topicId, filters, sortKey }: KanbanBoardProps) {
               onDrop={(e) => handleDrop(e, col.status)}
               aria-label={col.label}
               className={`flex min-h-[200px] flex-col rounded-xl border bg-[var(--surface)] p-2 transition ${
-                dragOverCol === col.status ? "border-[var(--brand)]" : "border-[var(--border)]"
+                dragOverCol === col.status ? "border-[var(--accent)]" : "border-[var(--border)]"
               } ${mobileTab === col.status ? "" : "hidden sm:flex"}`}
             >
               <div className="mb-2 flex items-center justify-between px-1.5 pt-1">

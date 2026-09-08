@@ -149,7 +149,7 @@ export function ProjectView({ topicId }: { topicId: string }) {
                     updateTopic(topicId, { description: descriptionDraft });
                     setEditingDescription(false);
                   }}
-                  className="rounded-md bg-[var(--brand)] px-2.5 text-xs font-medium text-[var(--accent-ink)]"
+                  className="rounded-md bg-[var(--accent)] px-2.5 text-xs font-medium text-[var(--accent-ink)]"
                 >
                   Salvar
                 </button>
@@ -173,7 +173,7 @@ export function ProjectView({ topicId }: { topicId: string }) {
                 setModalTask(null);
                 setModalOpen(true);
               }}
-              className="min-h-[36px] rounded-md bg-[var(--brand)] px-3 text-sm font-medium text-[var(--accent-ink)] hover:bg-[var(--accent-hover)]"
+              className="min-h-[36px] rounded-md bg-[var(--accent)] px-3 text-sm font-medium text-[var(--accent-ink)] hover:bg-[var(--accent-dark)]"
             >
               {wishlist ? "+ Novo item" : "+ Nova tarefa"}
             </button>
@@ -201,7 +201,7 @@ export function ProjectView({ topicId }: { topicId: string }) {
         {totals ? (
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
             <div className="rounded-lg border border-[var(--border)] bg-[var(--surface2)] p-3">
-              <p className="font-[family-name:var(--font-display)] text-lg font-semibold tabular-nums text-[var(--brand)]">
+              <p className="font-[family-name:var(--font-display)] text-lg font-semibold tabular-nums text-[var(--accent)]">
                 {formatBRL(totals.wantedCents)}
               </p>
               <p className="text-[11px] text-[var(--muted)]">
@@ -437,7 +437,7 @@ export function ProjectView({ topicId }: { topicId: string }) {
               aria-pressed={visual === chave}
               className={`min-h-[40px] rounded-md px-3 text-sm font-medium transition ${
                 visual === chave
-                  ? "bg-[var(--brand)] text-[var(--accent-ink)]"
+                  ? "bg-[var(--accent)] text-[var(--accent-ink)]"
                   : "text-[var(--muted)] hover:bg-[var(--surface2)]"
               }`}
             >

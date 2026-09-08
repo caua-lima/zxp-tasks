@@ -50,7 +50,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 toast.undo?.();
                 setToast(null);
               }}
-              className="font-semibold text-[var(--brand)] hover:underline"
+              className="font-semibold text-[var(--accent)] hover:underline"
             >
               {toast.acaoLabel ?? "Desfazer"}
             </button>

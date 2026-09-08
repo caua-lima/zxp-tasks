@@ -52,7 +52,7 @@ export function GoalsView({ onOpenTopic }: { onOpenTopic: (id: string) => void }
               aria-pressed={kind === k}
               className={`min-h-[36px] flex-1 rounded-md px-2 text-xs font-medium transition ${
                 kind === k
-                  ? "bg-[var(--brand)] text-[var(--accent-ink)]"
+                  ? "bg-[var(--accent)] text-[var(--accent-ink)]"
                   : "bg-[var(--surface2)] text-[var(--muted)] hover:bg-[var(--surface3)]"
               }`}
             >
@@ -72,7 +72,7 @@ export function GoalsView({ onOpenTopic }: { onOpenTopic: (id: string) => void }
           />
           <button
             type="submit"
-            className="min-h-[44px] shrink-0 rounded-md bg-[var(--brand)] px-4 text-sm font-semibold text-[var(--accent-ink)] hover:bg-[var(--accent-hover)]"
+            className="min-h-[44px] shrink-0 rounded-md bg-[var(--accent)] px-4 text-sm font-semibold text-[var(--accent-ink)] hover:bg-[var(--accent-dark)]"
           >
             Criar
           </button>
@@ -94,7 +94,7 @@ export function GoalsView({ onOpenTopic }: { onOpenTopic: (id: string) => void }
               <li key={topic.id}>
                 <button
                   onClick={() => onOpenTopic(topic.id)}
-                  className="flex min-h-[64px] w-full items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-left transition hover:border-[var(--brand)]"
+                  className="flex min-h-[64px] w-full items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-left transition hover:border-[var(--accent)]"
                 >
                   <span
                     className="h-3 w-3 shrink-0 rounded-full"
@@ -108,7 +108,7 @@ export function GoalsView({ onOpenTopic }: { onOpenTopic: (id: string) => void }
                     <span className="mt-0.5 block text-[11px] text-[var(--muted)]">
                       {totals ? (
                         <>
-                          <span className="tabular-nums text-[var(--brand)]">
+                          <span className="tabular-nums text-[var(--accent)]">
                             {formatBRL(totals.wantedCents)}
                           </span>{" "}
                           · {totals.itemsWanted}{" "}

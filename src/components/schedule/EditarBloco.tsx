@@ -67,7 +67,7 @@ export function EditarBloco({
           <button
             type="submit"
             form="form-bloco"
-            className="rounded-md bg-[var(--brand)] px-3 py-1.5 text-sm font-medium text-[var(--accent-ink)] hover:bg-[var(--accent-hover)]"
+            className="rounded-md bg-[var(--accent)] px-3 py-1.5 text-sm font-medium text-[var(--accent-ink)] hover:bg-[var(--accent-dark)]"
           >
             Salvar
           </button>
@@ -98,7 +98,7 @@ export function EditarBloco({
                 aria-pressed={minutes === m}
                 className={`min-h-[36px] rounded-md border px-3 text-xs font-medium transition ${
                   minutes === m
-                    ? "border-[var(--brand)] bg-[var(--brand)] text-[var(--accent-ink)]"
+                    ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-ink)]"
                     : "border-[var(--border)] text-[var(--muted)] hover:bg-[var(--surface)]"
                 }`}
               >

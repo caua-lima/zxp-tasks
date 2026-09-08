@@ -77,7 +77,7 @@ function BlockRow({
     : over
       ? "var(--danger)"
       : running
-        ? "var(--brand)"
+        ? "var(--accent)"
         : "var(--muted)";
 
   return (
@@ -86,7 +86,7 @@ function BlockRow({
         block.isBreak ? "bg-[var(--surface2)]" : "bg-[var(--surface)]"
       } ${
         running
-          ? "border-[var(--brand)]"
+          ? "border-[var(--accent)]"
           : naoFeito
             ? "border-dashed border-[var(--border)] opacity-70"
             : "border-[var(--border)]"
@@ -107,7 +107,7 @@ function BlockRow({
             {spent > 0 && !semTempo && ` · ${formatDuration(spent)} feitos`}
           </p>
           {projeto && (
-            <p className="mt-0.5 truncate text-[11px] text-[var(--brand)]">{projeto}</p>
+            <p className="mt-0.5 truncate text-[11px] text-[var(--accent)]">{projeto}</p>
           )}
         </div>
 
@@ -117,7 +117,7 @@ function BlockRow({
               onClick={onExtend}
               aria-label={`Somar ${EXTEND_MINUTES} minutos em ${block.title}`}
               title={`+${EXTEND_MINUTES} min`}
-              className="min-h-[32px] rounded-md px-1.5 text-xs font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] hover:text-[var(--brand)]"
+              className="min-h-[32px] rounded-md px-1.5 text-xs font-semibold text-[var(--muted)] hover:bg-[var(--surface2)] hover:text-[var(--accent)]"
             >
               +{EXTEND_MINUTES}
             </button>
@@ -183,7 +183,7 @@ function BlockRow({
                 ? "var(--success)"
                 : over
                   ? "var(--danger)"
-                  : "var(--brand)",
+                  : "var(--accent)",
           }}
         />
       </div>
@@ -192,7 +192,7 @@ function BlockRow({
         {!encerrado && !running && (
           <button
             onClick={onStart}
-            className="min-h-[44px] flex-1 rounded-md bg-[var(--brand)] px-4 text-sm font-semibold text-[var(--accent-ink)] hover:bg-[var(--accent-hover)]"
+            className="min-h-[44px] flex-1 rounded-md bg-[var(--accent)] px-4 text-sm font-semibold text-[var(--accent-ink)] hover:bg-[var(--accent-dark)]"
           >
             {spent > 0 ? "Continuar" : "Começar"}
           </button>
@@ -200,7 +200,7 @@ function BlockRow({
         {running && (
           <button
             onClick={onPause}
-            className="min-h-[44px] flex-1 rounded-md border border-[var(--brand)] px-4 text-sm font-semibold text-[var(--brand)] hover:bg-[var(--surface2)]"
+            className="min-h-[44px] flex-1 rounded-md border border-[var(--accent)] px-4 text-sm font-semibold text-[var(--accent)] hover:bg-[var(--surface2)]"
           >
             Pausar
           </button>
@@ -462,7 +462,7 @@ export function ScheduleView() {
               planejados
             </span>
             <span className="tabular-nums text-[var(--muted)]">
-              <strong style={{ color: "var(--brand)" }}>
+              <strong style={{ color: "var(--accent)" }}>
                 {formatDuration(totals.elapsedMs)}
               </strong>{" "}
               feitos
@@ -490,7 +490,7 @@ export function ScheduleView() {
               type="checkbox"
               checked={settings.parallelTimers}
               onChange={(e) => setParallelTimers(e.target.checked)}
-              className="accent-[var(--brand)]"
+              className="accent-[var(--accent)]"
             />
             Deixar mais de um cronômetro rodando
           </label>
@@ -535,7 +535,7 @@ export function ScheduleView() {
           />
           <button
             type="submit"
-            className="min-h-[44px] shrink-0 rounded-md bg-[var(--brand)] px-4 text-sm font-semibold text-[var(--accent-ink)] hover:bg-[var(--accent-hover)]"
+            className="min-h-[44px] shrink-0 rounded-md bg-[var(--accent)] px-4 text-sm font-semibold text-[var(--accent-ink)] hover:bg-[var(--accent-dark)]"
           >
             Add
           </button>
@@ -554,7 +554,7 @@ export function ScheduleView() {
               aria-pressed={minutes === m && !tempoLivre}
               className={`min-h-[36px] rounded-md border px-3 text-xs font-medium transition ${
                 minutes === m
-                  ? "border-[var(--brand)] bg-[var(--brand)] text-[var(--accent-ink)]"
+                  ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-ink)]"
                   : "border-[var(--border)] text-[var(--muted)] hover:bg-[var(--surface2)]"
               }`}
             >
@@ -580,7 +580,7 @@ export function ScheduleView() {
             title="Cronômetro conta pra cima, sem tempo combinado"
             className={`min-h-[36px] rounded-md border px-3 text-xs font-medium transition ${
               tempoLivre
-                ? "border-[var(--brand)] bg-[var(--brand)] text-[var(--accent-ink)]"
+                ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-ink)]"
                 : "border-[var(--border)] text-[var(--muted)] hover:bg-[var(--surface2)]"
             }`}
           >

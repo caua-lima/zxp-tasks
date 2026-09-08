@@ -89,7 +89,7 @@ export function WeeklyReview() {
           {!ehSemanaAtual && (
             <button
               onClick={() => setWeekStart(semanaAtual)}
-              className="ml-1 min-h-[36px] rounded-md px-2 text-xs font-medium text-[var(--brand)] hover:underline"
+              className="ml-1 min-h-[36px] rounded-md px-2 text-xs font-medium text-[var(--accent)] hover:underline"
             >
               Voltar pra esta semana
             </button>
@@ -100,7 +100,7 @@ export function WeeklyReview() {
           aria-pressed={modoFoto}
           className={`min-h-[36px] rounded-md border px-3 text-xs font-semibold transition ${
             modoFoto
-              ? "border-[var(--brand)] bg-[var(--brand)] text-[var(--accent-ink)]"
+              ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-ink)]"
               : "border-[var(--border)] text-[var(--muted)] hover:bg-[var(--surface)]"
           }`}
         >
@@ -136,7 +136,7 @@ export function WeeklyReview() {
         <h2 className="mb-2 text-sm font-semibold text-[var(--foreground)]">Execução</h2>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           <Stat label="Concluídas" value={String(metrics.completed)} tone="var(--success)" />
-          <Stat label="Criadas" value={String(metrics.created)} tone="var(--info)" />
+          <Stat label="Criadas" value={String(metrics.created)} />
           <Stat label="Arquivadas" value={String(metrics.archived)} />
           <Stat
             label="Atrasadas agora"
@@ -225,7 +225,7 @@ export function WeeklyReview() {
               saveWeeklyReview({ weekStart, stuck, toArchive, nextPriority, wastingTime });
               showToast("Revisão da semana salva neste dispositivo.");
             }}
-            className="rounded-md bg-[var(--brand)] px-3 py-2 text-sm font-medium text-[var(--accent-ink)] hover:bg-[var(--accent-hover)]"
+            className="rounded-md bg-[var(--accent)] px-3 py-2 text-sm font-medium text-[var(--accent-ink)] hover:bg-[var(--accent-dark)]"
           >
             Salvar revisão
           </button>

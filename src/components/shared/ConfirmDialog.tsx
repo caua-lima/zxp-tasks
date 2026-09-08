@@ -37,7 +37,7 @@ export function ConfirmDialog({
             style={
               danger
                 ? { backgroundColor: "var(--danger)", color: "#fff" }
-                : { backgroundColor: "var(--brand)", color: "var(--accent-ink)" }
+                : { backgroundColor: "var(--accent)", color: "var(--accent-ink)" }
             }
           >
             {confirmLabel}

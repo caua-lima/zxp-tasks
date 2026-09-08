@@ -70,7 +70,7 @@ export function BotaoNotificacoes() {
     <button
       type="button"
       onClick={ativar}
-      className="mt-3 min-h-[40px] w-full rounded-md border border-[var(--brand)] px-3 text-sm font-semibold text-[var(--brand)] hover:bg-[var(--surface2)]"
+      className="mt-3 min-h-[40px] w-full rounded-md border border-[var(--accent)] px-3 text-sm font-semibold text-[var(--accent)] hover:bg-[var(--surface2)]"
     >
       Ativar notificações
     </button>

@@ -93,7 +93,7 @@ function FormEntrar() {
       <button
         type="submit"
         disabled={enviando}
-        className="min-h-[44px] w-full rounded-md bg-[var(--brand)] px-3 text-sm font-semibold text-[var(--accent-ink)] hover:bg-[var(--accent-hover)] disabled:opacity-50"
+        className="min-h-[44px] w-full rounded-md bg-[var(--accent)] px-3 text-sm font-semibold text-[var(--accent-ink)] hover:bg-[var(--accent-dark)] disabled:opacity-50"
       >
         {enviando ? "Entrando..." : "Entrar"}
       </button>
@@ -192,7 +192,7 @@ function FormCriar() {
       <button
         type="submit"
         disabled={enviando}
-        className="min-h-[44px] w-full rounded-md bg-[var(--brand)] px-3 text-sm font-semibold text-[var(--accent-ink)] hover:bg-[var(--accent-hover)] disabled:opacity-50"
+        className="min-h-[44px] w-full rounded-md bg-[var(--accent)] px-3 text-sm font-semibold text-[var(--accent-ink)] hover:bg-[var(--accent-dark)] disabled:opacity-50"
       >
         {enviando ? "Criando..." : "Criar acesso"}
       </button>
@@ -338,7 +338,7 @@ function ContaLogada({ onClose }: { onClose: () => void }) {
             <button
               type="submit"
               disabled={enviando}
-              className="min-h-[40px] flex-1 rounded-md bg-[var(--brand)] px-3 text-sm font-semibold text-[var(--accent-ink)] hover:bg-[var(--accent-hover)] disabled:opacity-50"
+              className="min-h-[40px] flex-1 rounded-md bg-[var(--accent)] px-3 text-sm font-semibold text-[var(--accent-ink)] hover:bg-[var(--accent-dark)] disabled:opacity-50"
             >
               {enviando ? "Salvando..." : "Salvar"}
             </button>
@@ -392,7 +392,7 @@ function ContaLogada({ onClose }: { onClose: () => void }) {
             <button
               type="submit"
               disabled={enviando}
-              className="min-h-[40px] flex-1 rounded-md bg-[var(--brand)] px-3 text-sm font-semibold text-[var(--accent-ink)] hover:bg-[var(--accent-hover)] disabled:opacity-50"
+              className="min-h-[40px] flex-1 rounded-md bg-[var(--accent)] px-3 text-sm font-semibold text-[var(--accent-ink)] hover:bg-[var(--accent-dark)] disabled:opacity-50"
             >
               {enviando ? "Salvando..." : "Salvar"}
             </button>
@@ -457,7 +457,7 @@ export function AccountPanel({ onClose }: { onClose: () => void }) {
               aria-pressed={aba === k}
               className={`min-h-[44px] flex-1 rounded-md px-3 text-sm font-medium transition ${
                 aba === k
-                  ? "bg-[var(--brand)] text-[var(--accent-ink)]"
+                  ? "bg-[var(--accent)] text-[var(--accent-ink)]"
                   : "bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface2)]"
               }`}
             >

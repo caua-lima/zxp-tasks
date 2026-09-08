@@ -148,7 +148,7 @@ export function TopBar({
                   type="checkbox"
                   checked={filters.hideDone ?? false}
                   onChange={(e) => onChangeFilters({ ...filters, hideDone: e.target.checked })}
-                  className="accent-[var(--brand)]"
+                  className="accent-[var(--accent)]"
                 />
                 Ocultar concluídas
               </label>

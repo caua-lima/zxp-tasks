@@ -101,7 +101,7 @@ export function DataPanel({ onClose }: { onClose: () => void }) {
           <div className="flex flex-wrap gap-2">
             <button
               onClick={handleExport}
-              className="rounded-md bg-[var(--brand)] px-3 py-2 text-sm font-medium text-[var(--accent-ink)] hover:bg-[var(--accent-hover)]"
+              className="rounded-md bg-[var(--accent)] px-3 py-2 text-sm font-medium text-[var(--accent-ink)] hover:bg-[var(--accent-dark)]"
             >
               Exportar backup
             </button>
@@ -152,7 +152,7 @@ export function DataPanel({ onClose }: { onClose: () => void }) {
                         restoreTask(t.id);
                         showToast("Tarefa restaurada.");
                       }}
-                      className="rounded px-2 py-1 text-xs text-[var(--brand)] hover:bg-[var(--surface3)]"
+                      className="rounded px-2 py-1 text-xs text-[var(--accent)] hover:bg-[var(--surface3)]"
                     >
                       Restaurar
                     </button>

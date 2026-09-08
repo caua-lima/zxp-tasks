@@ -140,7 +140,7 @@ function LinhaDeTopico({
       {totals ? (
         totals.itemsWanted + totals.itemsBought > 0 && (
           <div className="mt-1 flex items-center gap-2 pl-4.5 text-[10px]">
-            <span className="tabular-nums text-[var(--brand)]">
+            <span className="tabular-nums text-[var(--accent)]">
               {formatBRL(totals.wantedCents)}
             </span>
             <span className="tabular-nums text-[var(--muted)]">
@@ -284,7 +284,7 @@ export function Sidebar({
               aria-current={view === v.key ? "page" : undefined}
               className={`min-h-[40px] w-full rounded-md px-2.5 text-left text-sm font-medium transition ${
                 view === v.key
-                  ? "bg-[var(--brand)] text-[var(--accent-ink)]"
+                  ? "bg-[var(--accent)] text-[var(--accent-ink)]"
                   : "text-[var(--muted)] hover:bg-[var(--surface)]"
               }`}
             >
@@ -397,7 +397,7 @@ export function Sidebar({
                 aria-pressed={newTopicKind === k}
                 className={`flex-1 rounded-md px-2 py-1 text-[11px] font-medium transition ${
                   newTopicKind === k
-                    ? "bg-[var(--brand)] text-[var(--accent-ink)]"
+                    ? "bg-[var(--accent)] text-[var(--accent-ink)]"
                     : "bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface2)]"
                 }`}
               >
@@ -422,7 +422,7 @@ export function Sidebar({
             <button
               type="submit"
               aria-label="Adicionar tópico"
-              className="min-h-[40px] shrink-0 rounded-md bg-[var(--brand)] px-3 text-sm font-medium text-[var(--accent-ink)] hover:bg-[var(--accent-hover)]"
+              className="min-h-[40px] shrink-0 rounded-md bg-[var(--accent)] px-3 text-sm font-medium text-[var(--accent-ink)] hover:bg-[var(--accent-dark)]"
             >
               +
             </button>

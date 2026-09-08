@@ -84,7 +84,7 @@ export function RelatorioView() {
               aria-pressed={dias === p.dias}
               className={`min-h-[36px] rounded-md border px-3 text-xs font-medium transition ${
                 dias === p.dias
-                  ? "border-[var(--brand)] bg-[var(--brand)] text-[var(--accent-ink)]"
+                  ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-ink)]"
                   : "border-[var(--border)] text-[var(--muted)] hover:bg-[var(--surface)]"
               }`}
             >
@@ -145,7 +145,7 @@ export function RelatorioView() {
               <span className="w-24 shrink-0 text-[var(--muted)]">{diaLegivel(d.date)}</span>
               <span className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--surface3)]">
                 <span
-                  className="block h-full rounded-full bg-[var(--brand)]"
+                  className="block h-full rounded-full bg-[var(--accent)]"
                   style={{ width: `${(d.elapsedMs / maiorDoPeriodo) * 100}%` }}
                 />
               </span>

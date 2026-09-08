@@ -47,7 +47,7 @@ export function TaskCard({
       aria-label={`${task.title}. ${priorityLabel(task.priority, kind)}${
         task.priceCents !== undefined ? `. ${formatBRL(task.priceCents)}` : ""
       }${overdue ? ". Atrasada" : ""}`}
-      className="group relative min-h-[44px] cursor-pointer overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface2)] p-3 pl-4 shadow-sm transition hover:border-[var(--brand)] focus:outline-none focus-visible:border-[var(--focus)] active:cursor-grabbing"
+      className="group relative min-h-[44px] cursor-pointer overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface2)] p-3 pl-4 shadow-sm transition hover:border-[var(--accent)] focus:outline-none focus-visible:border-[var(--focus)] active:cursor-grabbing"
     >
       <span
         aria-hidden="true"
@@ -74,7 +74,7 @@ export function TaskCard({
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] font-medium">
         {task.priceCents !== undefined && (
-          <span className="inline-flex items-center gap-1 rounded bg-[var(--brand)]/15 px-1.5 py-0.5 font-[family-name:var(--font-display)] tabular-nums text-[var(--brand)]">
+          <span className="inline-flex items-center gap-1 rounded bg-[var(--accent)]/15 px-1.5 py-0.5 font-[family-name:var(--font-display)] tabular-nums text-[var(--accent)]">
             {formatBRL(task.priceCents)}
           </span>
         )}
@@ -139,7 +139,7 @@ export function TaskCard({
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="inline-flex items-center gap-1 rounded bg-[var(--surface3)] px-1.5 py-0.5 text-[var(--info)] underline-offset-2 hover:underline"
+            className="inline-flex items-center gap-1 rounded bg-[var(--surface3)] px-1.5 py-0.5 text-[var(--accent)] underline-offset-2 hover:underline"
           >
             {linkHost(task.url)} ↗
           </a>
@@ -157,7 +157,7 @@ export function TaskCard({
                 onStart();
               }}
               title="Põe no cronograma de hoje e liga o cronômetro"
-              className="rounded border border-[var(--brand)] px-2 py-1 text-[11px] font-semibold text-[var(--brand)] hover:bg-[var(--brand)] hover:text-[var(--accent-ink)]"
+              className="rounded border border-[var(--accent)] px-2 py-1 text-[11px] font-semibold text-[var(--accent)] hover:bg-[var(--accent)] hover:text-[var(--accent-ink)]"
             >
               ▶ Iniciar
             </button>
