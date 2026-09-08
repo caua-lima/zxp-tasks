@@ -24,7 +24,7 @@ export const MARCA_MARFIM = "#F6F3E8";
 /** Traço do "Z" — idêntico ao arquivo de marca, sem reescalar. */
 const TRACO = 'points="30,47 170,47 30,153 170,153" fill="none" stroke-width="34" stroke-linejoin="miter" stroke-linecap="butt"';
 
-/** Ícone do app: fundo onyx, Z dourado, cantos arredondados. */
+/** Ícone do app: fundo onyx, Z azul, cantos arredondados. */
 export function svgAppIcon(): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><rect width="200" height="200" rx="44" fill="${MARCA_ONYX}"/><g transform="translate(24,24) scale(0.76)"><polyline ${TRACO} stroke="${MARCA_AZUL}"/></g></svg>`;
 }

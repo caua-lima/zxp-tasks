@@ -4,9 +4,10 @@ import { comoDataUri, svgFavicon } from "@/lib/marca";
 export const size = { width: 32, height: 32 };
 export const contentType = "image/png";
 
-// Favicon com a marca oficial (ver src/lib/marca.ts). Variante invertida —
-// fundo dourado, Z onyx — porque em 16-32px o Z vazado sobre fundo escuro
-// perde peso na aba do navegador.
+// Favicon com a marca oficial (ver src/lib/marca.ts): traço azul sobre
+// contêiner onyx, a mesma construção do ícone do app. Já foi invertido
+// (fundo cheio, Z vazado) por nitidez em 16px; o documento de identidade
+// define uma construção única pra família e ela vale mais que isso.
 export default function Icon() {
   return new ImageResponse(
     (

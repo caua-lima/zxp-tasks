@@ -319,7 +319,7 @@ export function CartaoDaSemana({ weekStart }: { weekStart: string }) {
       )}
 
       <p className="mt-6 border-t border-[var(--border)] pt-3 text-center text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--muted)]">
-        ZXP Solutions · Onyx Gold
+        ZXP Solutions · Onyx Blue
       </p>
     </div>
   );
