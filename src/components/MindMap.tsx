@@ -7,6 +7,7 @@ import { TaskFilters, filterTasks } from "@/lib/task-filters";
 import { checklistProgress, isTaskOverdue } from "@/lib/task-utils";
 import { PRIORITY_COLOR, PRIORITY_LABEL } from "@/lib/priority";
 import { formatDateShort } from "@/lib/date-utils";
+import { MARCA_AZUL } from "@/lib/marca";
 import { TaskModal } from "./TaskModal";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -25,7 +26,7 @@ const STATUS_LABEL: Record<string, string> = {
  */
 const STATUS_COLOR: Record<string, string> = {
   todo: "#A5A49C",
-  doing: "#3D8BFF",
+  doing: MARCA_AZUL,
   done: "#4EAF5B",
 };
 

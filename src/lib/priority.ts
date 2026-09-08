@@ -1,4 +1,5 @@
 import { TaskEnergy, TaskPriority } from "./types";
+import { MARCA_AZUL } from "./marca";
 
 export const PRIORITY_ORDER: TaskPriority[] = ["critical", "high", "medium", "low"];
 
@@ -21,7 +22,7 @@ export const PRIORITY_LABEL: Record<TaskPriority, string> = {
 export const PRIORITY_COLOR: Record<TaskPriority, string> = {
   critical: "#D65A4A",
   high: "#E8913A",
-  medium: "#3D8BFF",
+  medium: MARCA_AZUL,
   low: "#A5A49C",
 };
 

@@ -11,6 +11,7 @@ import {
   WeeklyReviewNote,
   emptyBoard,
 } from "./types";
+import { MARCA_AZUL } from "./marca";
 
 /**
  * Sem createdAt confiável não dá pra inventar "quando" a tarefa nasceu —
@@ -129,7 +130,7 @@ function migrateTopic(raw: unknown): Topic | null {
     id,
     name,
     // Tópico sem cor cai na assinatura do app, não no dourado do Market.
-    color: asString(r.color) ?? "#3D8BFF",
+    color: asString(r.color) ?? MARCA_AZUL,
     icon: asString(r.icon),
     description: asString(r.description),
     // Tópico salvo antes das listas de desejos não tem `kind` — vira projeto,

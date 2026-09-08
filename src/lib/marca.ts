@@ -14,9 +14,16 @@
 
 export const MARCA_ONYX = "#10100E";
 /**
- * Cor de assinatura do ZXP Tasks. A geometria do "Z" é idêntica à dos
- * outros apps da família — o que muda entre eles é só esta cor (dourado no
- * Market, esmeralda no Finance, azul aqui).
+ * Cor de assinatura do ZXP Tasks — fonte única do lado TypeScript.
+ *
+ * Espelha o token `--accent` de `globals.css`. Existe em hexadecimal porque
+ * há três lugares onde `var(--accent)` não chega: o SVG gerado em runtime
+ * pros ícones, atributos `fill` de SVG e o valor gravado como cor padrão de
+ * um tópico novo — esse último vai pro banco, e um `var()` salvo em dado
+ * seria uma cor que nunca resolve.
+ *
+ * A geometria do "Z" é idêntica à dos outros apps da família; o que muda
+ * entre eles é só esta cor (dourado no Market, esmeralda no Finance).
  */
 export const MARCA_AZUL = "#3D8BFF";
 export const MARCA_MARFIM = "#F6F3E8";
