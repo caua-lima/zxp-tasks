@@ -35,18 +35,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!supabase) return;
 
-    // Sessão já existente (voltou ao app depois de ter logado antes).
-    supabase.auth.getSession().then(({ data }) => {
-      setUser(data.session?.user ?? null);
-      setLoading(false);
-    });
+    /**
+     * Sessão já existente (voltou ao app depois de ter logado antes).
+     *
+     * O `catch` e o prazo não são zelo excessivo: agora que a tela inteira
+     * espera por isto, uma falha de rede ou um servidor sem resposta
+     * deixaria a pessoa presa no "verificando sua sessão" pra sempre — sem
+     * erro, sem botão, sem saída. Falhar aqui significa "não consegui provar
+     * quem é você", e a resposta certa pra isso é mostrar o login.
+     */
+    let respondeu = false;
+    const prazo = setTimeout(() => {
+      if (!respondeu) setLoading(false);
+    }, 8000);
+
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        respondeu = true;
+        setUser(data.session?.user ?? null);
+      })
+      .catch(() => {
+        respondeu = true;
+      })
+      .finally(() => {
+        clearTimeout(prazo);
+        setLoading(false);
+      });
 
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
       setLoading(false);
     });
 
-    return () => subscription.subscription.unsubscribe();
+    return () => {
+      clearTimeout(prazo);
+      subscription.subscription.unsubscribe();
+    };
   }, []);
 
   function exigeSupabase() {

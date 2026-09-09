@@ -68,6 +68,31 @@ export async function pushBoardToCloud(uid: string, board: Board): Promise<void>
 }
 
 /**
+ * Busca o board da nuvem uma vez, sem assinar nada.
+ *
+ * Existe como rede de segurança do Realtime. O socket cai o tempo todo no
+ * celular — o sistema congela a aba em segundo plano — e, se a replicação
+ * da tabela não estiver publicada no Supabase, ele nunca entrega nada. Nos
+ * dois casos o aparelho ficaria mostrando um quadro velho até alguém
+ * recarregar a página na mão.
+ *
+ * Devolve `null` quando não há linha ou quando a leitura falha: quem chama
+ * não pode confundir "a nuvem está vazia" com "não consegui ler agora" e
+ * apagar o que está na tela.
+ */
+export async function fetchCloudBoard(uid: string): Promise<Board | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from(TABLE)
+    .select("data")
+    .eq("user_id", uid)
+    .maybeSingle();
+  if (error || !data?.data) return null;
+  ultimoSincronizado = assinatura(data.data);
+  return migrateBoard(data.data);
+}
+
+/**
  * Lê o board da nuvem e fica ouvindo mudanças.
  *
  * `onChange` recebe `"empty"` quando o usuário ainda não tem linha na

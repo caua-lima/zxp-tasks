@@ -20,6 +20,7 @@ import { CommandPalette, Command } from "@/components/shared/CommandPalette";
 import { ShortcutsHelp } from "@/components/shared/ShortcutsHelp";
 import { ToastProvider, useToast } from "@/components/shared/Toast";
 import { PuxarParaRecarregar } from "@/components/shared/PuxarParaRecarregar";
+import { PortaDeEntrada } from "@/components/shared/PortaDeEntrada";
 import { SortKey, TaskFilters } from "@/lib/task-filters";
 import { Task } from "@/lib/types";
 
@@ -280,7 +281,12 @@ export default function Home() {
     <AuthProvider>
       <AppProvider>
         <ToastProvider>
-          <HomeInner />
+          {/* A porta fica DENTRO dos provedores: o quadro local continua
+              sendo carregado, e é ele que se une ao da nuvem no primeiro
+              login em vez de ficar órfão neste navegador. */}
+          <PortaDeEntrada>
+            <HomeInner />
+          </PortaDeEntrada>
         </ToastProvider>
       </AppProvider>
     </AuthProvider>

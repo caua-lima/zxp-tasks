@@ -28,7 +28,7 @@ import { mergeBoards, mergeImportedData, MergeReport, validateBackup } from "@/l
 import { createRecurringTask, skipOccurrence } from "@/lib/recurrence";
 import { todayISO } from "@/lib/date-utils";
 import { useAuth } from "./AuthContext";
-import { pushBoardToCloud, subscribeToCloudBoard } from "@/lib/cloud-sync";
+import { fetchCloudBoard, pushBoardToCloud, subscribeToCloudBoard } from "@/lib/cloud-sync";
 import { registrarAparelho } from "@/lib/push";
 import { createTask, NewTaskInput } from "@/lib/task-factory";
 import {
@@ -210,6 +210,40 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (typeof window === "undefined" || !("Notification" in window)) return;
     if (Notification.permission !== "granted") return;
     void registrarAparelho();
+  }, [userId]);
+
+  /**
+   * Rede de segurança do Realtime: ao voltar pro app, relê a nuvem.
+   *
+   * O socket do Realtime cai sozinho — o celular congela a aba em segundo
+   * plano — e, se a replicação da tabela não estiver publicada no Supabase,
+   * ele nunca entrega nada. Sem isto, a tarefa criada no PC só apareceria no
+   * celular quando alguém recarregasse a página na mão.
+   *
+   * Aqui as duas versões são UNIDAS, não substituídas: quem estava sem
+   * internet pode ter criado coisa no aparelho, e trocar o quadro pelo da
+   * nuvem apagaria esse trabalho sem aviso.
+   */
+  useEffect(() => {
+    if (!userId) return;
+
+    async function reconciliar() {
+      if (document.visibilityState !== "visible") return;
+      const cloud = await fetchCloudBoard(userId!);
+      if (!cloud) return;
+      setBoard((atual) => mergeBoards(atual, cloud).board);
+      setSyncStatus("synced");
+      setLastSyncedAt(new Date().toISOString());
+    }
+
+    document.addEventListener("visibilitychange", reconciliar);
+    window.addEventListener("focus", reconciliar);
+    window.addEventListener("online", reconciliar);
+    return () => {
+      document.removeEventListener("visibilitychange", reconciliar);
+      window.removeEventListener("focus", reconciliar);
+      window.removeEventListener("online", reconciliar);
+    };
   }, [userId]);
 
   useEffect(() => {
