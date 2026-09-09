@@ -35,6 +35,10 @@ export function WeeklyReview() {
   const ehSemanaAtual = weekStart === semanaAtual;
   // Modo foto: esconde tudo menos o cartão, pra o print sair limpo.
   const [modoFoto, setModoFoto] = useState(false);
+  // Filtro de período do cartão. 7 dias segue a semana do calendário
+  // (segunda a domingo); os maiores são janelas corridas terminando hoje.
+  const [dias, setDias] = useState(7);
+  const inicioDoCartao = dias === 7 ? weekStart : addDaysISO(today, -(dias - 1));
 
   const metrics = useMemo(
     // A revisão de uma semana passada usa o último dia daquela semana como
@@ -73,20 +77,21 @@ export function WeeklyReview() {
         <div className="flex items-center gap-1">
           <button
             onClick={() => setWeekStart((w) => addDaysISO(w, -7))}
+            disabled={dias !== 7}
             aria-label="Semana anterior"
-            className="min-h-[36px] rounded-md border border-[var(--border)] px-2.5 text-sm text-[var(--muted)] hover:bg-[var(--surface)]"
+            className="min-h-[36px] rounded-md border border-[var(--border)] px-2.5 text-sm text-[var(--muted)] hover:bg-[var(--surface)] disabled:opacity-30"
           >
             ←
           </button>
           <button
             onClick={() => setWeekStart((w) => addDaysISO(w, 7))}
-            disabled={ehSemanaAtual}
+            disabled={ehSemanaAtual || dias !== 7}
             aria-label="Próxima semana"
             className="min-h-[36px] rounded-md border border-[var(--border)] px-2.5 text-sm text-[var(--muted)] hover:bg-[var(--surface)] disabled:opacity-30"
           >
             →
           </button>
-          {!ehSemanaAtual && (
+          {!ehSemanaAtual && dias === 7 && (
             <button
               onClick={() => setWeekStart(semanaAtual)}
               className="ml-1 min-h-[36px] rounded-md px-2 text-xs font-medium text-[var(--accent)] hover:underline"
@@ -94,6 +99,22 @@ export function WeeklyReview() {
               Voltar pra esta semana
             </button>
           )}
+        </div>
+        <div className="flex gap-1">
+          {[7, 14, 30].map((n) => (
+            <button
+              key={n}
+              onClick={() => setDias(n)}
+              aria-pressed={dias === n}
+              className={`min-h-[36px] rounded-md border px-2.5 text-xs font-medium transition ${
+                dias === n
+                  ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-ink)]"
+                  : "border-[var(--border)] text-[var(--muted)] hover:bg-[var(--surface)]"
+              }`}
+            >
+              {n}d
+            </button>
+          ))}
         </div>
         <button
           onClick={() => setModoFoto((v) => !v)}
@@ -109,7 +130,7 @@ export function WeeklyReview() {
       </header>
 
       <div className={modoFoto ? "mt-4" : undefined}>
-        <CartaoDaSemana weekStart={weekStart} />
+        <CartaoDaSemana weekStart={inicioDoCartao} dias={dias} />
       </div>
 
       {modoFoto && (

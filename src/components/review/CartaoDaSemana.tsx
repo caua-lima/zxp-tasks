@@ -87,18 +87,28 @@ function Metrica({
   );
 }
 
-export function CartaoDaSemana({ weekStart }: { weekStart: string }) {
+export function CartaoDaSemana({
+  weekStart,
+  dias = 7,
+}: {
+  /** Primeiro dia do período. Em 7 dias é a segunda-feira da semana. */
+  weekStart: string;
+  dias?: number;
+}) {
   const { board, topics } = useApp();
-  const weekEnd = addDaysISO(weekStart, 6);
-  const semanaAnterior = addDaysISO(weekStart, -7);
+  const weekEnd = addDaysISO(weekStart, dias - 1);
+  const inicioAnterior = addDaysISO(weekStart, -dias);
+  // Em 7 dias o cabeçalho fala "Semana 37" e os rótulos são Seg..Dom. Em
+  // períodos maiores isso deixa de fazer sentido: viram dias do mês.
+  const ehSemana = dias === 7;
 
   const relatorio = useMemo(
     () => montarRelatorio(board, weekStart, weekEnd),
     [board, weekStart, weekEnd]
   );
   const anterior = useMemo(
-    () => montarRelatorio(board, semanaAnterior, addDaysISO(semanaAnterior, 6)),
-    [board, semanaAnterior]
+    () => montarRelatorio(board, inicioAnterior, addDaysISO(inicioAnterior, dias - 1)),
+    [board, inicioAnterior, dias]
   );
   const projetos = useMemo(
     () => tempoPorProjeto(board, weekStart, weekEnd),
@@ -108,6 +118,8 @@ export function CartaoDaSemana({ weekStart }: { weekStart: string }) {
 
   const foco = horas(relatorio.totalTrabalhadoMs);
   const diasAtivos = relatorio.dias.filter((d) => d.elapsedMs > 0).length;
+  const rotuloDoDia = (i: number, iso: string) =>
+    ehSemana ? DIAS[i] : String(new Date(iso + "T00:00:00").getDate());
   const mediaPorDia =
     diasAtivos === 0 ? 0 : Math.round(relatorio.totalTrabalhadoMs / diasAtivos);
 
@@ -161,7 +173,7 @@ export function CartaoDaSemana({ weekStart }: { weekStart: string }) {
             {intervaloLegivel(weekStart, weekEnd)}
           </p>
           <p className="mt-1 text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--muted)]">
-            Semana {numeroDaSemana(weekStart)}
+            {ehSemana ? `Semana ${numeroDaSemana(weekStart)}` : `${dias} dias`}
           </p>
         </div>
       </header>
@@ -197,7 +209,7 @@ export function CartaoDaSemana({ weekStart }: { weekStart: string }) {
         </div>
         <p className="mt-1.5 text-[11px] text-[var(--muted)]">
           {variacao !== null
-            ? `${variacao >= 0 ? "acima" : "abaixo"} da semana anterior (${curto(
+            ? `${variacao >= 0 ? "acima" : "abaixo"} do período anterior (${curto(
                 anterior.totalTrabalhadoMs
               )})`
             : "tempo medido pelo cronômetro, não estimado"}
@@ -214,7 +226,7 @@ export function CartaoDaSemana({ weekStart }: { weekStart: string }) {
           valor={`${relatorio.blocosFeitos}/${relatorio.blocosTotal}`}
           rotulo="Blocos"
         />
-        <Metrica valor={`${diasAtivos}/7`} rotulo="Dias" cor="var(--accent)" />
+        <Metrica valor={`${diasAtivos}/${dias}`} rotulo="Dias" cor="var(--accent)" />
         <Metrica valor={curto(mediaPorDia)} rotulo="Média/dia" />
       </div>
 
@@ -223,14 +235,14 @@ export function CartaoDaSemana({ weekStart }: { weekStart: string }) {
         {/* A barra é filha DIRETA do contêiner de altura fixa: dentro de um
             wrapper sem altura, o `height: %` não tinha contra o que resolver
             e o gráfico inteiro saía invisível. */}
-        <div className="flex h-24 items-end gap-1.5 sm:h-28">
+        <div className={`flex h-24 items-end sm:h-28 ${ehSemana ? "gap-1.5" : "gap-[2px]"}`}>
           {relatorio.dias.map((d) => {
             const altura = Math.max(3, Math.round((d.elapsedMs / maiorDia) * 100));
             const melhor = d.elapsedMs === maiorDia && d.elapsedMs > 0;
             return (
               <span
                 key={d.date}
-                title={`${DIAS[relatorio.dias.indexOf(d)]}: ${curto(d.elapsedMs)}`}
+                title={`${rotuloDoDia(relatorio.dias.indexOf(d), d.date)}: ${curto(d.elapsedMs)}`}
                 className="min-w-0 flex-1 rounded-t-[4px]"
                 style={{
                   height: `${altura}%`,
@@ -244,26 +256,35 @@ export function CartaoDaSemana({ weekStart }: { weekStart: string }) {
             );
           })}
         </div>
-        <div className="mt-2 flex gap-1.5">
-          {relatorio.dias.map((d, i) => (
-            <span
-              key={d.date}
-              className="min-w-0 flex-1 text-center text-[9px] font-semibold uppercase tracking-wider"
-              style={{
-                color: d.elapsedMs === maiorDia && d.elapsedMs > 0
-                  ? "var(--accent)"
-                  : "var(--muted)",
-              }}
-            >
-              {DIAS[i]}
-            </span>
-          ))}
+        <div className={`mt-2 flex ${ehSemana ? "gap-1.5" : "gap-[2px]"}`}>
+          {relatorio.dias.map((d, i) => {
+            // Trinta rótulos lado a lado viram borrão: em período longo só
+            // um a cada cinco dias aparece.
+            const mostra = ehSemana || i % 5 === 0 || i === relatorio.dias.length - 1;
+            return (
+              <span
+                key={d.date}
+                className="min-w-0 flex-1 overflow-hidden text-center text-[9px] font-semibold uppercase tracking-wider"
+                style={{
+                  color:
+                    d.elapsedMs === maiorDia && d.elapsedMs > 0
+                      ? "var(--accent)"
+                      : "var(--muted)",
+                }}
+              >
+                {mostra ? rotuloDoDia(i, d.date) : ""}
+              </span>
+            );
+          })}
         </div>
         {relatorio.melhorDia && (
           <p className="mt-2.5 text-[11px] text-[var(--muted)]">
             Melhor dia:{" "}
             <span className="font-semibold text-[var(--foreground)]">
-              {DIAS[relatorio.dias.findIndex((d) => d.date === relatorio.melhorDia!.date)]}
+              {rotuloDoDia(
+                relatorio.dias.findIndex((d) => d.date === relatorio.melhorDia!.date),
+                relatorio.melhorDia.date
+              )}
             </span>{" "}
             com{" "}
             <span className="tabular-nums text-[var(--accent)]">
