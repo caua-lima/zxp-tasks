@@ -30,6 +30,7 @@ export function EditarBloco({
   const [title, setTitle] = useState(block.title);
   const [minutes, setMinutes] = useState(block.plannedMinutes);
   const [topicId, setTopicId] = useState(block.topicId ?? "");
+  const [tempoLivre, setTempoLivre] = useState(!!block.openEnded);
 
   // Um bloco que já tem tarefa não pode trocar de projeto por aqui: a tarefa
   // ficaria numa pasta e o bloco apontando pra outra.
@@ -43,6 +44,9 @@ export function EditarBloco({
     updateBlock(block.id, {
       title: nome,
       plannedMinutes: Math.max(1, minutes),
+      // `undefined` em vez de `false` pra não gravar a chave à toa em bloco
+      // que nunca foi de tempo livre.
+      openEnded: tempoLivre ? true : undefined,
       ...(projetoTravado ? {} : { topicId: topicId || undefined }),
     });
     if (block.taskId && nome !== block.title) {
@@ -94,8 +98,11 @@ export function EditarBloco({
               <button
                 key={m}
                 type="button"
-                onClick={() => setMinutes(m)}
-                aria-pressed={minutes === m}
+                onClick={() => {
+                  setMinutes(m);
+                  setTempoLivre(false);
+                }}
+                aria-pressed={minutes === m && !tempoLivre}
                 className={`min-h-[36px] rounded-md border px-3 text-xs font-medium transition ${
                   minutes === m
                     ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-ink)]"
@@ -109,13 +116,35 @@ export function EditarBloco({
               type="number"
               min={1}
               value={DURATION_PRESETS.includes(minutes) ? "" : minutes}
-              onChange={(e) => setMinutes(Math.max(1, Number(e.target.value) || 1))}
+              onChange={(e) => {
+                setMinutes(Math.max(1, Number(e.target.value) || 1));
+                setTempoLivre(false);
+              }}
               placeholder="outro"
               aria-label="Duração personalizada em minutos"
               className="min-h-[36px] w-20 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 text-xs tabular-nums text-[var(--foreground)] outline-none focus:border-[var(--focus)]"
             />
+            <button
+              type="button"
+              onClick={() => setTempoLivre((v) => !v)}
+              aria-pressed={tempoLivre}
+              title="Cronômetro conta pra cima, sem tempo combinado"
+              className={`min-h-[36px] rounded-md border px-3 text-xs font-medium transition ${
+                tempoLivre
+                  ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-ink)]"
+                  : "border-[var(--border)] text-[var(--muted)] hover:bg-[var(--surface)]"
+              }`}
+            >
+              sem tempo
+            </button>
           </div>
-          {block.accumulatedMs > 0 && (
+          {tempoLivre && (
+            <p className="mt-1 text-[11px] text-[var(--muted)]">
+              Sem tempo combinado: o cronômetro conta pra cima e não existe
+              &ldquo;passou do tempo&rdquo;.
+            </p>
+          )}
+          {block.accumulatedMs > 0 && !tempoLivre && (
             <p className="mt-1 text-[11px] text-[var(--muted)]">
               O tempo já cronometrado não é apagado — só muda o quanto estava
               planejado.
