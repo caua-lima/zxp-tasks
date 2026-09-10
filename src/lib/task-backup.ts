@@ -90,6 +90,7 @@ export interface SyncMergeReport {
   tasksAdded: number;
   blocksAdded: number;
   reviewsAdded: number;
+  metasAdded: number;
 }
 
 /**
@@ -129,6 +130,28 @@ export function mergeBoards(
   const semanas = new Set(local.weeklyReviews.map((w) => w.weekStart));
   const novasRevisoes = remote.weeklyReviews.filter((w) => !semanas.has(w.weekStart));
 
+  /**
+   * Metas: por id, e com os REGISTROS unidos dia a dia pelo maior valor.
+   *
+   * A mesma meta é anotada nos dois aparelhos — duas páginas no celular de
+   * manhã, uma no PC à noite. Ficar só com a versão local apagaria o que foi
+   * anotado no outro; somar contaria em dobro o que sincronizou antes. O
+   * maior valor de cada dia é o único que não perde nem inventa progresso.
+   */
+  const metasLocais = local.metas ?? [];
+  const metasRemotas = remote.metas ?? [];
+  const idsMetasLocais = new Set(metasLocais.map((m) => m.id));
+  const metasUnidas = metasLocais.map((m) => {
+    const outra = metasRemotas.find((r) => r.id === m.id);
+    if (!outra) return m;
+    const registros = { ...m.registros };
+    for (const [dia, valor] of Object.entries(outra.registros)) {
+      registros[dia] = Math.max(registros[dia] ?? 0, valor);
+    }
+    return { ...m, registros };
+  });
+  const novasMetas = metasRemotas.filter((m) => !idsMetasLocais.has(m.id));
+
   return {
     board: {
       ...local,
@@ -142,12 +165,14 @@ export function mergeBoards(
       dailyFocus: { ...remote.dailyFocus, ...local.dailyFocus },
       // Preferência é do aparelho que está na mão da pessoa agora.
       settings: local.settings,
+      metas: [...metasUnidas, ...novasMetas],
     },
     report: {
       topicsAdded: novosTopicos.length,
       tasksAdded: novasTarefas.length,
       blocksAdded: novosBlocos.length,
       reviewsAdded: novasRevisoes.length,
+      metasAdded: novasMetas.length,
     },
   };
 }

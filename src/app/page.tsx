@@ -12,6 +12,7 @@ import { ScheduleView } from "@/components/schedule/ScheduleView";
 import { GoalsView } from "@/components/goals/GoalsView";
 import { WeeklyReview } from "@/components/review/WeeklyReview";
 import { RelatorioView } from "@/components/report/RelatorioView";
+import { MetasView } from "@/components/metas/MetasView";
 import { ProjectView } from "@/components/projects/ProjectView";
 import { TaskModal } from "@/components/TaskModal";
 import { DataPanel } from "@/components/shared/DataPanel";
@@ -54,6 +55,7 @@ function HomeInner() {
   const title = useMemo(() => {
     if (view === "schedule") return "Cronograma";
     if (view === "goals") return "Projetos";
+    if (view === "metas") return "Metas";
     if (view === "today") return "Hoje";
     if (view === "review") return "Revisão semanal";
     if (view === "report") return "Relatório";
@@ -138,6 +140,7 @@ function HomeInner() {
       { id: "new", label: "Nova tarefa", hint: "N", run: openNewTask },
       { id: "schedule", label: "Ir para Cronograma", hint: "G C", run: () => setView("schedule") },
       { id: "goals", label: "Ir para Projetos", hint: "G P", run: () => setView("goals") },
+      { id: "metas", label: "Ir para Metas", run: () => setView("metas") },
       { id: "today", label: "Ir para Hoje (foco)", hint: "G H", run: () => setView("today") },
       { id: "kanban", label: "Ir para Kanban", hint: "G K", run: () => setView("kanban") },
       { id: "mind", label: "Ir para Mapa mental", hint: "G M", run: () => setView("mindmap") },
@@ -241,6 +244,7 @@ function HomeInner() {
           {view === "mindmap" && <MindMap topicId={selectedTopicId} filters={filters} />}
           {view === "review" && <WeeklyReview />}
           {view === "report" && <RelatorioView />}
+          {view === "metas" && <MetasView />}
           {view === "project" &&
             (selectedTopicId ? (
               <ProjectView topicId={selectedTopicId} />

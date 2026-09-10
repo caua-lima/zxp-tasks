@@ -37,6 +37,7 @@ const label = "mb-1 block text-xs font-medium text-[var(--muted)]";
 export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: TaskModalProps) {
   const {
     topics,
+    metas,
     addTask,
     updateTask,
     setTaskStatus,
@@ -78,6 +79,8 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
   const [mostrarPassos, setMostrarPassos] = useState((task?.checklist ?? []).length > 0);
   const [extras, setExtras] = useState<string[]>(task?.extraTopicIds ?? []);
   const [mostrarExtras, setMostrarExtras] = useState((task?.extraTopicIds ?? []).length > 0);
+  const [metasLigadas, setMetasLigadas] = useState<string[]>(task?.metaIds ?? []);
+  const [mostrarMetas, setMostrarMetas] = useState((task?.metaIds ?? []).length > 0);
   const [confirmTrash, setConfirmTrash] = useState(false);
   const [titleError, setTitleError] = useState(false);
   const [priceText, setPriceText] = useState(
@@ -93,6 +96,7 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
   const selectedTopic = topics.find((t) => t.id === topicId);
   // Só projetos ativos e diferentes do principal entram como extra.
   const outrosProjetos = topics.filter((t) => !t.archivedAt && t.id !== topicId);
+  const metasAtivas = metas.filter((m) => !m.archivedAt);
   const kind = topicKind(selectedTopic);
   const wishlist = kind === "wishlist";
   const preco = priceText.trim() === "" ? null : parseValorComposto(priceText);
@@ -116,6 +120,7 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
       // O principal nunca entra nos extras: seria a mesma tarefa contada
       // duas vezes no mesmo projeto.
       extraTopicIds: extras.filter((id) => id !== topicId),
+      metaIds: metasLigadas,
       priority,
       energy: energy || undefined,
       estimatedMinutes: estimate === "" ? undefined : Number(estimate),
@@ -392,6 +397,48 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
                 className="block text-xs font-medium text-[var(--accent)] hover:underline"
               >
                 + Adicionar a outro projeto
+              </button>
+            ))}
+
+          {metasAtivas.length > 0 &&
+            (mostrarMetas ? (
+              <div>
+                <span className={label}>Ajuda nas metas</span>
+                <p className="mb-2 text-[11px] text-[var(--muted)]">
+                  Concluir esta tarefa marca o dia como batido nas metas escolhidas.
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {metasAtivas.map((m) => {
+                    const marcada = metasLigadas.includes(m.id);
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        aria-pressed={marcada}
+                        onClick={() =>
+                          setMetasLigadas((atuais) =>
+                            marcada ? atuais.filter((id) => id !== m.id) : [...atuais, m.id]
+                          )
+                        }
+                        className={`rounded-md border px-2.5 py-1.5 text-xs font-medium transition ${
+                          marcada
+                            ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-ink)]"
+                            : "border-[var(--border)] text-[var(--muted)] hover:bg-[var(--surface)]"
+                        }`}
+                      >
+                        {m.title} · {m.dailyTarget} {m.unit}/dia
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setMostrarMetas(true)}
+                className="block text-xs font-medium text-[var(--accent)] hover:underline"
+              >
+                + Ligar a uma meta
               </button>
             ))}
 

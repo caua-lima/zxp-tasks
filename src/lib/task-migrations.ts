@@ -8,6 +8,7 @@ import {
   TaskPriority,
   TaskStatus,
   Topic,
+  Meta,
   WeeklyReviewNote,
   emptyBoard,
 } from "./types";
@@ -120,6 +121,9 @@ function migrateTask(raw: unknown): Task | null {
           ),
         ]
       : undefined,
+    metaIds: Array.isArray(r.metaIds)
+      ? [...new Set(r.metaIds.filter((id): id is string => typeof id === "string" && !!id))]
+      : undefined,
     tags: migrateTags(r.tags),
     checklist: migrateChecklist(r.checklist),
     recurrence: migrateRecurrence(r.recurrence) ?? undefined,
@@ -190,6 +194,41 @@ function migrateScheduleBlock(raw: unknown): ScheduleBlock | null {
   };
 }
 
+/**
+ * Meta vinda de backup ou de outro aparelho. Alvo e duração inválidos viram
+ * 1 em vez de derrubar a meta inteira; registro que não é número positivo é
+ * descartado — um "NaN páginas" contaminaria o total acumulado.
+ */
+function migrateMeta(raw: unknown): Meta | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const title = asString(r.title);
+  const startDate = asString(r.startDate);
+  if (!title || !startDate) return null;
+
+  const registros: Record<string, number> = {};
+  if (r.registros && typeof r.registros === "object") {
+    for (const [dia, valor] of Object.entries(r.registros as Record<string, unknown>)) {
+      if (typeof valor === "number" && Number.isFinite(valor) && valor > 0) registros[dia] = valor;
+    }
+  }
+
+  const inteiroPositivo = (v: unknown) =>
+    typeof v === "number" && Number.isFinite(v) && v >= 1 ? Math.round(v) : 1;
+
+  return {
+    id: asString(r.id) ?? crypto.randomUUID(),
+    title,
+    unit: asString(r.unit) ?? "",
+    dailyTarget: inteiroPositivo(r.dailyTarget),
+    startDate,
+    days: inteiroPositivo(r.days),
+    registros,
+    createdAt: asString(r.createdAt) ?? SAFE_FALLBACK_DATE,
+    archivedAt: asString(r.archivedAt),
+  };
+}
+
 function migrateWeeklyReview(raw: unknown): WeeklyReviewNote | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
@@ -232,8 +271,14 @@ export function migrateBoard(raw: unknown): Board {
       ? (r.dailyFocus as Record<string, string[]>)
       : {};
 
+  // Quadro salvo antes das metas não tem a lista: nasce vazia.
+  const metas = Array.isArray(r.metas)
+    ? r.metas.map(migrateMeta).filter((m): m is Meta => m !== null)
+    : [];
+
   return {
     schemaVersion: CURRENT_SCHEMA_VERSION,
+    metas,
     topics,
     tasks,
     schedule,

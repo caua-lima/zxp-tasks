@@ -13,6 +13,13 @@ import assert from "node:assert/strict";
 import { Board, ScheduleBlock, Task, Topic, emptyBoard } from "./types";
 import { migrateBoard } from "./task-migrations";
 import { montarRelatorio, tempoPorProjeto } from "./report";
+import {
+  aplicarConclusaoNasMetas,
+  marcarDiaBatido,
+  novaMeta,
+  progressoDaMeta,
+  registrarNaMeta,
+} from "./metas";
 import { interpretarComandoDeVoz } from "./voice-command";
 import {
   completedBlockData,
@@ -1804,4 +1811,101 @@ test("migração preserva a espera do bloco", () => {
   assert.equal(board.schedule[0].parkedAt, "2026-09-09T13:00:00.000Z");
   assert.equal(board.schedule[0].resumedAt, "2026-09-10T09:00:00.000Z");
   assert.equal(board.schedule[0].continuaDe, "z");
+});
+
+// ── Metas ─────────────────────────────────────────────────────────────────
+
+function metaDeTeste(over: Partial<Parameters<typeof novaMeta>[0]> = {}) {
+  return novaMeta(
+    { title: "Ler", unit: "páginas", dailyTarget: 2, startDate: "2026-09-01", days: 30, ...over },
+    "m1",
+    "2026-09-01T10:00:00.000Z"
+  );
+}
+
+test("meta nova nasce sem registros e com alvo e duração válidos", () => {
+  const m = novaMeta(
+    { title: "  Ler ", unit: " páginas ", dailyTarget: 0, startDate: "2026-09-01", days: 0 },
+    "m", "2026-09-01T10:00:00.000Z"
+  );
+  assert.equal(m.title, "Ler");
+  assert.equal(m.unit, "páginas");
+  // Alvo zero faria todo dia contar como batido sem fazer nada.
+  assert.equal(m.dailyTarget, 1);
+  assert.equal(m.days, 1);
+  assert.deepEqual(m.registros, {});
+});
+
+test("progresso conta dias batidos, total e em que dia estamos", () => {
+  let m = metaDeTeste();
+  m = registrarNaMeta(m, "2026-09-01", 2);
+  m = registrarNaMeta(m, "2026-09-02", 5);
+  m = registrarNaMeta(m, "2026-09-03", 1); // não bateu
+  const p = progressoDaMeta(m, "2026-09-04");
+  assert.equal(p.diaAtual, 4);
+  assert.equal(p.diasPassados, 4);
+  assert.equal(p.diasBatidos, 2);
+  assert.equal(p.totalFeito, 8);
+  assert.equal(p.terminou, false);
+});
+
+test("hoje ainda não batido não quebra a sequência; ontem sem bater quebra", () => {
+  let m = metaDeTeste();
+  for (const d of ["2026-09-01", "2026-09-02", "2026-09-03"]) m = registrarNaMeta(m, d, 2);
+  // Dia 04 é hoje e ainda não leu: a sequência de 3 continua de pé.
+  assert.equal(progressoDaMeta(m, "2026-09-04").sequencia, 3);
+  // Chegou o dia 05 sem ter lido no 04: aí sim quebrou.
+  assert.equal(progressoDaMeta(m, "2026-09-05").sequencia, 0);
+});
+
+test("registro nunca fica negativo e ignora dia fora da meta", () => {
+  let m = metaDeTeste();
+  m = registrarNaMeta(m, "2026-09-02", 1);
+  m = registrarNaMeta(m, "2026-09-02", -5);
+  assert.equal(m.registros["2026-09-02"], undefined);
+  const antes = registrarNaMeta(m, "2026-08-31", 3);
+  assert.deepEqual(antes.registros, {});
+  const depois = registrarNaMeta(m, "2026-10-01", 3);
+  assert.deepEqual(depois.registros, {});
+});
+
+test("marcar como batido não rebaixa o que já foi anotado", () => {
+  let m = metaDeTeste();
+  m = registrarNaMeta(m, "2026-09-02", 10);
+  assert.equal(marcarDiaBatido(m, "2026-09-02").registros["2026-09-02"], 10);
+  assert.equal(marcarDiaBatido(m, "2026-09-03").registros["2026-09-03"], 2);
+});
+
+test("concluir tarefa ligada marca o dia na meta, e só nas metas dela", () => {
+  const board = {
+    ...emptyBoard(),
+    metas: [metaDeTeste(), { ...metaDeTeste(), id: "m2" }],
+    tasks: [tarefa({ id: "k1", topicId: "a", metaIds: ["m1"] })],
+  };
+  const depois = aplicarConclusaoNasMetas(board, ["k1"], "2026-09-05");
+  assert.equal(depois.metas.find((m) => m.id === "m1")!.registros["2026-09-05"], 2);
+  assert.deepEqual(depois.metas.find((m) => m.id === "m2")!.registros, {});
+});
+
+test("sincronizar une os registros da mesma meta pelo maior valor do dia", () => {
+  const local = { ...emptyBoard(), metas: [{ ...metaDeTeste(), registros: { "2026-09-01": 2, "2026-09-02": 1 } }] };
+  const remote = { ...emptyBoard(), metas: [{ ...metaDeTeste(), registros: { "2026-09-02": 4, "2026-09-03": 2 } }] };
+  const unida = mergeBoards(local, remote).board.metas[0];
+  // Nem perde o que foi anotado no outro aparelho, nem soma em dobro.
+  assert.deepEqual(unida.registros, { "2026-09-01": 2, "2026-09-02": 4, "2026-09-03": 2 });
+});
+
+test("migração cria lista de metas vazia em quadro antigo e limpa lixo", () => {
+  assert.deepEqual(migrateBoard({ topics: [], tasks: [] }).metas, []);
+  const b = migrateBoard({
+    topics: [], tasks: [],
+    metas: [
+      { id: "m", title: "Ler", unit: "pág", dailyTarget: "2", startDate: "2026-09-01", days: 30,
+        registros: { "2026-09-01": 2, "2026-09-02": "x", "2026-09-03": -1, "2026-09-04": NaN } },
+      { id: "sem-titulo", startDate: "2026-09-01" },
+    ],
+  });
+  assert.equal(b.metas.length, 1);
+  assert.equal(b.metas[0].dailyTarget, 1);
+  assert.deepEqual(b.metas[0].registros, { "2026-09-01": 2 });
 });

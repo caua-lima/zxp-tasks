@@ -67,6 +67,11 @@ export interface Task {
    * quadros antigos válidos sem migração nenhuma.
    */
   extraTopicIds?: string[];
+  /**
+   * Metas que esta tarefa ajuda a cumprir. Concluir a tarefa marca o dia como
+   * batido em cada uma — "ler o capítulo 3" serve a "ler 2 páginas por dia".
+   */
+  metaIds?: string[];
 
   tags: string[];
   checklist: ChecklistItem[];
@@ -185,6 +190,35 @@ export interface ScheduleBlock {
   openEnded?: boolean;
 }
 
+/**
+ * Uma meta com prazo e alvo diário: "ler 2 páginas por dia durante 30 dias".
+ *
+ * Diferente de uma tarefa, ela não termina num clique — ela se cumpre dia a
+ * dia. Por isso guarda um registro por DIA em vez de um status: a pergunta
+ * que ela responde é "bati hoje?" e "quantos dias bati?", não "está feita?".
+ */
+export interface Meta {
+  id: string;
+  /** O que fazer: "Ler". */
+  title: string;
+  /** Em que se mede: "páginas", "minutos", "km". */
+  unit: string;
+  /** Quanto por dia pra considerar o dia batido. */
+  dailyTarget: number;
+  /** Primeiro dia local da meta, "AAAA-MM-DD". */
+  startDate: string;
+  /** Duração em dias, contando o primeiro. */
+  days: number;
+  /**
+   * Quanto foi feito em cada dia local. Guardado como número, e não como
+   * "batido sim/não", porque ler 10 páginas num dia de meta 2 é informação —
+   * vira o total acumulado.
+   */
+  registros: Record<string, number>;
+  createdAt: string;
+  archivedAt?: string;
+}
+
 export interface BoardSettings {
   /**
    * Deixa mais de um cronômetro correr ao mesmo tempo.
@@ -206,6 +240,7 @@ export interface Board {
   dailyFocus: Record<string, string[]>;
   weeklyReviews: WeeklyReviewNote[];
   settings: BoardSettings;
+  metas: Meta[];
 }
 
 export const CURRENT_SCHEMA_VERSION = 4;
@@ -219,5 +254,6 @@ export function emptyBoard(): Board {
     dailyFocus: {},
     weeklyReviews: [],
     settings: { parallelTimers: false },
+    metas: [],
   };
 }

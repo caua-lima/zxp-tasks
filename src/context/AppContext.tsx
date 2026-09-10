@@ -18,6 +18,7 @@ import {
   TaskStatus,
   Topic,
   TopicKind,
+  Meta,
   WeeklyReviewNote,
   emptyBoard,
 } from "@/lib/types";
@@ -31,6 +32,7 @@ import { useAuth } from "./AuthContext";
 import { fetchCloudBoard, pushBoardToCloud, subscribeToCloudBoard } from "@/lib/cloud-sync";
 import { registrarAparelho } from "@/lib/push";
 import { createTask, NewTaskInput } from "@/lib/task-factory";
+import { aplicarConclusaoNasMetas, NovaMetaInput, novaMeta, registrarNaMeta } from "@/lib/metas";
 import {
   completeBlock,
   completedBlockData,
@@ -106,6 +108,12 @@ interface AppContextValue {
   parkBlockLater: (id: string) => void;
   /** Traz um bloco em espera de volta pro cronograma de hoje. */
   resumeParkedBlock: (id: string) => void;
+  /** Metas diárias com prazo ("ler 2 páginas por dia durante 30 dias"). */
+  metas: Meta[];
+  addMeta: (input: NovaMetaInput) => Meta;
+  /** Soma ou subtrai no registro de um dia da meta. */
+  registrarMeta: (metaId: string, dia: string, delta: number) => void;
+  arquivarMeta: (metaId: string) => void;
   /**
    * Começa a tarefa agora: cria (ou reaproveita) o bloco de hoje e liga o
    * cronômetro. Devolve false se a tarefa não existir mais.
@@ -368,7 +376,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const next = createRecurringTask(target, uuid(), now);
         if (next) tasks.push(next);
       }
-      return { ...b, tasks };
+      const proximo = { ...b, tasks };
+      // Só na TRANSIÇÃO pra feito: remarcar uma tarefa que já estava feita
+      // não pode reprocessar a meta.
+      return status === "done" && target && target.status !== "done"
+        ? aplicarConclusaoNasMetas(proximo, [id], todayISO())
+        : proximo;
     });
   }, []);
 
@@ -687,7 +700,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const task = block?.taskId ? b.tasks.find((t) => t.id === block.taskId) : undefined;
       const concluirTarefa = task && task.status !== "done";
 
-      return {
+      const proximo = {
         ...b,
         schedule: b.schedule.map((x) => (x.id === id ? completeBlock(x, nowIso) : x)),
         tasks: concluirTarefa
@@ -698,6 +711,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             )
           : b.tasks,
       };
+      // Concluir o bloco conclui a tarefa que ele carrega — e, com ela, marca
+      // o dia nas metas que ela ajuda. Mesma regra do setTaskStatus: uma
+      // tarefa pode virar "feita" por mais de um caminho, e a meta não pode
+      // depender de qual deles foi usado.
+      return concluirTarefa ? aplicarConclusaoNasMetas(proximo, [task.id], todayISO()) : proximo;
     });
   }, []);
 
@@ -827,6 +845,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
+  // ── Metas ──────────────────────────────────────────────────────────────
+  const addMeta = useCallback((input: NovaMetaInput) => {
+    const meta = novaMeta(input, uuid(), new Date().toISOString());
+    setBoard((b) => ({ ...b, metas: [...(b.metas ?? []), meta] }));
+    return meta;
+  }, []);
+
+  const registrarMeta = useCallback((metaId: string, dia: string, delta: number) => {
+    setBoard((b) => ({
+      ...b,
+      metas: (b.metas ?? []).map((m) => (m.id === metaId ? registrarNaMeta(m, dia, delta) : m)),
+    }));
+  }, []);
+
+  /** Arquiva sem apagar: o histórico de dias batidos é justamente o que se quer rever. */
+  const arquivarMeta = useCallback((metaId: string) => {
+    const nowIso = new Date().toISOString();
+    setBoard((b) => ({
+      ...b,
+      metas: (b.metas ?? []).map((m) => (m.id === metaId ? { ...m, archivedAt: nowIso } : m)),
+    }));
+  }, []);
+
   /** Copia a estrutura de um dia pro outro, com os cronômetros zerados. */
   const copyDay = useCallback((fromDate: string, toDate: string) => {
     let copiados = 0;
@@ -920,6 +961,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       getLastOpenedTaskId,
       exportData,
       importData,
+      metas: board.metas ?? [],
+      addMeta,
+      registrarMeta,
+      arquivarMeta,
       syncStatus,
       lastSyncedAt,
     }),
@@ -964,6 +1009,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       getLastOpenedTaskId,
       exportData,
       importData,
+      addMeta,
+      registrarMeta,
+      arquivarMeta,
       syncStatus,
       lastSyncedAt,
     ]

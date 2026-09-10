@@ -21,6 +21,7 @@ const SYNC_DOT_COLOR: Record<string, string> = {
 export type ViewKey =
   | "schedule"
   | "goals"
+  | "metas"
   | "report"
   | "today"
   | "kanban"
@@ -36,6 +37,7 @@ export type ViewKey =
 const VIEWS: { key: ViewKey; label: string }[] = [
   { key: "schedule", label: "Cronograma" },
   { key: "goals", label: "Projetos" },
+  { key: "metas", label: "Metas" },
 ];
 
 const EXTRA_VIEWS: { key: ViewKey; label: string }[] = [
