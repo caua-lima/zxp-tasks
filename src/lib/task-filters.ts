@@ -1,5 +1,5 @@
 import { Task, TaskEnergy, TaskPriority } from "./types";
-import { getTaskPriorityScore, isTaskOverdue } from "./task-utils";
+import { getTaskPriorityScore, isTaskOverdue, taskBelongsToTopic } from "./task-utils";
 import { todayISO } from "./date-utils";
 
 export type SortKey = "priority" | "dueDate" | "createdAt" | "updatedAt";
@@ -18,7 +18,7 @@ export function filterTasks(tasks: Task[], filters: TaskFilters, today: string =
   const search = filters.search?.trim().toLowerCase();
   return tasks.filter((t) => {
     if (t.deletedAt || t.archivedAt) return false;
-    if (filters.topicId && t.topicId !== filters.topicId) return false;
+    if (filters.topicId && !taskBelongsToTopic(t, filters.topicId)) return false;
     if (filters.priority && t.priority !== filters.priority) return false;
     if (filters.energy && t.energy !== filters.energy) return false;
     if (filters.tag && !(t.tags ?? []).includes(filters.tag)) return false;

@@ -34,6 +34,7 @@ import {
   suggestFocusTasks,
 } from "./task-utils";
 import { filterTasks, sortTasks } from "./task-filters";
+import { taskBelongsToTopic } from "./task-utils";
 import { validateBackup, mergeImportedData, mergeBoards } from "./task-backup";
 import { calculateWeeklyMetrics } from "./weekly-review";
 import { addDaysISO, startOfWeekISO, localDayOf, daysBetween } from "./date-utils";
@@ -1649,4 +1650,76 @@ test("tempoPorProjeto ignora dias fora do período", () => {
     bloco({ id: "b", date: "2026-09-08", topicId: "t1", accumulatedMs: 60 * 60_000 }),
   ]};
   assert.deepEqual(tempoPorProjeto(board, "2026-09-01", "2026-09-07"), []);
+});
+
+// ── Tarefa em mais de um projeto ──────────────────────────────────────────
+
+function tarefa(over: Partial<Task> & { id: string; topicId: string }): Task {
+  return {
+    title: "T",
+    description: "",
+    status: "todo",
+    priority: "medium",
+    tags: [],
+    checklist: [],
+    createdAt: "2026-09-01T10:00:00.000Z",
+    updatedAt: "2026-09-01T10:00:00.000Z",
+    ...over,
+  };
+}
+
+test("tarefa pertence ao projeto principal e aos extras", () => {
+  const t = tarefa({ id: "k1", topicId: "a", extraTopicIds: ["b"] });
+  assert.equal(taskBelongsToTopic(t, "a"), true);
+  assert.equal(taskBelongsToTopic(t, "b"), true);
+  assert.equal(taskBelongsToTopic(t, "c"), false);
+  // Tarefa antiga, sem o campo, continua funcionando.
+  assert.equal(taskBelongsToTopic(tarefa({ id: "k2", topicId: "a" }), "a"), true);
+});
+
+test("filtro por projeto encontra a tarefa pelo extra", () => {
+  const lista = [
+    tarefa({ id: "k1", topicId: "a", extraTopicIds: ["b"] }),
+    tarefa({ id: "k2", topicId: "b" }),
+    tarefa({ id: "k3", topicId: "c" }),
+  ];
+  assert.deepEqual(filterTasks(lista, { topicId: "b" }).map((t) => t.id), ["k1", "k2"]);
+});
+
+test("progresso do projeto conta as tarefas que vieram por extra", () => {
+  const lista = [
+    tarefa({ id: "k1", topicId: "a", extraTopicIds: ["b"], status: "done" }),
+    tarefa({ id: "k2", topicId: "b" }),
+  ];
+  const p = calculateTopicProgress(lista, "b", "2026-09-10");
+  assert.equal(p.total, 2);
+  assert.equal(p.done, 1);
+});
+
+test("migração ignora extra repetido e o próprio projeto principal", () => {
+  const board = migrateBoard({
+    topics: [{ id: "a", name: "A", createdAt: "2026-09-01" }],
+    tasks: [
+      {
+        id: "k1",
+        topicId: "a",
+        title: "T",
+        // "a" é o principal e não pode virar extra; "b" repetido não pode
+        // duplicar; 7 não é id de nada.
+        extraTopicIds: ["a", "b", "b", 7],
+        createdAt: "2026-09-01T10:00:00.000Z",
+        updatedAt: "2026-09-01T10:00:00.000Z",
+      },
+    ],
+  });
+  assert.deepEqual(board.tasks[0].extraTopicIds, ["b"]);
+});
+
+test("dinheiro da lista de desejos NÃO soma nos projetos extras", () => {
+  const lista = [
+    tarefa({ id: "w1", topicId: "compras", extraTopicIds: ["casa"], priceCents: 50000 }),
+  ];
+  assert.equal(wishlistTotals(lista, "compras").wantedCents, 50000);
+  // Se contasse aqui também, o total diria que se quer gastar o dobro.
+  assert.equal(wishlistTotals(lista, "casa").wantedCents, 0);
 });

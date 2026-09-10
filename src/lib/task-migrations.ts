@@ -109,6 +109,17 @@ function migrateTask(raw: unknown): Task | null {
       r.energy === "deep" || r.energy === "normal" || r.energy === "quick"
         ? r.energy
         : undefined,
+    // Extras: só strings, sem repetir o principal e sem duplicatas — um id
+    // repetido faria a tarefa ser contada duas vezes no mesmo projeto.
+    extraTopicIds: Array.isArray(r.extraTopicIds)
+      ? [
+          ...new Set(
+            r.extraTopicIds.filter(
+              (id): id is string => typeof id === "string" && !!id && id !== topicId
+            )
+          ),
+        ]
+      : undefined,
     tags: migrateTags(r.tags),
     checklist: migrateChecklist(r.checklist),
     recurrence: migrateRecurrence(r.recurrence) ?? undefined,

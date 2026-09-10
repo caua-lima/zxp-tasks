@@ -85,12 +85,24 @@ export interface TopicProgress {
   percent: number;
 }
 
+/**
+ * A tarefa aparece neste projeto? Vale o principal e os extras.
+ *
+ * Existe como função única porque "pertencer a um projeto" é decidido em
+ * cinco lugares diferentes (filtro, progresso da barra lateral, tópico
+ * travado, quadro, mapa). Espalhar a regra garantiria que um deles ficasse
+ * pra trás e a tarefa sumisse de um lugar só.
+ */
+export function taskBelongsToTopic(task: Task, topicId: string): boolean {
+  return task.topicId === topicId || (task.extraTopicIds ?? []).includes(topicId);
+}
+
 export function calculateTopicProgress(
   tasks: Task[],
   topicId: string,
   today: string = todayISO()
 ): TopicProgress {
-  const topicTasks = tasks.filter((t) => t.topicId === topicId && isActive(t));
+  const topicTasks = tasks.filter((t) => taskBelongsToTopic(t, topicId) && isActive(t));
   const done = topicTasks.filter((t) => t.status === "done").length;
   const overdue = topicTasks.filter((t) => isTaskOverdue(t, today)).length;
   const total = topicTasks.length;
@@ -103,7 +115,7 @@ export function findStuckTopic(tasks: Task[], topics: Topic[]): Topic | null {
   let oldest = Infinity;
   for (const topic of topics) {
     if (topic.archivedAt) continue;
-    const topicTasks = tasks.filter((t) => t.topicId === topic.id && isActive(t));
+    const topicTasks = tasks.filter((t) => taskBelongsToTopic(t, topic.id) && isActive(t));
     if (topicTasks.length === 0) continue;
     const lastUpdate = Math.max(...topicTasks.map((t) => new Date(t.updatedAt).getTime()));
     if (lastUpdate < oldest) {

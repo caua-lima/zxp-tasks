@@ -24,6 +24,12 @@ export interface Recurrence {
 
 export interface Task {
   id: string;
+  /**
+   * Projeto PRINCIPAL da tarefa. Continua sendo um só, e de propósito: é
+   * quem responde "de onde isso saiu" e é o único que conta no dinheiro de
+   * uma lista de desejos — somar o mesmo preço em duas pastas inflaria o
+   * total sem que nada tivesse sido comprado a mais.
+   */
   topicId: string;
   title: string;
   description: string;
@@ -51,6 +57,16 @@ export interface Task {
   priceParts?: string;
   url?: string;
   store?: string;
+
+  /**
+   * Outros projetos em que a tarefa também aparece.
+   *
+   * Existe porque uma mesma coisa pode pertencer a duas frentes — "gravar
+   * aula" é da Mentoria e do Marketing ao mesmo tempo. Guardar só os EXTRAS
+   * (nunca o principal) evita a pergunta "qual dos dois vale?" e mantém
+   * quadros antigos válidos sem migração nenhuma.
+   */
+  extraTopicIds?: string[];
 
   tags: string[];
   checklist: ChecklistItem[];

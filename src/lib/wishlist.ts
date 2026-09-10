@@ -62,6 +62,11 @@ export interface WishlistTotals {
   itemsWithoutPrice: number;
 }
 
+/**
+ * Aqui, e só aqui, vale o projeto PRINCIPAL — os extras ficam de fora de
+ * propósito. Um item que aparece em duas listas somaria o próprio preço nas
+ * duas, e o total diria que se quer gastar o dobro do que se quer.
+ */
 export function wishlistTotals(tasks: Task[], topicId: string): WishlistTotals {
   const items = tasks.filter(
     (t) => t.topicId === topicId && !t.deletedAt && !t.archivedAt

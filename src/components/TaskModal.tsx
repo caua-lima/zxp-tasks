@@ -76,6 +76,8 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
   // já tem conteúdo neles, abrem sozinhos — senão sumiriam da edição.
   const [mostrarDescricao, setMostrarDescricao] = useState((task?.description ?? "") !== "");
   const [mostrarPassos, setMostrarPassos] = useState((task?.checklist ?? []).length > 0);
+  const [extras, setExtras] = useState<string[]>(task?.extraTopicIds ?? []);
+  const [mostrarExtras, setMostrarExtras] = useState((task?.extraTopicIds ?? []).length > 0);
   const [confirmTrash, setConfirmTrash] = useState(false);
   const [titleError, setTitleError] = useState(false);
   const [priceText, setPriceText] = useState(
@@ -89,6 +91,8 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
   // O tipo da pasta escolhida no formulário decide os rótulos e os campos —
   // trocar o tópico no meio da edição troca a cara do modal na hora.
   const selectedTopic = topics.find((t) => t.id === topicId);
+  // Só projetos ativos e diferentes do principal entram como extra.
+  const outrosProjetos = topics.filter((t) => !t.archivedAt && t.id !== topicId);
   const kind = topicKind(selectedTopic);
   const wishlist = kind === "wishlist";
   const preco = priceText.trim() === "" ? null : parseValorComposto(priceText);
@@ -109,6 +113,9 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
       description,
       dueDate: dueDate || undefined,
       topicId,
+      // O principal nunca entra nos extras: seria a mesma tarefa contada
+      // duas vezes no mesmo projeto.
+      extraTopicIds: extras.filter((id) => id !== topicId),
       priority,
       energy: energy || undefined,
       estimatedMinutes: estimate === "" ? undefined : Number(estimate),
@@ -337,6 +344,56 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
               </select>
             </div>
           </div>
+
+          {outrosProjetos.length > 0 &&
+            (mostrarExtras ? (
+              <div>
+                <span className={label}>Também aparece em</span>
+                <p className="mb-2 text-[11px] text-[var(--muted)]">
+                  A tarefa fica visível nesses projetos também. O de cima continua
+                  sendo o principal.
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {outrosProjetos.map((t) => {
+                    const marcado = extras.includes(t.id);
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        aria-pressed={marcado}
+                        onClick={() =>
+                          setExtras((atuais) =>
+                            marcado
+                              ? atuais.filter((id) => id !== t.id)
+                              : [...atuais, t.id]
+                          )
+                        }
+                        className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition ${
+                          marcado
+                            ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-ink)]"
+                            : "border-[var(--border)] text-[var(--muted)] hover:bg-[var(--surface)]"
+                        }`}
+                      >
+                        <span
+                          aria-hidden="true"
+                          className="h-2 w-2 rounded-full"
+                          style={{ backgroundColor: t.color }}
+                        />
+                        {t.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setMostrarExtras(true)}
+                className="block text-xs font-medium text-[var(--accent)] hover:underline"
+              >
+                + Adicionar a outro projeto
+              </button>
+            ))}
 
           {wishlist && (
             <div className="grid gap-3 sm:grid-cols-2">

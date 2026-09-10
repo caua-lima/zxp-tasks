@@ -9,6 +9,7 @@ export interface NewTaskInput {
   priority?: TaskPriority;
   energy?: TaskEnergy;
   estimatedMinutes?: number;
+  extraTopicIds?: string[];
   tags?: string[];
   priceCents?: number;
   priceParts?: string;
@@ -40,6 +41,7 @@ export function createTask(input: NewTaskInput, id: string, now: string): Task {
     priceParts: input.priceParts,
     url: input.url,
     store: input.store,
+    extraTopicIds: input.extraTopicIds,
     tags: input.tags ?? [],
     checklist: [],
     createdAt: now,
