@@ -13,6 +13,7 @@ import {
   isOvertime,
   isRunning,
   progressPercent,
+  isParked,
   ordenarParaExibicao,
   remainingMs,
   scheduleTotals,
@@ -45,6 +46,8 @@ function BlockRow({
   onPause,
   onFinish,
   onSkip,
+  onPark,
+  onResume,
   onReopen,
   onRemove,
 }: {
@@ -57,15 +60,19 @@ function BlockRow({
   onPause: () => void;
   onFinish: () => void;
   onSkip: () => void;
+  onPark: () => void;
+  onResume: () => void;
   onReopen: () => void;
   onRemove: () => void;
 }) {
   const running = isRunning(block);
   const done = !!block.completedAt;
   const naoFeito = !!block.skippedAt;
+  const emEspera = !!block.parkedAt;
+  const retomadoDepois = !!block.resumedAt;
   const semTempo = !!block.openEnded;
   // "Encerrado" cobre os dois desfechos; só o aberto ainda aceita cronômetro.
-  const encerrado = done || naoFeito;
+  const encerrado = done || naoFeito || emEspera;
   const over = isOvertime(block, now);
   const remaining = remainingMs(block, now);
   const spent = elapsedMs(block, now);
@@ -87,7 +94,7 @@ function BlockRow({
       } ${
         running
           ? "border-[var(--accent)]"
-          : naoFeito
+          : naoFeito || emEspera
             ? "border-dashed border-[var(--border)] opacity-70"
             : "border-[var(--border)]"
       }`}
@@ -157,6 +164,11 @@ function BlockRow({
           {naoFeito && (
             <p className="text-[10px] font-medium text-[var(--muted)]">não fiz</p>
           )}
+          {emEspera && (
+            <p className="text-[10px] font-medium text-[var(--accent)]">
+              {retomadoDepois ? "retomado depois" : "em espera"}
+            </p>
+          )}
           {over && !encerrado && (
             <p className="text-[10px] font-medium text-[var(--danger)]">passou do tempo</p>
           )}
@@ -220,7 +232,29 @@ function BlockRow({
             >
               Não fiz
             </button>
+            {spent > 0 && (
+              <button
+                onClick={onPark}
+                title="Começou e vai terminar em outra hora ou outro dia"
+                className="min-h-[44px] rounded-md border border-[var(--border)] px-3 text-sm font-medium text-[var(--muted)] hover:bg-[var(--surface2)]"
+              >
+                Pra depois
+              </button>
+            )}
           </>
+        ) : emEspera && !retomadoDepois ? (
+          <button
+            onClick={onResume}
+            className="min-h-[44px] flex-1 rounded-md border border-[var(--accent)] px-4 text-sm font-semibold text-[var(--accent)] hover:bg-[var(--surface2)]"
+          >
+            Retomar
+          </button>
+        ) : retomadoDepois ? (
+          // Já continua em outro dia: reabrir aqui criaria dois blocos contando
+          // o mesmo trabalho.
+          <span className="flex min-h-[44px] flex-1 items-center justify-center text-xs text-[var(--muted)]">
+            Continua em outro dia
+          </span>
         ) : (
           <button
             onClick={onReopen}
@@ -257,6 +291,8 @@ export function ScheduleView() {
     pauseTimer,
     finishBlock,
     skipBlockToday,
+    parkBlockLater,
+    resumeParkedBlock,
     reopenTimer,
     copyDay,
   } = useApp();
@@ -274,6 +310,19 @@ export function ScheduleView() {
 
   const blocks = useMemo(
     () => ordenarParaExibicao(blocksOfDay(schedule, date)),
+    [schedule, date]
+  );
+
+  /**
+   * Tudo que foi guardado pra depois e ainda não voltou, de QUALQUER dia.
+   * Os do dia aberto na tela ficam de fora: já aparecem na própria lista, com
+   * o botão "Retomar" — listar duas vezes seria ruído.
+   */
+  const blocosEmEspera = useMemo(
+    () =>
+      schedule
+        .filter((b) => isParked(b) && b.date !== date)
+        .sort((a, b) => (a.parkedAt! < b.parkedAt! ? 1 : -1)),
     [schedule, date]
   );
 
@@ -667,6 +716,48 @@ export function ScheduleView() {
         ☕ Intervalo de {BREAK_MINUTES} min
       </button>
 
+      {blocosEmEspera.length > 0 && (
+        <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+          <h2 className="text-sm font-semibold text-[var(--foreground)]">
+            Em espera{" "}
+            <span className="tabular-nums text-[var(--muted)]">({blocosEmEspera.length})</span>
+          </h2>
+          <p className="mt-0.5 text-[11px] text-[var(--muted)]">
+            Começados e guardados pra depois. Retomar traz pro dia de hoje, e o
+            tempo já feito continua contado no dia em que foi feito.
+          </p>
+          <ul className="mt-2 space-y-1.5">
+            {blocosEmEspera.map((b) => (
+              <li
+                key={b.id}
+                className="flex items-center gap-2 rounded-lg border border-dashed border-[var(--border)] px-3 py-2"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm text-[var(--foreground)]">{b.title}</p>
+                  <p className="text-[11px] tabular-nums text-[var(--muted)]">
+                    {new Date(b.date + "T00:00:00").toLocaleDateString("pt-BR", {
+                      day: "2-digit",
+                      month: "short",
+                    })}{" "}
+                    · {formatDuration(elapsedMs(b, now))} feitos
+                    {nomeDoProjeto(b.topicId) && ` · ${nomeDoProjeto(b.topicId)}`}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    resumeParkedBlock(b.id);
+                    showToast(`"${b.title}" voltou pro cronograma de hoje.`);
+                  }}
+                  className="min-h-[40px] shrink-0 rounded-md border border-[var(--accent)] px-3 text-xs font-semibold text-[var(--accent)] hover:bg-[var(--surface2)]"
+                >
+                  Retomar hoje
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {blocks.length === 0 ? (
         <div className="rounded-xl border border-dashed border-[var(--border)] p-6 text-center">
           <p className="text-sm text-[var(--muted)]">
@@ -728,6 +819,19 @@ export function ScheduleView() {
                 cancelarFim(block.id);
                 limparAvisoDeInicio();
                 showToast("Marcado como não feito.", () => reopenTimer(block.id));
+              }}
+              onPark={() => {
+                parkBlockLater(block.id);
+                cancelarFim(block.id);
+                limparAvisoDeInicio();
+                showToast(
+                  "Guardado pra depois — o tempo feito fica contado hoje.",
+                  () => reopenTimer(block.id)
+                );
+              }}
+              onResume={() => {
+                resumeParkedBlock(block.id);
+                showToast("De volta ao cronograma. É só tocar em Começar.");
               }}
               onReopen={() => reopenTimer(block.id)}
               onRemove={() => setConfirmRemove(block)}

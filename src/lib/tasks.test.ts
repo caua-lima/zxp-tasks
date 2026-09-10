@@ -18,8 +18,11 @@ import {
   completedBlockData,
   extendBlock,
   isFinished,
+  isParked,
   ordenarParaExibicao,
+  parkBlock,
   plannedMs,
+  retomarBloco,
   skipBlock,
 } from "./schedule";
 import {
@@ -1722,4 +1725,83 @@ test("dinheiro da lista de desejos NÃO soma nos projetos extras", () => {
   assert.equal(wishlistTotals(lista, "compras").wantedCents, 50000);
   // Se contasse aqui também, o total diria que se quer gastar o dobro.
   assert.equal(wishlistTotals(lista, "casa").wantedCents, 0);
+});
+
+// ── Pra depois (bloco em espera) ─────────────────────────────────────────
+
+test("guardar pra depois congela o tempo e tira o bloco da frente", () => {
+  const b = {
+    ...bloco({ id: "a", date: "2026-09-09", plannedMinutes: 60 }),
+    startedAt: "2026-09-09T12:00:00.000Z",
+  };
+  const p = parkBlock(b, "2026-09-09T12:20:00.000Z");
+  assert.equal(p.accumulatedMs, 20 * 60_000);
+  assert.equal(p.startedAt, undefined);
+  assert.equal(isFinished(p), true);
+  assert.equal(isParked(p), true);
+  // Não é conclusão nem "não fiz".
+  assert.equal(p.completedAt, undefined);
+  assert.equal(p.skippedAt, undefined);
+});
+
+test("retomar no mesmo dia só reabre, sem criar bloco novo", () => {
+  const p = { ...bloco({ id: "a", date: "2026-09-10" }), parkedAt: "2026-09-10T12:00:00.000Z" };
+  const { antigo, novo } = retomarBloco(p, "2026-09-10", "2026-09-10T15:00:00.000Z", "n", 3);
+  assert.equal(novo, null);
+  assert.equal(antigo.parkedAt, undefined);
+  assert.equal(isFinished(antigo), false);
+});
+
+test("retomar em outro dia deixa o tempo no dia antigo e cria continuação hoje", () => {
+  const p = {
+    ...bloco({ id: "a", date: "2026-09-09", plannedMinutes: 60, topicId: "t1", taskId: "k1" }),
+    accumulatedMs: 20 * 60_000,
+    parkedAt: "2026-09-09T13:00:00.000Z",
+  };
+  const { antigo, novo } = retomarBloco(p, "2026-09-10", "2026-09-10T09:00:00.000Z", "n1", 2);
+  // O antigo não muda de dia nem perde os 20 minutos de ontem.
+  assert.equal(antigo.date, "2026-09-09");
+  assert.equal(antigo.accumulatedMs, 20 * 60_000);
+  assert.equal(antigo.resumedAt, "2026-09-10T09:00:00.000Z");
+  assert.equal(isParked(antigo), false);
+  // O novo começa do zero, hoje, com o que faltava e o mesmo vínculo.
+  assert.ok(novo);
+  assert.equal(novo!.date, "2026-09-10");
+  assert.equal(novo!.accumulatedMs, 0);
+  assert.equal(novo!.plannedMinutes, 40);
+  assert.equal(novo!.taskId, "k1");
+  assert.equal(novo!.continuaDe, "a");
+});
+
+test("retomar bloco que já tinha estourado volta com o planejado original", () => {
+  const p = {
+    ...bloco({ id: "a", date: "2026-09-09", plannedMinutes: 30 }),
+    accumulatedMs: 45 * 60_000,
+    parkedAt: "2026-09-09T13:00:00.000Z",
+  };
+  const { novo } = retomarBloco(p, "2026-09-10", "2026-09-10T09:00:00.000Z", "n", 0);
+  assert.equal(novo!.plannedMinutes, 30);
+});
+
+test("reabrir limpa também a espera", () => {
+  const p = { ...bloco({ id: "a", date: "d" }), parkedAt: "2026-09-09T13:00:00.000Z" };
+  const r = reopenBlock(p);
+  assert.equal(r.parkedAt, undefined);
+  assert.equal(isFinished(r), false);
+});
+
+test("migração preserva a espera do bloco", () => {
+  const board = migrateBoard({
+    topics: [],
+    tasks: [],
+    schedule: [
+      {
+        id: "a", date: "2026-09-09", title: "X", plannedMinutes: 30, accumulatedMs: 0, order: 0,
+        parkedAt: "2026-09-09T13:00:00.000Z", resumedAt: "2026-09-10T09:00:00.000Z", continuaDe: "z",
+      },
+    ],
+  });
+  assert.equal(board.schedule[0].parkedAt, "2026-09-09T13:00:00.000Z");
+  assert.equal(board.schedule[0].resumedAt, "2026-09-10T09:00:00.000Z");
+  assert.equal(board.schedule[0].continuaDe, "z");
 });

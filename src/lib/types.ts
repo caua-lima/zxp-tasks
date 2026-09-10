@@ -138,6 +138,21 @@ export interface ScheduleBlock {
    * no relatório.
    */
   skippedAt?: string;
+  /**
+   * "Pra depois": começou, não terminou, e vai ser retomado em outra hora
+   * ou outro dia. Não é "não fiz" (houve trabalho) nem "concluído" (não
+   * acabou). O tempo gasto continua contando no dia em que foi gasto.
+   */
+  parkedAt?: string;
+  /**
+   * Quando um bloco em espera foi retomado NUM OUTRO DIA. Retomar cria um
+   * bloco novo no dia de hoje e marca este — assim o tempo de cada dia
+   * continua no seu dia, em vez de o bloco inteiro "mudar de data" e levar
+   * junto horas que foram trabalhadas antes.
+   */
+  resumedAt?: string;
+  /** Bloco em espera de onde este aqui continua, quando for o caso. */
+  continuaDe?: string;
   order: number;
   /**
    * Projeto a que este bloco pertence, e a tarefa criada junto com ele.

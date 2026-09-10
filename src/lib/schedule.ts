@@ -10,8 +10,17 @@ export function isRunning(block: ScheduleBlock): boolean {
 }
 
 /** Concluído OU marcado como não feito — os dois encerram o bloco. */
+/**
+ * Encerrado no dia: concluído, marcado como não feito, ou guardado pra
+ * depois. Os três tiram o bloco da frente da lista e desligam o cronômetro.
+ */
 export function isFinished(block: ScheduleBlock): boolean {
-  return !!block.completedAt || !!block.skippedAt;
+  return !!block.completedAt || !!block.skippedAt || !!block.parkedAt;
+}
+
+/** Guardado pra depois e ainda não retomado — é o que aparece em "Em espera". */
+export function isParked(block: ScheduleBlock): boolean {
+  return !!block.parkedAt && !block.resumedAt;
 }
 
 /**
@@ -104,8 +113,78 @@ export function skipBlock(
   return { ...frozen, skippedAt: block.skippedAt ?? nowIso, completedAt: undefined };
 }
 
+/**
+ * Guarda o bloco pra depois. Congela o cronômetro como concluir e "não fiz"
+ * fazem: o tempo já gasto é trabalho real e fica registrado neste dia.
+ */
+export function parkBlock(
+  block: ScheduleBlock,
+  nowIso: string = new Date().toISOString()
+): ScheduleBlock {
+  const frozen = pauseBlock(block, new Date(nowIso).getTime());
+  return {
+    ...frozen,
+    parkedAt: block.parkedAt ?? nowIso,
+    resumedAt: undefined,
+    completedAt: undefined,
+    skippedAt: undefined,
+  };
+}
+
+/**
+ * Retoma um bloco em espera.
+ *
+ * No MESMO dia, ele só volta a ficar aberto — nada a separar. Em OUTRO dia,
+ * o bloco antigo fica onde está (marcado como retomado) e nasce um bloco
+ * novo hoje, ligado à mesma tarefa. Mover o antigo pra hoje levaria junto o
+ * tempo trabalhado ontem, e o relatório passaria a mentir sobre os dois dias.
+ *
+ * O bloco novo começa com o que FALTAVA do planejado; se já tinha estourado,
+ * volta com o planejado original em vez de um prazo zero ou negativo.
+ */
+export function retomarBloco(
+  block: ScheduleBlock,
+  hoje: string,
+  nowIso: string,
+  novoId: string,
+  proximaOrdem: number
+): { antigo: ScheduleBlock; novo: ScheduleBlock | null } {
+  if (block.date === hoje) {
+    return { antigo: { ...block, parkedAt: undefined, resumedAt: undefined }, novo: null };
+  }
+
+  const faltavaMin = Math.ceil((block.plannedMinutes * MINUTE_MS - block.accumulatedMs) / MINUTE_MS);
+  const plannedMinutes = block.openEnded
+    ? block.plannedMinutes
+    : faltavaMin > 0
+      ? faltavaMin
+      : block.plannedMinutes;
+
+  return {
+    antigo: { ...block, resumedAt: nowIso },
+    novo: {
+      id: novoId,
+      date: hoje,
+      title: block.title,
+      plannedMinutes,
+      accumulatedMs: 0,
+      order: proximaOrdem,
+      topicId: block.topicId,
+      taskId: block.taskId,
+      openEnded: block.openEnded,
+      continuaDe: block.id,
+    },
+  };
+}
+
 export function reopenBlock(block: ScheduleBlock): ScheduleBlock {
-  return { ...block, completedAt: undefined, skippedAt: undefined };
+  return {
+    ...block,
+    completedAt: undefined,
+    skippedAt: undefined,
+    parkedAt: undefined,
+    resumedAt: undefined,
+  };
 }
 
 /** Zera o cronômetro sem apagar o bloco. */
@@ -116,6 +195,8 @@ export function resetBlock(block: ScheduleBlock): ScheduleBlock {
     startedAt: undefined,
     completedAt: undefined,
     skippedAt: undefined,
+    parkedAt: undefined,
+    resumedAt: undefined,
   };
 }
 

@@ -184,6 +184,9 @@ function migrateScheduleBlock(raw: unknown): ScheduleBlock | null {
     taskId: asString(r.taskId),
     isBreak: r.isBreak === true,
     openEnded: r.openEnded === true,
+    parkedAt: asString(r.parkedAt),
+    resumedAt: asString(r.resumedAt),
+    continuaDe: asString(r.continuaDe),
   };
 }
 

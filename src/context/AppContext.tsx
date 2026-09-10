@@ -35,9 +35,11 @@ import {
   completeBlock,
   completedBlockData,
   extendBlock,
+  parkBlock,
   pauseBlock,
   reopenBlock,
   resetBlock,
+  retomarBloco,
   skipBlock,
   startBlock,
 } from "@/lib/schedule";
@@ -100,6 +102,10 @@ interface AppContextValue {
   finishBlock: (id: string) => void;
   /** Encerra o bloco como "não fiz" — sem mexer na tarefa do projeto. */
   skipBlockToday: (id: string) => void;
+  /** Guarda o bloco pra retomar em outra hora ou outro dia. */
+  parkBlockLater: (id: string) => void;
+  /** Traz um bloco em espera de volta pro cronograma de hoje. */
+  resumeParkedBlock: (id: string) => void;
   /**
    * Começa a tarefa agora: cria (ou reaproveita) o bloco de hoje e liga o
    * cronômetro. Devolve false se a tarefa não existir mais.
@@ -779,6 +785,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
+  /**
+   * Guarda pra depois sem mexer na tarefa do projeto: ela começou e não
+   * terminou, então "Fazendo" continua sendo a verdade.
+   */
+  const parkBlockLater = useCallback((id: string) => {
+    const nowIso = new Date().toISOString();
+    setBoard((b) => ({
+      ...b,
+      schedule: b.schedule.map((x) => (x.id === id ? parkBlock(x, nowIso) : x)),
+    }));
+  }, []);
+
+  const resumeParkedBlock = useCallback((id: string) => {
+    const nowIso = new Date().toISOString();
+    const hoje = todayISO();
+    const novoId = uuid();
+    setBoard((b) => {
+      const block = b.schedule.find((x) => x.id === id);
+      // Retomar duas vezes não pode criar duas continuações do mesmo bloco.
+      if (!block || !block.parkedAt || block.resumedAt) return b;
+      const doDia = b.schedule.filter((x) => x.date === hoje);
+      const proxima = doDia.length === 0 ? 0 : Math.max(...doDia.map((x) => x.order)) + 1;
+      const { antigo, novo } = retomarBloco(block, hoje, nowIso, novoId, proxima);
+      const schedule = b.schedule.map((x) => (x.id === id ? antigo : x));
+      return { ...b, schedule: novo ? [...schedule, novo] : schedule };
+    });
+  }, []);
+
   const reopenTimer = useCallback((id: string) => {
     setBoard((b) => ({
       ...b,
@@ -876,6 +910,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       pauseTimer,
       finishBlock,
       skipBlockToday,
+      parkBlockLater,
+      resumeParkedBlock,
       startTaskNow,
       reopenTimer,
       resetTimer,
@@ -918,6 +954,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       pauseTimer,
       finishBlock,
       skipBlockToday,
+      parkBlockLater,
+      resumeParkedBlock,
       startTaskNow,
       reopenTimer,
       resetTimer,
