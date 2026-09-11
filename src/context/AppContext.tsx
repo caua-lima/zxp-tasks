@@ -13,6 +13,7 @@ import { v4 as uuid } from "uuid";
 import {
   Board,
   BoardSettings,
+  Grupo,
   ScheduleBlock,
   Task,
   TaskStatus,
@@ -68,11 +69,17 @@ interface AppContextValue {
   tasks: Task[];
   board: Board;
   ready: boolean;
-  addTopic: (name: string, kind?: TopicKind) => Topic;
+  addTopic: (name: string, kind?: TopicKind, groupId?: string) => Topic;
   updateTopic: (id: string, patch: Partial<Omit<Topic, "id" | "createdAt">>) => void;
   archiveTopic: (id: string) => void;
   restoreTopic: (id: string) => void;
   deleteTopic: (id: string) => void;
+  /** Seções da barra lateral — de "Projetos"/"Trabalho" fixos a qualquer nome. */
+  groups: Grupo[];
+  addGroup: (name: string) => Grupo;
+  renameGroup: (id: string, name: string) => void;
+  /** Tópicos do grupo apagado não somem — ficam sem grupo ("Outros"). */
+  deleteGroup: (id: string) => void;
   addTask: (input: NewTaskInput) => Task;
   updateTask: (id: string, patch: Partial<Omit<Task, "id" | "createdAt">>) => void;
   setTaskStatus: (id: string, status: TaskStatus) => void;
@@ -331,19 +338,61 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [board, ready, userId]);
 
   const addTopic = useCallback(
-    (name: string, kind: TopicKind = "project") => {
-      const topic: Topic = {
-        id: uuid(),
-        name: name.trim(),
-        color: nextTopicColor(board.topics.length),
-        kind,
-        createdAt: new Date().toISOString(),
-      };
-      setBoard((b) => ({ ...b, topics: [...b.topics, topic] }));
+    (name: string, kind: TopicKind = "project", groupId?: string) => {
+      const id = uuid();
+      const createdAt = new Date().toISOString();
+      let topic!: Topic;
+      setBoard((b) => {
+        topic = {
+          id,
+          name: name.trim(),
+          color: nextTopicColor(b.topics.length),
+          kind,
+          // Sem grupo escolhido, cai no primeiro que existir — só fica
+          // realmente sem grupo em quadro que ainda não tem nenhum.
+          groupId: groupId ?? b.groups[0]?.id,
+          createdAt,
+        };
+        return { ...b, topics: [...b.topics, topic] };
+      });
       return topic;
     },
-    [board.topics.length]
+    []
   );
+
+  const addGroup = useCallback((name: string) => {
+    const id = uuid();
+    const createdAt = new Date().toISOString();
+    let grupo!: Grupo;
+    setBoard((b) => {
+      grupo = {
+        id,
+        name: name.trim(),
+        order: b.groups.length === 0 ? 0 : Math.max(...b.groups.map((g) => g.order)) + 1,
+        createdAt,
+      };
+      return { ...b, groups: [...b.groups, grupo] };
+    });
+    return grupo;
+  }, []);
+
+  const renameGroup = useCallback((id: string, name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setBoard((b) => ({
+      ...b,
+      groups: b.groups.map((g) => (g.id === id ? { ...g, name: trimmed } : g)),
+    }));
+  }, []);
+
+  const deleteGroup = useCallback((id: string) => {
+    setBoard((b) => ({
+      ...b,
+      groups: b.groups.filter((g) => g.id !== id),
+      // Tópicos do grupo apagado não somem — ficam sem grupo ("Outros").
+      topics: b.topics.map((t) => (t.groupId === id ? { ...t, groupId: undefined } : t)),
+    }));
+  }, []);
 
   const updateTopic = useCallback(
     (id: string, patch: Partial<Omit<Topic, "id" | "createdAt">>) => {
@@ -1044,6 +1093,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       archiveTopic,
       restoreTopic,
       deleteTopic,
+      groups: board.groups ?? [],
+      addGroup,
+      renameGroup,
+      deleteGroup,
       addTask,
       updateTask,
       setTaskStatus,
@@ -1098,6 +1151,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       archiveTopic,
       restoreTopic,
       deleteTopic,
+      addGroup,
+      renameGroup,
+      deleteGroup,
       addTask,
       updateTask,
       setTaskStatus,

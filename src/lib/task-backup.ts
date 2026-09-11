@@ -116,6 +116,12 @@ export function mergeBoards(
   const novosTopicos = remote.topics.filter((t) => !topicIds.has(t.id));
   for (const t of novosTopicos) topicIds.add(t.id);
 
+  // Grupos (seções da barra lateral): por id, local vence em empate — é a
+  // organização que a pessoa está vendo na tela agora.
+  const gruposLocais = local.groups ?? [];
+  const idsGruposLocais = new Set(gruposLocais.map((g) => g.id));
+  const novosGrupos = (remote.groups ?? []).filter((g) => !idsGruposLocais.has(g.id));
+
   const taskIds = new Set(local.tasks.map((t) => t.id));
   const novasTarefas = remote.tasks.filter(
     // Tarefa cujo tópico não existe em lugar nenhum ficaria invisível.
@@ -175,6 +181,7 @@ export function mergeBoards(
   return {
     board: {
       ...local,
+      groups: [...gruposLocais, ...novosGrupos],
       topics: [...local.topics, ...novosTopicos],
       tasks: [...local.tasks, ...novasTarefas],
       schedule: [...local.schedule, ...novosBlocos],

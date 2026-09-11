@@ -2286,6 +2286,46 @@ test("intervalo não conclui sozinho mesmo passando de qualquer teto", () => {
   assert.equal(autoConcluirBlocos(board, agora).mudou, false);
 });
 
+// ── Grupos personalizáveis na barra lateral ───────────────────────────────
+
+test("quadro de antes dos grupos nasce com as três seções que já existiam", () => {
+  const b = migrateBoard({
+    topics: [
+      { id: "p", name: "Mentoria", kind: "project" },
+      { id: "w", name: "Pronix", kind: "work" },
+      { id: "d", name: "Casa nova", kind: "wishlist" },
+    ],
+    tasks: [],
+  });
+  assert.equal(b.groups.length, 3);
+  const nomes = b.groups.map((g) => g.name).sort();
+  assert.deepEqual(nomes, ["Conquistas pessoais", "Projetos", "Trabalho"]);
+  const grupoDe = (topicId: string) =>
+    b.groups.find((g) => g.id === b.topics.find((t) => t.id === topicId)!.groupId)?.name;
+  assert.equal(grupoDe("p"), "Projetos");
+  assert.equal(grupoDe("w"), "Trabalho");
+  assert.equal(grupoDe("d"), "Conquistas pessoais");
+});
+
+test("só nasce seção pra vertente que estava realmente em uso", () => {
+  const b = migrateBoard({ topics: [{ id: "p", name: "Mentoria", kind: "project" }], tasks: [] });
+  assert.deepEqual(b.groups.map((g) => g.name), ["Projetos"]);
+});
+
+test("quadro sem tópico nenhum não inventa grupo", () => {
+  assert.deepEqual(migrateBoard({ topics: [], tasks: [] }).groups, []);
+});
+
+test("tópico já com grupo próprio não é reatribuído pela migração", () => {
+  const b = migrateBoard({
+    topics: [{ id: "p", name: "Mentoria", kind: "project", groupId: "meu-grupo" }],
+    tasks: [],
+    groups: [{ id: "meu-grupo", name: "Meus projetos" }],
+  });
+  assert.equal(b.topics[0].groupId, "meu-grupo");
+  assert.deepEqual(b.groups.map((g) => g.name), ["Meus projetos"]);
+});
+
 test("migração aceita o teto de auto-conclusão só quando é um número positivo", () => {
   const b = migrateBoard({
     topics: [

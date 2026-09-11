@@ -3,11 +3,13 @@ import {
   ChecklistItem,
   ScheduleBlock,
   CURRENT_SCHEMA_VERSION,
+  Grupo,
   Recurrence,
   Task,
   TaskPriority,
   TaskStatus,
   Topic,
+  TopicKind,
   Meta,
   Programacao,
   WeeklyReviewNote,
@@ -162,10 +164,35 @@ function migrateTopic(raw: unknown): Topic | null {
       r.autoCompleteMinutes > 0
         ? Math.round(r.autoCompleteMinutes)
         : undefined,
+    groupId: asString(r.groupId),
     createdAt: asString(r.createdAt) ?? SAFE_FALLBACK_DATE,
     archivedAt: asString(r.archivedAt) ?? undefined,
   };
 }
+
+function migrateGrupo(raw: unknown): Grupo | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const name = asString(r.name);
+  if (!name) return null;
+  return {
+    id: asString(r.id) ?? crypto.randomUUID(),
+    name,
+    order: typeof r.order === "number" && Number.isFinite(r.order) ? r.order : 0,
+    createdAt: asString(r.createdAt) ?? SAFE_FALLBACK_DATE,
+  };
+}
+
+/**
+ * Nomes e ids fixos das três seções de sempre — usados só UMA vez, pra
+ * quadro de antes dos grupos personalizados nascer organizado do jeito que
+ * já estava, em vez de largar tudo num "Outros" só porque o recurso é novo.
+ */
+const GRUPO_PADRAO: Record<TopicKind, { id: string; name: string; order: number }> = {
+  project: { id: "grupo-projetos", name: "Projetos", order: 0 },
+  work: { id: "grupo-trabalho", name: "Trabalho", order: 1 },
+  wishlist: { id: "grupo-conquistas", name: "Conquistas pessoais", order: 2 },
+};
 
 type SessaoBruta = { start: string; end: string };
 
@@ -323,9 +350,26 @@ export function migrateBoard(raw: unknown): Board {
   if (!raw || typeof raw !== "object") return emptyBoard();
   const r = raw as Record<string, unknown>;
 
-  const topics = Array.isArray(r.topics)
+  let topics = Array.isArray(r.topics)
     ? r.topics.map(migrateTopic).filter((t): t is Topic => t !== null)
     : [];
+
+  let groups = Array.isArray(r.groups)
+    ? r.groups.map(migrateGrupo).filter((g): g is Grupo => g !== null)
+    : [];
+
+  // Quadro de antes dos grupos personalizados: nasce com as três seções que
+  // já existiam (uma por vertente em uso), pra ninguém abrir o app depois
+  // da atualização e ver tudo despejado num "Outros" só.
+  if (groups.length === 0 && topics.length > 0) {
+    const emUso = new Set(topics.map((t) => t.kind ?? "project"));
+    groups = (Object.keys(GRUPO_PADRAO) as TopicKind[])
+      .filter((kind) => emUso.has(kind))
+      .map((kind) => ({ ...GRUPO_PADRAO[kind], createdAt: SAFE_FALLBACK_DATE }));
+    topics = topics.map((t) =>
+      t.groupId ? t : { ...t, groupId: GRUPO_PADRAO[t.kind ?? "project"].id }
+    );
+  }
   const tasks = Array.isArray(r.tasks)
     ? r.tasks.map(migrateTask).filter((t): t is Task => t !== null)
     : [];
@@ -352,6 +396,7 @@ export function migrateBoard(raw: unknown): Board {
     schemaVersion: CURRENT_SCHEMA_VERSION,
     metas,
     programacoes,
+    groups,
     topics,
     tasks,
     schedule,

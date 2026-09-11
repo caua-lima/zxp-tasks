@@ -108,8 +108,29 @@ export interface Topic {
    * acabou e ninguém voltou pra fechar.
    */
   autoCompleteMinutes?: number;
+  /**
+   * Em qual grupo da barra lateral este tópico aparece. Sem grupo (tópico
+   * de antes deste recurso existir, ou grupo apagado depois) cai numa
+   * seção "Outros" — nada some, só fica sem pasta por cima.
+   */
+  groupId?: string;
   createdAt: string;
   archivedAt?: string | null;
+}
+
+/**
+ * Uma seção da barra lateral, do jeito que a pessoa quiser organizar —
+ * "Projetos", "Trabalho" e "Conquistas pessoais" nasceram fixas, mas
+ * viraram só o ponto de partida: dá pra renomear, criar outras e mover
+ * tópicos entre elas. `kind` (em `Topic`) continua controlando só o
+ * COMPORTAMENTO de lista de desejos; a organização visual é toda daqui.
+ */
+export interface Grupo {
+  id: string;
+  name: string;
+  /** Ordem de exibição — menor primeiro. */
+  order: number;
+  createdAt: string;
 }
 
 /** Um intervalo de tempo de verdade: início e fim, não só a duração. */
@@ -303,6 +324,7 @@ export interface Board {
   settings: BoardSettings;
   metas: Meta[];
   programacoes: Programacao[];
+  groups: Grupo[];
 }
 
 export const CURRENT_SCHEMA_VERSION = 4;
@@ -318,5 +340,6 @@ export function emptyBoard(): Board {
     settings: { parallelTimers: false },
     metas: [],
     programacoes: [],
+    groups: [],
   };
 }
