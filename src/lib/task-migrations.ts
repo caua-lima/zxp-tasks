@@ -156,6 +156,12 @@ function migrateTopic(raw: unknown): Topic | null {
       typeof r.budgetCents === "number" && Number.isFinite(r.budgetCents) && r.budgetCents >= 0
         ? Math.round(r.budgetCents)
         : undefined,
+    autoCompleteMinutes:
+      typeof r.autoCompleteMinutes === "number" &&
+      Number.isFinite(r.autoCompleteMinutes) &&
+      r.autoCompleteMinutes > 0
+        ? Math.round(r.autoCompleteMinutes)
+        : undefined,
     createdAt: asString(r.createdAt) ?? SAFE_FALLBACK_DATE,
     archivedAt: asString(r.archivedAt) ?? undefined,
   };

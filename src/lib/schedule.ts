@@ -1,4 +1,6 @@
-import { ScheduleBlock } from "./types";
+import { Board, ScheduleBlock } from "./types";
+import { aplicarMetasDoBloco } from "./metas";
+import { todayISO } from "./date-utils";
 
 export const MINUTE_MS = 60_000;
 
@@ -282,6 +284,47 @@ export function completedBlockData(minutosGastos: number, nowIso: string) {
     accumulatedMs: minutos * MINUTE_MS,
     completedAt: nowIso,
   };
+}
+
+/**
+ * Fecha sozinho um bloco que passou do teto de tempo do PROJETO — "pedido de
+ * agência não passa de 30 min, se chegou lá é porque esqueci de concluir".
+ *
+ * Só bloco de trabalho (não intervalo) rodando de verdade entra na checagem;
+ * sem `topicId` não há de onde ler o teto. Idempotente como
+ * `materializarProgramacoes`: sem nada pra fechar, devolve o MESMO board.
+ */
+export function autoConcluirBlocos(
+  board: Board,
+  now: number = Date.now()
+): { board: Board; mudou: boolean } {
+  const nowIso = new Date(now).toISOString();
+  let atual = board;
+  let mudou = false;
+
+  for (const block of board.schedule) {
+    if (block.isBreak || !block.topicId || !isRunning(block)) continue;
+    const limite = atual.topics.find((t) => t.id === block.topicId)?.autoCompleteMinutes;
+    if (!limite || elapsedMs(block, now) < limite * MINUTE_MS) continue;
+
+    mudou = true;
+    const task = block.taskId ? atual.tasks.find((t) => t.id === block.taskId) : undefined;
+    const concluirTarefa = task && task.status !== "done";
+    atual = {
+      ...atual,
+      schedule: atual.schedule.map((x) => (x.id === block.id ? completeBlock(x, nowIso) : x)),
+      tasks: concluirTarefa
+        ? atual.tasks.map((t) =>
+            t.id === task!.id
+              ? { ...t, status: "done" as const, completedAt: nowIso, updatedAt: nowIso }
+              : t
+          )
+        : atual.tasks,
+    };
+    atual = aplicarMetasDoBloco(atual, block, todayISO());
+  }
+
+  return mudou ? { board: atual, mudou } : { board, mudou };
 }
 
 /** Minutos padrão de um intervalo — o "10 minutinhos off". */

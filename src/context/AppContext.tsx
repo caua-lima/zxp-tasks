@@ -46,6 +46,7 @@ import {
   novaProgramacao,
 } from "@/lib/programacao";
 import {
+  autoConcluirBlocos,
   completeBlock,
   completedBlockData,
   extendBlock,
@@ -260,10 +261,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!ready) return;
     function aplicar() {
       setBoard((b) => {
-        const r = materializarProgramacoes(b, todayISO(), Date.now());
+        const r1 = materializarProgramacoes(b, todayISO(), Date.now());
+        // Mesma checagem que abre o expediente sozinho também fecha, no
+        // outro sentido, quem passou do teto de tempo do projeto e ninguém
+        // voltou pra concluir.
+        const r2 = autoConcluirBlocos(r1.board, Date.now());
         // Devolve o MESMO objeto quando nada mudou: sem isto, cada minuto
         // dispararia uma gravação e uma sincronização à toa.
-        return r.mudou ? r.board : b;
+        return r1.mudou || r2.mudou ? r2.board : b;
       });
     }
     // Primeira rodada fora do corpo do efeito, e não como setState síncrono.

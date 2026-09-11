@@ -100,6 +100,14 @@ export interface Topic {
   kind?: TopicKind;
   /** Meta de gasto da lista de desejos, em centavos. */
   budgetCents?: number;
+  /**
+   * Conclui sozinho um bloco deste projeto que passou de tantos minutos
+   * rodando. Existe pra quem tem um tipo de tarefa com teto conhecido —
+   * "pedido de agência não passa de 30 min" — e esquece de apertar
+   * "Concluir": se o cronômetro passou do teto, muito provavelmente já
+   * acabou e ninguém voltou pra fechar.
+   */
+  autoCompleteMinutes?: number;
   createdAt: string;
   archivedAt?: string | null;
 }

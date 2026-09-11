@@ -63,6 +63,8 @@ export function ProjectView({ topicId }: { topicId: string }) {
   const [confirmArchive, setConfirmArchive] = useState(false);
   const [editingDescription, setEditingDescription] = useState(false);
   const [descriptionDraft, setDescriptionDraft] = useState("");
+  const [editingAutoComplete, setEditingAutoComplete] = useState(false);
+  const [autoCompleteDraft, setAutoCompleteDraft] = useState("");
 
   const topic = topics.find((t) => t.id === topicId);
 
@@ -165,6 +167,67 @@ export function ProjectView({ topicId }: { topicId: string }) {
                 {topic.description || "+ Adicionar descrição"}
               </button>
             )}
+
+            {!wishlist &&
+              (editingAutoComplete ? (
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <span className="text-xs text-[var(--muted)]">Concluir sozinho após</span>
+                  <input
+                    autoFocus
+                    type="number"
+                    min={1}
+                    value={autoCompleteDraft}
+                    onChange={(e) => setAutoCompleteDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        const min = Math.round(Number(autoCompleteDraft));
+                        updateTopic(topicId, {
+                          autoCompleteMinutes: min > 0 ? min : undefined,
+                        });
+                        setEditingAutoComplete(false);
+                      }
+                      if (e.key === "Escape") setEditingAutoComplete(false);
+                    }}
+                    aria-label="Concluir sozinho depois de quantos minutos"
+                    className="min-h-[32px] w-16 rounded-md border border-[var(--border)] bg-[var(--surface2)] px-2 text-xs tabular-nums text-[var(--foreground)] outline-none focus:border-[var(--focus)]"
+                  />
+                  <span className="text-xs text-[var(--muted)]">min</span>
+                  <button
+                    onClick={() => {
+                      const min = Math.round(Number(autoCompleteDraft));
+                      updateTopic(topicId, { autoCompleteMinutes: min > 0 ? min : undefined });
+                      setEditingAutoComplete(false);
+                    }}
+                    className="rounded-md bg-[var(--accent)] px-2.5 py-1 text-xs font-medium text-[var(--accent-ink)]"
+                  >
+                    Salvar
+                  </button>
+                  {topic.autoCompleteMinutes && (
+                    <button
+                      onClick={() => {
+                        updateTopic(topicId, { autoCompleteMinutes: undefined });
+                        setEditingAutoComplete(false);
+                      }}
+                      className="text-xs text-[var(--muted)] hover:text-[var(--danger)]"
+                    >
+                      Desligar
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <button
+                  onClick={() => {
+                    setAutoCompleteDraft(String(topic.autoCompleteMinutes ?? ""));
+                    setEditingAutoComplete(true);
+                  }}
+                  className="mt-1 block text-left text-xs text-[var(--muted)] hover:text-[var(--foreground)]"
+                  title="Ex: pedido de agência não passa de 30 min — se o cronômetro chegar lá, provavelmente foi esquecido rodando"
+                >
+                  {topic.autoCompleteMinutes
+                    ? `⏱ Conclui sozinho depois de ${topic.autoCompleteMinutes} min`
+                    : "+ Concluir sozinho depois de X min"}
+                </button>
+              ))}
           </div>
 
           <div className="flex shrink-0 gap-2">

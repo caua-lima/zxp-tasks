@@ -32,6 +32,7 @@ import {
 } from "./programacao";
 import { interpretarComandoDeVoz } from "./voice-command";
 import {
+  autoConcluirBlocos,
   completedBlockData,
   extendBlock,
   isFinished,
@@ -57,7 +58,7 @@ import { filterTasks, sortTasks } from "./task-filters";
 import { taskBelongsToTopic } from "./task-utils";
 import { validateBackup, mergeImportedData, mergeBoards } from "./task-backup";
 import { calculateWeeklyMetrics } from "./weekly-review";
-import { addDaysISO, startOfWeekISO, localDayOf, daysBetween } from "./date-utils";
+import { addDaysISO, startOfWeekISO, localDayOf, daysBetween, todayISO } from "./date-utils";
 import {
   createRecurringTask,
   nextOccurrence,
@@ -2094,4 +2095,89 @@ test("migração preserva as metas do bloco sem repetir nem aceitar lixo", () =>
     schedule: [{ id: "a", date: "2026-09-05", title: "Ler", plannedMinutes: 20, accumulatedMs: 0, order: 0, metaIds: ["m1", "m1", 3] }],
   });
   assert.deepEqual(b.schedule[0].metaIds, ["m1"]);
+});
+
+// ── Conclusão automática por tempo do projeto ─────────────────────────────
+// "Pedido de agência não passa de 30 min — se chegou lá, esqueci de concluir."
+
+function topicoComTeto(minutos?: number): Topic {
+  return {
+    id: "ag",
+    name: "Agências",
+    color: "#3D8BFF",
+    autoCompleteMinutes: minutos,
+    createdAt: "2026-09-01T10:00:00.000Z",
+  };
+}
+
+test("bloco que passa do teto do projeto é concluído sozinho, com a tarefa e a meta junto", () => {
+  // A meta conta no dia REAL da conclusão (mesma regra do "Concluir" manual),
+  // não no dia nominal do bloco — por isso a janela cobre "hoje" de verdade.
+  const hoje = todayISO();
+  const inicioDoDia = new Date(`${hoje}T00:05:00`).toISOString();
+  const board: Board = {
+    ...emptyBoard(),
+    topics: [topicoComTeto(30)],
+    tasks: [tarefa({ id: "k1", topicId: "ag", status: "doing", metaIds: ["m1"] })],
+    metas: [metaDeTeste({ startDate: addDaysISO(hoje, -1), days: 3 })],
+    schedule: [
+      { ...bloco({ id: "b", date: hoje }), topicId: "ag", taskId: "k1", startedAt: inicioDoDia },
+    ],
+  };
+  const agora = new Date(inicioDoDia).getTime() + 31 * 60_000;
+  const r = autoConcluirBlocos(board, agora);
+  assert.equal(r.mudou, true);
+  const b = r.board.schedule[0];
+  assert.equal(isRunning(b), false);
+  assert.ok(b.completedAt);
+  assert.equal(r.board.tasks[0].status, "done");
+  assert.equal(r.board.metas[0].registros[hoje], 2);
+});
+
+test("bloco ainda dentro do teto não é mexido", () => {
+  const board: Board = {
+    ...emptyBoard(),
+    topics: [topicoComTeto(30)],
+    schedule: [{ ...bloco({ id: "b", date: "2026-09-05" }), topicId: "ag", startedAt: "2026-09-05T10:00:00.000Z" }],
+  };
+  const agora = new Date("2026-09-05T10:20:00.000Z").getTime();
+  const r = autoConcluirBlocos(board, agora);
+  assert.equal(r.mudou, false);
+  assert.equal(r.board, board);
+});
+
+test("sem teto configurado no projeto, nada é concluído sozinho", () => {
+  const board: Board = {
+    ...emptyBoard(),
+    topics: [topicoComTeto(undefined)],
+    schedule: [{ ...bloco({ id: "b", date: "2026-09-05" }), topicId: "ag", startedAt: "2026-09-05T10:00:00.000Z" }],
+  };
+  const agora = new Date("2026-09-05T12:00:00.000Z").getTime();
+  assert.equal(autoConcluirBlocos(board, agora).mudou, false);
+});
+
+test("intervalo não conclui sozinho mesmo passando de qualquer teto", () => {
+  const board: Board = {
+    ...emptyBoard(),
+    topics: [topicoComTeto(10)],
+    schedule: [
+      { ...bloco({ id: "b", date: "2026-09-05" }), topicId: "ag", isBreak: true, startedAt: "2026-09-05T10:00:00.000Z" },
+    ],
+  };
+  const agora = new Date("2026-09-05T10:30:00.000Z").getTime();
+  assert.equal(autoConcluirBlocos(board, agora).mudou, false);
+});
+
+test("migração aceita o teto de auto-conclusão só quando é um número positivo", () => {
+  const b = migrateBoard({
+    topics: [
+      { id: "a", name: "A", autoCompleteMinutes: 45 },
+      { id: "b", name: "B", autoCompleteMinutes: -5 },
+      { id: "c", name: "C", autoCompleteMinutes: "x" },
+    ],
+    tasks: [],
+  });
+  assert.equal(b.topics.find((t) => t.id === "a")!.autoCompleteMinutes, 45);
+  assert.equal(b.topics.find((t) => t.id === "b")!.autoCompleteMinutes, undefined);
+  assert.equal(b.topics.find((t) => t.id === "c")!.autoCompleteMinutes, undefined);
 });
