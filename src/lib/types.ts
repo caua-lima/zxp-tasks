@@ -112,6 +112,12 @@ export interface Topic {
   archivedAt?: string | null;
 }
 
+/** Um intervalo de tempo de verdade: início e fim, não só a duração. */
+export interface Sessao {
+  start: string;
+  end: string;
+}
+
 export interface WeeklyReviewNote {
   id: string;
   weekStart: string;
@@ -205,6 +211,16 @@ export interface ScheduleBlock {
    * quebrar quem lê o campo; quem decide é esta marca.
    */
   openEnded?: boolean;
+  /**
+   * Cada trecho em que o cronômetro esteve realmente ligado, com início e
+   * fim — não só a soma em `accumulatedMs`. Existe pra responder "quanto
+   * tempo de RELÓGIO o dia teve", que é diferente de somar a duração de
+   * cada bloco quando dois rodam ao mesmo tempo: 3h de duas tarefas juntas
+   * são 3h de relógio, não 6h. Bloco de antes deste campo existir
+   * simplesmente não tem sessão registrada — `allSessions` (em
+   * `schedule.ts`) cobre esse caso sem inventar precisão que não existe.
+   */
+  sessions?: Sessao[];
 }
 
 /**

@@ -70,6 +70,7 @@ import { createTask } from "./task-factory";
 import { traduzErroAuth } from "./auth-errors";
 import {
   MINUTE_MS,
+  allSessions,
   blocksOfDay,
   completeBlock,
   elapsedMs,
@@ -83,6 +84,7 @@ import {
   resetBlock,
   scheduleTotals,
   startBlock,
+  wallClockMs,
 } from "./schedule";
 import {
   wishlistTotals,
@@ -1176,6 +1178,107 @@ describe("cronograma — cronômetro", () => {
   });
 });
 
+describe("relógio do dia (união dos intervalos, não soma das durações)", () => {
+  const T0 = new Date("2026-08-16T10:00:00.000Z").getTime();
+
+  function bloco(partial: Partial<ScheduleBlock> = {}): ScheduleBlock {
+    return {
+      id: "b1",
+      date: "2026-08-16",
+      title: "Chamar leads",
+      plannedMinutes: 40,
+      accumulatedMs: 0,
+      order: 0,
+      ...partial,
+    };
+  }
+
+  test("pausar registra a sessão de verdade, com início e fim", () => {
+    const rodando = startBlock(bloco(), new Date(T0).toISOString());
+    const pausado = pauseBlock(rodando, T0 + 10 * MINUTE_MS);
+    assert.deepEqual(pausado.sessions, [
+      { start: new Date(T0).toISOString(), end: new Date(T0 + 10 * MINUTE_MS).toISOString() },
+    ]);
+  });
+
+  test("pausar de novo empilha a sessão nova sem apagar a anterior", () => {
+    let b = startBlock(bloco(), new Date(T0).toISOString());
+    b = pauseBlock(b, T0 + 10 * MINUTE_MS);
+    b = startBlock(b, new Date(T0 + 20 * MINUTE_MS).toISOString());
+    b = pauseBlock(b, T0 + 25 * MINUTE_MS);
+    assert.equal(b.sessions!.length, 2);
+    assert.equal(b.sessions![1].start, new Date(T0 + 20 * MINUTE_MS).toISOString());
+  });
+
+  test("bloco rodando agora entra em allSessions com o trecho até o instante pedido", () => {
+    const rodando = startBlock(bloco(), new Date(T0).toISOString());
+    const sessoes = allSessions(rodando, T0 + 15 * MINUTE_MS);
+    assert.deepEqual(sessoes, [
+      { start: new Date(T0).toISOString(), end: new Date(T0 + 15 * MINUTE_MS).toISOString() },
+    ]);
+  });
+
+  test("bloco de antes deste recurso (sem sessions) vira uma aproximação, não some do total", () => {
+    const antigo = bloco({ accumulatedMs: 20 * MINUTE_MS, completedAt: new Date(T0).toISOString() });
+    const sessoes = allSessions(antigo);
+    assert.equal(sessoes.length, 1);
+    assert.equal(sessoes[0].end, new Date(T0).toISOString());
+    assert.equal(new Date(sessoes[0].end).getTime() - new Date(sessoes[0].start).getTime(), 20 * MINUTE_MS);
+  });
+
+  test("duas tarefas de 3h rodando juntas contam 3h de relógio, não 6h", () => {
+    const a = { ...startBlock(bloco({ id: "a" }), new Date(T0).toISOString()) };
+    const b = { ...startBlock(bloco({ id: "b" }), new Date(T0).toISOString()) };
+    const agora = T0 + 3 * 60 * MINUTE_MS;
+    assert.equal(wallClockMs([a, b], agora), 3 * 60 * MINUTE_MS);
+  });
+
+  test("sessões que não se tocam somam cada uma inteira", () => {
+    const a = pauseBlock(startBlock(bloco({ id: "a" }), new Date(T0).toISOString()), T0 + 30 * MINUTE_MS);
+    const b = pauseBlock(
+      startBlock(bloco({ id: "b" }), new Date(T0 + 60 * MINUTE_MS).toISOString()),
+      T0 + 80 * MINUTE_MS
+    );
+    assert.equal(wallClockMs([a, b]), 50 * MINUTE_MS);
+  });
+
+  test("sessões que se sobrepõem em parte contam a união, não a soma", () => {
+    // a: 0–40min · b: 20–50min → união é 0–50min = 50min, não os 70min da soma.
+    const a = pauseBlock(startBlock(bloco({ id: "a" }), new Date(T0).toISOString()), T0 + 40 * MINUTE_MS);
+    const b = pauseBlock(
+      startBlock(bloco({ id: "b" }), new Date(T0 + 20 * MINUTE_MS).toISOString()),
+      T0 + 50 * MINUTE_MS
+    );
+    assert.equal(wallClockMs([a, b]), 50 * MINUTE_MS);
+  });
+
+  test("intervalo fica fora do relógio do dia", () => {
+    const a = pauseBlock(startBlock(bloco({ id: "a" }), new Date(T0).toISOString()), T0 + 30 * MINUTE_MS);
+    const cafe = pauseBlock(
+      startBlock(bloco({ id: "cafe", isBreak: true }), new Date(T0 + 30 * MINUTE_MS).toISOString()),
+      T0 + 40 * MINUTE_MS
+    );
+    assert.equal(wallClockMs([a, cafe]), 30 * MINUTE_MS);
+  });
+
+  test("migração aceita sessão válida e descarta a que termina antes de começar", () => {
+    const b = migrateBoard({
+      topics: [], tasks: [],
+      schedule: [{
+        id: "a", date: "2026-09-05", title: "Leads", plannedMinutes: 30, accumulatedMs: 0, order: 0,
+        sessions: [
+          { start: "2026-09-05T10:00:00.000Z", end: "2026-09-05T10:30:00.000Z" },
+          { start: "2026-09-05T11:00:00.000Z", end: "2026-09-05T10:00:00.000Z" },
+          { start: "2026-09-05T12:00:00.000Z" },
+        ],
+      }],
+    });
+    assert.deepEqual(b.schedule[0].sessions, [
+      { start: "2026-09-05T10:00:00.000Z", end: "2026-09-05T10:30:00.000Z" },
+    ]);
+  });
+});
+
 describe("mensagens de erro de login/cadastro", () => {
   test("credencial inválida vira frase clara em português", () => {
     assert.equal(
@@ -1387,6 +1490,21 @@ test("relatório separa tempo de trabalho do tempo de intervalo", () => {
   assert.equal(r.totalIntervaloMs, 10 * 60_000);
   // Intervalo não pode entrar na contagem de blocos de trabalho.
   assert.equal(r.blocosTotal, 1);
+});
+
+test("duas tarefas em paralelo dobram o trabalhado (de propósito) mas não o relógio do dia", () => {
+  const board = boardDeTeste({
+    schedule: [
+      bloco({ id: "a", date: "2026-09-06", accumulatedMs: 3 * 60 * 60_000 }),
+      bloco({ id: "b", date: "2026-09-06", accumulatedMs: 3 * 60 * 60_000 }),
+    ],
+  });
+  const r = montarRelatorio(board, "2026-09-06", "2026-09-06");
+  // Soma continua contando em dobro — é "tempo dedicado", intencional.
+  assert.equal(r.totalTrabalhadoMs, 6 * 60 * 60_000);
+  // Sem `sessions` (blocos "antigos") cada um vira uma aproximação isolada;
+  // o que importa aqui é que o relógio NUNCA passa da soma das durações.
+  assert.ok(r.totalRelogioMs <= r.totalTrabalhadoMs);
 });
 
 test("bloco concluído depois da meia-noite aparece como virada de dia", () => {

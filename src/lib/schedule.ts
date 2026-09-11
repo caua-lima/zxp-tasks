@@ -1,4 +1,4 @@
-import { Board, ScheduleBlock } from "./types";
+import { Board, ScheduleBlock, Sessao } from "./types";
 import { aplicarMetasDoBloco } from "./metas";
 import { todayISO } from "./date-utils";
 
@@ -85,10 +85,20 @@ export function pauseBlock(
   now: number = Date.now()
 ): ScheduleBlock {
   if (!isRunning(block)) return block;
+  const inicio = new Date(block.startedAt!).getTime();
+  // Guarda o trecho de verdade (início e fim), não só quanto durou — é o
+  // que permite somar o RELÓGIO do dia sem contar em dobro quando duas
+  // tarefas rodam juntas. Relógio andando pra trás (mesma trava de
+  // `elapsedMs`) não pode gerar uma sessão de duração negativa.
+  const sessions =
+    now > inicio
+      ? [...(block.sessions ?? []), { start: block.startedAt!, end: new Date(now).toISOString() }]
+      : block.sessions;
   return {
     ...block,
     accumulatedMs: elapsedMs(block, now),
     startedAt: undefined,
+    sessions,
   };
 }
 
@@ -241,6 +251,77 @@ export function scheduleTotals(
     runningId: runningIds[0] ?? null,
     runningIds,
   };
+}
+
+/**
+ * Todos os trechos em que o bloco esteve ligado, incluindo o que está
+ * rodando agora (se estiver).
+ *
+ * Bloco de antes deste campo existir não tem `sessions` registrada — vira
+ * UMA sessão aproximada, do tamanho do que já está em `accumulatedMs`,
+ * ancorada no que se sabe de mais concreto (o próprio `sessions[0]`, ou o
+ * início do trecho atual, ou o instante do desfecho). Não é exata (um bloco
+ * antigo pausado várias vezes vira um intervalo só), mas nunca finge um
+ * relógio mais preciso do que o dado disponível permite — e não é pior do
+ * que a soma simples que existia antes deste recurso.
+ */
+export function allSessions(block: ScheduleBlock, now: number = Date.now()): Sessao[] {
+  const registradas = block.sessions ?? [];
+  const emAndamento: Sessao[] = isRunning(block)
+    ? [{ start: block.startedAt!, end: new Date(now).toISOString() }]
+    : [];
+
+  const duracao = (s: Sessao) =>
+    Math.max(0, new Date(s.end).getTime() - new Date(s.start).getTime());
+  const somaConhecida =
+    registradas.reduce((soma, s) => soma + duracao(s), 0) +
+    emAndamento.reduce((soma, s) => soma + duracao(s), 0);
+  const faltante = block.accumulatedMs - somaConhecida;
+  if (faltante <= 0) return [...registradas, ...emAndamento];
+
+  const ancora = registradas[0]?.start ?? emAndamento[0]?.start ?? block.completedAt ??
+    block.skippedAt ?? block.parkedAt;
+  if (!ancora) return [...registradas, ...emAndamento];
+
+  const aproximada: Sessao = {
+    start: new Date(new Date(ancora).getTime() - faltante).toISOString(),
+    end: ancora,
+  };
+  return [aproximada, ...registradas, ...emAndamento];
+}
+
+/**
+ * Tempo de RELÓGIO de um conjunto de blocos — a união dos intervalos, não a
+ * soma das durações. Duas tarefas de 3h rodando juntas viram 3h aqui, nunca
+ * 6h; é essa diferença que faz a média diária dizer a verdade quando existe
+ * mais de um cronômetro ligado ao mesmo tempo (`settings.parallelTimers`).
+ * Intervalo (`isBreak`) fica de fora, como em todo outro total do dia.
+ */
+export function wallClockMs(blocks: ScheduleBlock[], now: number = Date.now()): number {
+  const intervalos = blocks
+    .filter((b) => !b.isBreak)
+    .flatMap((b) => allSessions(b, now))
+    .map((s) => [new Date(s.start).getTime(), new Date(s.end).getTime()] as const)
+    .filter(([inicio, fim]) => fim > inicio)
+    .sort((a, b) => a[0] - b[0]);
+
+  let total = 0;
+  let inicioAtual: number | null = null;
+  let fimAtual = 0;
+  for (const [inicio, fim] of intervalos) {
+    if (inicioAtual === null) {
+      inicioAtual = inicio;
+      fimAtual = fim;
+    } else if (inicio <= fimAtual) {
+      fimAtual = Math.max(fimAtual, fim);
+    } else {
+      total += fimAtual - inicioAtual;
+      inicioAtual = inicio;
+      fimAtual = fim;
+    }
+  }
+  if (inicioAtual !== null) total += fimAtual - inicioAtual;
+  return total;
 }
 
 export function blocksOfDay(blocks: ScheduleBlock[], date: string): ScheduleBlock[] {

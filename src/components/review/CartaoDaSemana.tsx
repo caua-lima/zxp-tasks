@@ -120,8 +120,11 @@ export function CartaoDaSemana({
   const diasAtivos = relatorio.dias.filter((d) => d.elapsedMs > 0).length;
   const rotuloDoDia = (i: number, iso: string) =>
     ehSemana ? DIAS[i] : String(new Date(iso + "T00:00:00").getDate());
+  // Relógio, não a soma das durações: com duas tarefas rodando juntas, a
+  // soma dobra o tempo do dia e infla a média sozinha. `totalRelogioMs` é a
+  // união dos intervalos — 3h de duas tarefas juntas contam como 3h, não 6h.
   const mediaPorDia =
-    diasAtivos === 0 ? 0 : Math.round(relatorio.totalTrabalhadoMs / diasAtivos);
+    diasAtivos === 0 ? 0 : Math.round(relatorio.totalRelogioMs / diasAtivos);
 
   // Só compara quando há com o que comparar: "+100%" partindo de zero não
   // diz nada sobre a semana, só que a anterior estava vazia.

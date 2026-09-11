@@ -167,6 +167,22 @@ function migrateTopic(raw: unknown): Topic | null {
   };
 }
 
+type SessaoBruta = { start: string; end: string };
+
+/**
+ * Só aceita intervalo que faz sentido — início e fim de verdade, fim depois
+ * do início. Uma sessão inválida vinda de um backup editado à mão não pode
+ * virar duração negativa dentro do total do dia.
+ */
+function migrateSessions(v: unknown): SessaoBruta[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  const sessions = v
+    .filter((s): s is Record<string, unknown> => !!s && typeof s === "object")
+    .map((s) => ({ start: asString(s.start), end: asString(s.end) }))
+    .filter((s): s is SessaoBruta => !!s.start && !!s.end && s.end > s.start);
+  return sessions.length > 0 ? sessions : undefined;
+}
+
 function migrateScheduleBlock(raw: unknown): ScheduleBlock | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
@@ -202,6 +218,7 @@ function migrateScheduleBlock(raw: unknown): ScheduleBlock | null {
     metaIds: Array.isArray(r.metaIds)
       ? [...new Set(r.metaIds.filter((id): id is string => typeof id === "string" && !!id))]
       : undefined,
+    sessions: migrateSessions(r.sessions),
   };
 }
 

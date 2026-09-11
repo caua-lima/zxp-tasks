@@ -1,5 +1,5 @@
 import { Board, ScheduleBlock, Task } from "./types";
-import { elapsedMs, plannedMs } from "./schedule";
+import { elapsedMs, plannedMs, wallClockMs } from "./schedule";
 import { addDaysISO, localDayOf, todayISO } from "./date-utils";
 
 /**
@@ -29,6 +29,15 @@ export interface DiaDoRelatorio {
   /** Só blocos de trabalho — intervalo tem seu próprio total. */
   plannedMs: number;
   elapsedMs: number;
+  /**
+   * Tempo de RELÓGIO do dia — a união dos intervalos, não a soma das
+   * durações. Existe separado de `elapsedMs` porque os dois respondem
+   * perguntas diferentes: `elapsedMs` é "quanto foi dedicado" (soma, conta
+   * em dobro de propósito quando duas tarefas rodam juntas) e `relogioMs` é
+   * "quanto tempo do dia isso ocupou de verdade" — a base certa pra uma
+   * média por dia que não infla sozinha por causa de cronômetros paralelos.
+   */
+  relogioMs: number;
   intervaloMs: number;
   blocosFeitos: number;
   /** Encerrados como "não fiz" — fechados, mas não produtividade. */
@@ -45,6 +54,7 @@ export interface Relatorio {
   dias: DiaDoRelatorio[];
   totalPlanejadoMs: number;
   totalTrabalhadoMs: number;
+  totalRelogioMs: number;
   totalIntervaloMs: number;
   blocosFeitos: number;
   blocosNaoFeitos: number;
@@ -110,6 +120,7 @@ export function montarRelatorio(
       date,
       plannedMs: trabalho.reduce((soma, b) => soma + plannedMs(b), 0),
       elapsedMs: trabalho.reduce((soma, b) => soma + elapsedMs(b, agora), 0),
+      relogioMs: wallClockMs(trabalho, agora),
       intervaloMs: intervalos.reduce((soma, b) => soma + elapsedMs(b, agora), 0),
       blocosFeitos: trabalho.filter((b) => b.completedAt).length,
       blocosNaoFeitos: trabalho.filter((b) => b.skippedAt).length,
@@ -140,6 +151,7 @@ export function montarRelatorio(
     dias: linhas,
     totalPlanejadoMs: soma((d) => d.plannedMs),
     totalTrabalhadoMs: soma((d) => d.elapsedMs),
+    totalRelogioMs: soma((d) => d.relogioMs),
     totalIntervaloMs: soma((d) => d.intervaloMs),
     blocosFeitos: soma((d) => d.blocosFeitos),
     blocosNaoFeitos: soma((d) => d.blocosNaoFeitos),
