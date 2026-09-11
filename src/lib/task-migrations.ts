@@ -193,6 +193,9 @@ function migrateScheduleBlock(raw: unknown): ScheduleBlock | null {
     resumedAt: asString(r.resumedAt),
     continuaDe: asString(r.continuaDe),
     programacaoId: asString(r.programacaoId),
+    metaIds: Array.isArray(r.metaIds)
+      ? [...new Set(r.metaIds.filter((id): id is string => typeof id === "string" && !!id))]
+      : undefined,
   };
 }
 

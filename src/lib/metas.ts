@@ -1,4 +1,4 @@
-import { Board, Meta } from "./types";
+import { Board, Meta, ScheduleBlock } from "./types";
 import { addDaysISO } from "./date-utils";
 
 /**
@@ -151,18 +151,41 @@ export function marcarDiaBatido(meta: Meta, dia: string): Meta {
  * feito). Espalhar a regra garantiria que um deles esquecesse da meta.
  */
 export function aplicarConclusaoNasMetas(board: Board, taskIds: string[], dia: string): Board {
-  const metaIds = new Set<string>();
+  const metaIds: string[] = [];
   for (const id of taskIds) {
     const t = board.tasks.find((x) => x.id === id);
-    for (const m of t?.metaIds ?? []) metaIds.add(m);
+    metaIds.push(...(t?.metaIds ?? []));
   }
-  if (metaIds.size === 0) return board;
+  return marcarMetas(board, metaIds, dia);
+}
+
+/**
+ * Marca o dia como batido num conjunto de metas. Base comum de todo caminho
+ * que conclui alguma coisa; meta arquivada fica de fora — arquivar é
+ * justamente parar de contar.
+ */
+export function marcarMetas(board: Board, metaIds: string[], dia: string): Board {
+  const alvo = new Set(metaIds);
+  if (alvo.size === 0) return board;
   return {
     ...board,
     metas: (board.metas ?? []).map((m) =>
-      metaIds.has(m.id) && !m.archivedAt ? marcarDiaBatido(m, dia) : m
+      alvo.has(m.id) && !m.archivedAt ? marcarDiaBatido(m, dia) : m
     ),
   };
+}
+
+/**
+ * Bloco concluído conta nas metas dele E nas da tarefa que ele carrega.
+ *
+ * As duas fontes existem porque bloco sem projeto não tem tarefa onde
+ * guardar o vínculo ("Ler", solto no cronograma). Juntar as duas não conta
+ * em dobro: marcar o dia usa o maior valor, então repetir a mesma meta é
+ * inofensivo.
+ */
+export function aplicarMetasDoBloco(board: Board, block: ScheduleBlock, dia: string): Board {
+  const task = block.taskId ? board.tasks.find((t) => t.id === block.taskId) : undefined;
+  return marcarMetas(board, [...(block.metaIds ?? []), ...(task?.metaIds ?? [])], dia);
 }
 
 /** Frase curta da meta: "Ler 2 páginas por dia". */

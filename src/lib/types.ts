@@ -160,6 +160,13 @@ export interface ScheduleBlock {
   continuaDe?: string;
   /** Programação que gerou este bloco, quando ele veio de uma. */
   programacaoId?: string;
+  /**
+   * Metas em que o bloco conta ao ser concluído. Só é preenchido quando o
+   * bloco NÃO carrega tarefa — um "Ler" solto, sem projeto. Com tarefa, as
+   * metas moram nela e concluir o bloco já conta por ela; guardar nos dois
+   * lugares abriria a pergunta "qual vale?".
+   */
+  metaIds?: string[];
   order: number;
   /**
    * Projeto a que este bloco pertence, e a tarefa criada junto com ele.

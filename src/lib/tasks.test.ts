@@ -15,7 +15,9 @@ import { migrateBoard } from "./task-migrations";
 import { montarRelatorio, tempoPorProjeto } from "./report";
 import {
   aplicarConclusaoNasMetas,
+  aplicarMetasDoBloco,
   marcarDiaBatido,
+  marcarMetas,
   novaMeta,
   progressoDaMeta,
   registrarNaMeta,
@@ -2057,4 +2059,39 @@ test("programação criada depois do fim do expediente não gera o bloco de hoje
   const amanha = materializarProgramacoes(quadroCom(p), "2026-09-11", local("2026-09-11T09:00:00"));
   assert.equal(amanha.board.schedule.length, 1);
   assert.ok(amanha.board.schedule[0].startedAt);
+});
+
+// ── Metas no bloco do cronograma ─────────────────────────────────────────
+
+test("bloco concluído conta nas metas dele e nas da tarefa que carrega", () => {
+  const board = {
+    ...emptyBoard(),
+    metas: [metaDeTeste(), { ...metaDeTeste(), id: "m2" }, { ...metaDeTeste(), id: "m3" }],
+    tasks: [tarefa({ id: "k1", topicId: "a", metaIds: ["m2"] })],
+  };
+  // m2 aparece nas duas fontes: não pode contar em dobro.
+  const bl = { ...bloco({ id: "b", date: "2026-09-05" }), taskId: "k1", metaIds: ["m1", "m2"] };
+  const d = aplicarMetasDoBloco(board, bl, "2026-09-05");
+  assert.equal(d.metas.find((m) => m.id === "m1")!.registros["2026-09-05"], 2);
+  assert.equal(d.metas.find((m) => m.id === "m2")!.registros["2026-09-05"], 2);
+  assert.deepEqual(d.metas.find((m) => m.id === "m3")!.registros, {});
+});
+
+test("bloco sem projeto, e portanto sem tarefa, também conta pra meta", () => {
+  const board = { ...emptyBoard(), metas: [metaDeTeste()] };
+  const bl = { ...bloco({ id: "b", date: "2026-09-05" }), metaIds: ["m1"] };
+  assert.equal(aplicarMetasDoBloco(board, bl, "2026-09-05").metas[0].registros["2026-09-05"], 2);
+});
+
+test("meta arquivada não é marcada por nenhum caminho", () => {
+  const board = { ...emptyBoard(), metas: [{ ...metaDeTeste(), archivedAt: "2026-09-03T10:00:00.000Z" }] };
+  assert.deepEqual(marcarMetas(board, ["m1"], "2026-09-05").metas[0].registros, {});
+});
+
+test("migração preserva as metas do bloco sem repetir nem aceitar lixo", () => {
+  const b = migrateBoard({
+    topics: [], tasks: [],
+    schedule: [{ id: "a", date: "2026-09-05", title: "Ler", plannedMinutes: 20, accumulatedMs: 0, order: 0, metaIds: ["m1", "m1", 3] }],
+  });
+  assert.deepEqual(b.schedule[0].metaIds, ["m1"]);
 });

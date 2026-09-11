@@ -122,6 +122,11 @@ function BlockRow({
               ⏰ programado
             </p>
           )}
+          {!!block.metaIds?.length && (
+            <p className="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--muted)]">
+              🎯 conta pra meta
+            </p>
+          )}
         </div>
 
         <div className="flex shrink-0 items-start gap-1">
@@ -286,6 +291,7 @@ export function ScheduleView() {
     schedule,
     topics,
     tasks,
+    metas,
     setTaskStatus,
     addBlock,
     addBreak,
@@ -309,6 +315,10 @@ export function ScheduleView() {
   const [minutes, setMinutes] = useState(40);
   const [topicId, setTopicId] = useState("");
   const [tarefaExistenteId, setTarefaExistenteId] = useState("");
+  // Vínculos extras do que está nascendo agora: outros projetos e metas.
+  const [extrasBloco, setExtrasBloco] = useState<string[]>([]);
+  const [metasBloco, setMetasBloco] = useState<string[]>([]);
+  const [mostrarVinculos, setMostrarVinculos] = useState(false);
   const [semTitulo, setSemTitulo] = useState(false);
   const [tempoLivre, setTempoLivre] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState<ScheduleBlock | null>(null);
@@ -338,6 +348,11 @@ export function ScheduleView() {
   const projetosDisponiveis = useMemo(
     () => topics.filter((t) => !t.archivedAt && topicKind(t) !== "wishlist"),
     [topics]
+  );
+  const metasAtivas = useMemo(() => metas.filter((m) => !m.archivedAt), [metas]);
+  const outrosProjetosBloco = useMemo(
+    () => projetosDisponiveis.filter((t) => t.id !== topicId),
+    [projetosDisponiveis, topicId]
   );
   /**
    * Tarefas que já existem no projeto escolhido e ainda não foram feitas.
@@ -478,9 +493,16 @@ export function ScheduleView() {
       // sentido enquanto o cronômetro ainda vai rodar.
       openEnded: tempoLivre && !jaFeito && minutosDitados === undefined,
       jaFeito,
+      // Tarefa que já existe traz os próprios vínculos (editáveis nela); aqui
+      // só vale pro que está nascendo agora.
+      extraTopicIds: tarefaExistenteId ? undefined : extrasBloco,
+      metaIds: tarefaExistenteId ? undefined : metasBloco,
     });
     setTitle("");
     setTarefaExistenteId("");
+    setExtrasBloco([]);
+    setMetasBloco([]);
+    setMostrarVinculos(false);
     setSemTitulo(false);
   }
 
@@ -708,6 +730,90 @@ export function ScheduleView() {
             )}
           </div>
         )}
+
+        {!tarefaExistenteId &&
+          (metasAtivas.length > 0 || (!!topicId && outrosProjetosBloco.length > 0)) &&
+          (mostrarVinculos ? (
+            <div className="mt-2 space-y-2.5 rounded-lg border border-[var(--border)] p-2.5">
+              {!!topicId && outrosProjetosBloco.length > 0 && (
+                <div>
+                  <p className="mb-1 text-[11px] text-[var(--muted)]">Também aparece em</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {outrosProjetosBloco.map((t) => {
+                      const marcado = extrasBloco.includes(t.id);
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
+                          aria-pressed={marcado}
+                          onClick={() =>
+                            setExtrasBloco((atuais) =>
+                              marcado ? atuais.filter((x) => x !== t.id) : [...atuais, t.id]
+                            )
+                          }
+                          className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition ${
+                            marcado
+                              ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-ink)]"
+                              : "border-[var(--border)] text-[var(--muted)] hover:bg-[var(--surface2)]"
+                          }`}
+                        >
+                          <span
+                            aria-hidden="true"
+                            className="h-2 w-2 rounded-full"
+                            style={{ backgroundColor: t.color }}
+                          />
+                          {t.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              {metasAtivas.length > 0 && (
+                <div>
+                  <p className="mb-1 text-[11px] text-[var(--muted)]">Conta pra meta</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {metasAtivas.map((m) => {
+                      const marcado = metasBloco.includes(m.id);
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          aria-pressed={marcado}
+                          onClick={() =>
+                            setMetasBloco((atuais) =>
+                              marcado ? atuais.filter((x) => x !== m.id) : [...atuais, m.id]
+                            )
+                          }
+                          className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition ${
+                            marcado
+                              ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-ink)]"
+                              : "border-[var(--border)] text-[var(--muted)] hover:bg-[var(--surface2)]"
+                          }`}
+                        >
+                          {m.title} · {m.dailyTarget} {m.unit}/dia
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {metasBloco.length > 0 && !topicId && (
+                    <p className="mt-1 text-[11px] text-[var(--muted)]">
+                      Sem projeto, a meta fica guardada no próprio bloco e conta quando ele
+                      for concluído.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setMostrarVinculos(true)}
+              className="mt-2 block text-xs font-medium text-[var(--accent)] hover:underline"
+            >
+              + Outro projeto ou meta
+            </button>
+          ))}
 
         <BotaoNotificacoes />
       </form>

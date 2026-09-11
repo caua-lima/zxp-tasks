@@ -33,7 +33,13 @@ import { useAuth } from "./AuthContext";
 import { fetchCloudBoard, pushBoardToCloud, subscribeToCloudBoard } from "@/lib/cloud-sync";
 import { registrarAparelho } from "@/lib/push";
 import { createTask, NewTaskInput } from "@/lib/task-factory";
-import { aplicarConclusaoNasMetas, NovaMetaInput, novaMeta, registrarNaMeta } from "@/lib/metas";
+import {
+  aplicarConclusaoNasMetas,
+  aplicarMetasDoBloco,
+  NovaMetaInput,
+  novaMeta,
+  registrarNaMeta,
+} from "@/lib/metas";
 import {
   materializarProgramacoes,
   NovaProgramacaoInput,
@@ -93,6 +99,10 @@ interface AppContextValue {
       openEnded?: boolean;
       /** Já foi feito — entra concluído, com `plannedMinutes` como tempo gasto. */
       jaFeito?: boolean;
+      /** Outros projetos em que a tarefa criada também aparece. */
+      extraTopicIds?: string[];
+      /** Metas em que isto conta ao ser concluído. */
+      metaIds?: string[];
     }
   ) => void;
   updateBlock: (id: string, patch: Partial<Omit<ScheduleBlock, "id">>) => void;
@@ -556,6 +566,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         taskId?: string;
         openEnded?: boolean;
         jaFeito?: boolean;
+        extraTopicIds?: string[];
+        metaIds?: string[];
       }
     ) => {
       const blockId = uuid();
@@ -585,12 +597,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           topicId: existente?.topicId ?? topico?.id,
           taskId: existente?.id ?? (criarTarefa ? novaTarefaId : undefined),
           openEnded: opcoes?.openEnded ? true : undefined,
+          // Sem tarefa (bloco solto), as metas moram no próprio bloco. Com
+          // tarefa, moram nela — guardar nos dois abriria "qual vale?".
+          metaIds:
+            !existente && !criarTarefa && opcoes?.metaIds?.length ? opcoes.metaIds : undefined,
           // Registrar o que já foi feito: o bloco nasce concluído, com o
           // tempo informado já contado.
           ...(opcoes?.jaFeito ? completedBlockData(plannedMinutes, now) : {}),
         };
 
-        if (!criarTarefa) return { ...b, schedule: [...b.schedule, block] };
+        if (!criarTarefa) {
+          const proximo = { ...b, schedule: [...b.schedule, block] };
+          // "Já fiz" conta na meta no dia do bloco, que é o dia em que foi feito.
+          return opcoes?.jaFeito ? aplicarMetasDoBloco(proximo, block, date) : proximo;
+        }
 
         const task = createTask(
           {
@@ -600,12 +620,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             // obrigaria a marcar de novo no projeto o que já aconteceu.
             status: opcoes?.jaFeito ? "done" : "todo",
             estimatedMinutes: opcoes?.openEnded ? undefined : plannedMinutes,
+            // O principal nunca entra como extra: seria a mesma tarefa
+            // contada duas vezes no mesmo projeto.
+            extraTopicIds: opcoes?.extraTopicIds?.some((id) => id !== topico.id)
+              ? opcoes.extraTopicIds.filter((id) => id !== topico.id)
+              : undefined,
+            metaIds: opcoes?.metaIds?.length ? opcoes.metaIds : undefined,
           },
           novaTarefaId,
           now
         );
         const tarefaFinal = opcoes?.jaFeito ? { ...task, completedAt: now } : task;
-        return { ...b, tasks: [...b.tasks, tarefaFinal], schedule: [...b.schedule, block] };
+        const proximo = { ...b, tasks: [...b.tasks, tarefaFinal], schedule: [...b.schedule, block] };
+        return opcoes?.jaFeito ? aplicarMetasDoBloco(proximo, block, date) : proximo;
       });
     },
     []
@@ -768,11 +795,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             )
           : b.tasks,
       };
-      // Concluir o bloco conclui a tarefa que ele carrega — e, com ela, marca
-      // o dia nas metas que ela ajuda. Mesma regra do setTaskStatus: uma
-      // tarefa pode virar "feita" por mais de um caminho, e a meta não pode
-      // depender de qual deles foi usado.
-      return concluirTarefa ? aplicarConclusaoNasMetas(proximo, [task.id], todayISO()) : proximo;
+      // Concluir o bloco marca o dia nas metas dele e nas da tarefa que ele
+      // carrega. Não depende de a tarefa estar mudando pra feita: um bloco sem
+      // projeto também conta, e marcar de novo é inofensivo (vale o maior).
+      return block ? aplicarMetasDoBloco(proximo, block, todayISO()) : proximo;
     });
   }, []);
 
