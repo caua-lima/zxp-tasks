@@ -58,6 +58,7 @@ function HomeInner() {
     if (view === "today") return "Hoje";
     if (view === "review") return "Revisão semanal";
     if (view === "report") return "Relatório";
+    if (view === "mindmap") return "Mapa mental";
     if (view === "project") return selectedTopic?.name ?? "Projeto";
     if (!selectedTopicId) return "Todos os tópicos";
     return selectedTopic?.name ?? "Todos os tópicos";
@@ -235,7 +236,11 @@ function HomeInner() {
               priorityFilter={filters.priority ?? null}
             />
           )}
-          {view === "mindmap" && <MindMap topicId={selectedTopicId} filters={filters} />}
+          {/* Sempre a vida inteira, nunca só o projeto selecionado — o mapa
+              de UM projeto já existe dentro dele mesmo (aba "Mapa mental"
+              do projeto). Repetir o recorte aqui seria a mesma tela duas
+              vezes, só que com menos contexto em volta. */}
+          {view === "mindmap" && <MindMap topicId={null} filters={filters} />}
           {view === "review" && <WeeklyReview />}
           {view === "report" && <RelatorioView />}
           {view === "metas" && <MetasView />}
