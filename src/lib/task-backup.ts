@@ -91,6 +91,7 @@ export interface SyncMergeReport {
   blocksAdded: number;
   reviewsAdded: number;
   metasAdded: number;
+  programacoesAdded: number;
 }
 
 /**
@@ -152,6 +153,25 @@ export function mergeBoards(
   });
   const novasMetas = metasRemotas.filter((m) => !idsMetasLocais.has(m.id));
 
+  /**
+   * Programações: por id, com os DIAS PULADOS unidos. Um feriado tirado no
+   * celular precisa valer no PC — senão o PC recriaria o bloco que foi
+   * apagado de propósito. Os blocos gerados já se deduplicam sozinhos, porque
+   * o id deles é derivado da programação e do dia.
+   */
+  const progLocais = local.programacoes ?? [];
+  const progRemotas = remote.programacoes ?? [];
+  const idsProgLocais = new Set(progLocais.map((p) => p.id));
+  const programacoesUnidas = progLocais.map((p) => {
+    const outra = progRemotas.find((r) => r.id === p.id);
+    if (!outra) return p;
+    return {
+      ...p,
+      diasPulados: [...new Set([...(p.diasPulados ?? []), ...(outra.diasPulados ?? [])])],
+    };
+  });
+  const novasProgramacoes = progRemotas.filter((p) => !idsProgLocais.has(p.id));
+
   return {
     board: {
       ...local,
@@ -166,6 +186,7 @@ export function mergeBoards(
       // Preferência é do aparelho que está na mão da pessoa agora.
       settings: local.settings,
       metas: [...metasUnidas, ...novasMetas],
+      programacoes: [...programacoesUnidas, ...novasProgramacoes],
     },
     report: {
       topicsAdded: novosTopicos.length,
@@ -173,6 +194,7 @@ export function mergeBoards(
       blocksAdded: novosBlocos.length,
       reviewsAdded: novasRevisoes.length,
       metasAdded: novasMetas.length,
+      programacoesAdded: novasProgramacoes.length,
     },
   };
 }

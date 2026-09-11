@@ -9,6 +9,7 @@ import {
   TaskStatus,
   Topic,
   Meta,
+  Programacao,
   WeeklyReviewNote,
   emptyBoard,
 } from "./types";
@@ -191,6 +192,48 @@ function migrateScheduleBlock(raw: unknown): ScheduleBlock | null {
     parkedAt: asString(r.parkedAt),
     resumedAt: asString(r.resumedAt),
     continuaDe: asString(r.continuaDe),
+    programacaoId: asString(r.programacaoId),
+  };
+}
+
+/**
+ * Programação vinda de backup ou de outro aparelho. Sem nenhum dia válido da
+ * semana ela nunca geraria bloco — é descartada em vez de ficar ocupando a
+ * lista sem efeito. Horário inválido não precisa ser barrado aqui: a
+ * duração vira zero e a materialização simplesmente ignora.
+ */
+function migrateProgramacao(raw: unknown): Programacao | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const title = asString(r.title);
+  const startTime = asString(r.startTime);
+  const endTime = asString(r.endTime);
+  if (!title || !startTime || !endTime) return null;
+
+  const weekdays = Array.isArray(r.weekdays)
+    ? [
+        ...new Set(
+          r.weekdays.filter(
+            (d): d is number => typeof d === "number" && Number.isInteger(d) && d >= 0 && d <= 6
+          )
+        ),
+      ].sort()
+    : [];
+  if (weekdays.length === 0) return null;
+
+  return {
+    id: asString(r.id) ?? crypto.randomUUID(),
+    title,
+    topicId: asString(r.topicId),
+    weekdays,
+    startTime,
+    endTime,
+    autoStart: r.autoStart !== false,
+    diasPulados: Array.isArray(r.diasPulados)
+      ? [...new Set(r.diasPulados.filter((d): d is string => typeof d === "string" && !!d))]
+      : [],
+    createdAt: asString(r.createdAt) ?? SAFE_FALLBACK_DATE,
+    pausedAt: asString(r.pausedAt),
   };
 }
 
@@ -271,6 +314,9 @@ export function migrateBoard(raw: unknown): Board {
       ? (r.dailyFocus as Record<string, string[]>)
       : {};
 
+  const programacoes = Array.isArray(r.programacoes)
+    ? r.programacoes.map(migrateProgramacao).filter((p): p is Programacao => p !== null)
+    : [];
   // Quadro salvo antes das metas não tem a lista: nasce vazia.
   const metas = Array.isArray(r.metas)
     ? r.metas.map(migrateMeta).filter((m): m is Meta => m !== null)
@@ -279,6 +325,7 @@ export function migrateBoard(raw: unknown): Board {
   return {
     schemaVersion: CURRENT_SCHEMA_VERSION,
     metas,
+    programacoes,
     topics,
     tasks,
     schedule,

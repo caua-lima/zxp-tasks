@@ -31,6 +31,7 @@ import {
 } from "@/lib/notifications";
 import { BotaoNotificacoes } from "./BotaoNotificacoes";
 import { EditarBloco } from "./EditarBloco";
+import { ProgramarModal } from "./ProgramarModal";
 import { BotaoDeVoz } from "./BotaoDeVoz";
 import { avisarOutrosAparelhos } from "@/lib/push";
 import { useToast } from "../shared/Toast";
@@ -115,6 +116,11 @@ function BlockRow({
           </p>
           {projeto && (
             <p className="mt-0.5 truncate text-[11px] text-[var(--accent)]">{projeto}</p>
+          )}
+          {block.programacaoId && (
+            <p className="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--muted)]">
+              ⏰ programado
+            </p>
           )}
         </div>
 
@@ -307,6 +313,7 @@ export function ScheduleView() {
   const [tempoLivre, setTempoLivre] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState<ScheduleBlock | null>(null);
   const [editando, setEditando] = useState<ScheduleBlock | null>(null);
+  const [programando, setProgramando] = useState(false);
 
   const blocks = useMemo(
     () => ordenarParaExibicao(blocksOfDay(schedule, date)),
@@ -705,16 +712,25 @@ export function ScheduleView() {
         <BotaoNotificacoes />
       </form>
 
-      <button
-        type="button"
-        onClick={() => {
-          addBreak(date, BREAK_MINUTES);
-          showToast(`Intervalo de ${BREAK_MINUTES} min começou. Use o + pra esticar.`);
-        }}
-        className="min-h-[44px] w-full rounded-xl border border-dashed border-[var(--border)] text-sm font-medium text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--foreground)]"
-      >
-        ☕ Intervalo de {BREAK_MINUTES} min
-      </button>
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            addBreak(date, BREAK_MINUTES);
+            showToast(`Intervalo de ${BREAK_MINUTES} min começou. Use o + pra esticar.`);
+          }}
+          className="min-h-[44px] rounded-xl border border-dashed border-[var(--border)] px-2 text-sm font-medium text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--foreground)]"
+        >
+          ☕ Intervalo de {BREAK_MINUTES} min
+        </button>
+        <button
+          type="button"
+          onClick={() => setProgramando(true)}
+          className="min-h-[44px] rounded-xl border border-dashed border-[var(--border)] px-2 text-sm font-medium text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--foreground)]"
+        >
+          ⏰ Programar
+        </button>
+      </div>
 
       {blocosEmEspera.length > 0 && (
         <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
@@ -839,6 +855,8 @@ export function ScheduleView() {
           ))}
         </ul>
       )}
+
+      {programando && <ProgramarModal onClose={() => setProgramando(false)} />}
 
       {editando && (
         <EditarBloco

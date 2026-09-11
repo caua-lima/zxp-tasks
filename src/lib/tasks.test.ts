@@ -20,6 +20,14 @@ import {
   progressoDaMeta,
   registrarNaMeta,
 } from "./metas";
+import {
+  DIAS_UTEIS,
+  descreverDias,
+  idDoBlocoProgramado,
+  materializarProgramacoes,
+  novaProgramacao,
+  problemaDaProgramacao,
+} from "./programacao";
 import { interpretarComandoDeVoz } from "./voice-command";
 import {
   completedBlockData,
@@ -1908,4 +1916,145 @@ test("migração cria lista de metas vazia em quadro antigo e limpa lixo", () =>
   assert.equal(b.metas.length, 1);
   assert.equal(b.metas[0].dailyTarget, 1);
   assert.deepEqual(b.metas[0].registros, { "2026-09-01": 2 });
+});
+
+// ── Programação (bloco que se repete sozinho) ─────────────────────────────
+// 2026-09-10 é quinta; 2026-09-12 é sábado. Horários sem "Z" são locais
+// (o fuso dos testes é fixo em America/Sao_Paulo).
+
+function progDeTeste(over: Partial<Parameters<typeof novaProgramacao>[0]> = {}, createdAt = "2026-09-01T09:00:00.000Z") {
+  return novaProgramacao(
+    { title: "SDR", weekdays: DIAS_UTEIS, startTime: "08:00", endTime: "18:00", autoStart: true, ...over },
+    "p1",
+    createdAt
+  );
+}
+const local = (s: string) => new Date(s).getTime();
+const quadroCom = (...programacoes: ReturnType<typeof novaProgramacao>[]) => ({ ...emptyBoard(), programacoes });
+
+test("antes do horário o bloco nasce parado, com id previsível", () => {
+  const { board } = materializarProgramacoes(quadroCom(progDeTeste()), "2026-09-10", local("2026-09-10T07:00:00"));
+  assert.equal(board.schedule.length, 1);
+  const b = board.schedule[0];
+  assert.equal(b.id, "prog-p1-2026-09-10");
+  assert.equal(b.plannedMinutes, 600);
+  assert.equal(b.startedAt, undefined);
+  assert.equal(b.programacaoId, "p1");
+});
+
+test("abrindo o app no meio do expediente, o bloco já roda desde o início", () => {
+  const { board } = materializarProgramacoes(quadroCom(progDeTeste()), "2026-09-10", local("2026-09-10T09:30:00"));
+  assert.equal(board.schedule[0].startedAt, new Date("2026-09-10T08:00:00").toISOString());
+});
+
+test("app fechado o dia todo: o expediente nasce fechado e completo", () => {
+  const { board } = materializarProgramacoes(quadroCom(progDeTeste()), "2026-09-10", local("2026-09-10T19:00:00"));
+  const b = board.schedule[0];
+  assert.equal(b.accumulatedMs, 10 * 60 * 60_000);
+  assert.equal(b.completedAt, new Date("2026-09-10T18:00:00").toISOString());
+});
+
+test("materializar de novo sem mudar de fase devolve o MESMO quadro", () => {
+  const primeira = materializarProgramacoes(quadroCom(progDeTeste()), "2026-09-10", local("2026-09-10T09:30:00"));
+  const segunda = materializarProgramacoes(primeira.board, "2026-09-10", local("2026-09-10T09:31:00"));
+  assert.equal(segunda.mudou, false);
+  assert.equal(segunda.board, primeira.board);
+});
+
+test("bloco rodando fecha exatamente no fim, sem contar o que passou das 18h", () => {
+  const rodando = materializarProgramacoes(quadroCom(progDeTeste()), "2026-09-10", local("2026-09-10T09:30:00")).board;
+  const { board } = materializarProgramacoes(rodando, "2026-09-10", local("2026-09-10T18:40:00"));
+  const b = board.schedule[0];
+  assert.equal(b.accumulatedMs, 10 * 60 * 60_000);
+  assert.equal(b.startedAt, undefined);
+  assert.ok(b.completedAt);
+});
+
+test("hora extra retomada depois do fim não é encerrada pelo app", () => {
+  const board = quadroCom(progDeTeste());
+  board.schedule = [{
+    id: idDoBlocoProgramado("p1", "2026-09-10"), date: "2026-09-10", title: "SDR", plannedMinutes: 600,
+    accumulatedMs: 10 * 60 * 60_000, order: 0, programacaoId: "p1",
+    startedAt: new Date("2026-09-10T18:30:00").toISOString(),
+  }];
+  const r = materializarProgramacoes(board, "2026-09-10", local("2026-09-10T19:00:00"));
+  assert.equal(r.mudou, false);
+});
+
+test("bloco pausado pela pessoa não é religado sozinho", () => {
+  const board = quadroCom(progDeTeste());
+  board.schedule = [{
+    id: idDoBlocoProgramado("p1", "2026-09-10"), date: "2026-09-10", title: "SDR", plannedMinutes: 600,
+    accumulatedMs: 2 * 60 * 60_000, order: 0, programacaoId: "p1",
+  }];
+  assert.equal(materializarProgramacoes(board, "2026-09-10", local("2026-09-10T11:00:00")).mudou, false);
+});
+
+test("fim de semana, programação pausada e dia pulado não geram bloco", () => {
+  const hora = local("2026-09-12T09:00:00");
+  assert.equal(materializarProgramacoes(quadroCom(progDeTeste()), "2026-09-12", hora).board.schedule.length, 0);
+  const pausada = { ...progDeTeste(), pausedAt: "2026-09-09T10:00:00.000Z" };
+  assert.equal(materializarProgramacoes(quadroCom(pausada), "2026-09-10", local("2026-09-10T09:00:00")).board.schedule.length, 0);
+  const pulada = { ...progDeTeste(), diasPulados: ["2026-09-10"] };
+  assert.equal(materializarProgramacoes(quadroCom(pulada), "2026-09-10", local("2026-09-10T09:00:00")).board.schedule.length, 0);
+});
+
+test("no dia em que foi criada, o relógio começa na criação e não às 8h", () => {
+  // Criada às 10h do dia 10 (13h em UTC).
+  const p = progDeTeste({}, "2026-09-10T13:00:00.000Z");
+  const { board } = materializarProgramacoes(quadroCom(p), "2026-09-10", local("2026-09-10T11:00:00"));
+  assert.equal(board.schedule[0].startedAt, new Date("2026-09-10T10:00:00").toISOString());
+});
+
+test("dois aparelhos gerando o mesmo expediente viram um bloco só na sincronização", () => {
+  const hora = local("2026-09-10T09:30:00");
+  const pc = materializarProgramacoes(quadroCom(progDeTeste()), "2026-09-10", hora).board;
+  const cel = materializarProgramacoes(quadroCom(progDeTeste()), "2026-09-10", hora).board;
+  assert.equal(mergeBoards(pc, cel).board.schedule.length, 1);
+});
+
+test("sincronizar une os dias pulados da mesma programação", () => {
+  const pc = quadroCom({ ...progDeTeste(), diasPulados: ["2026-09-07"] });
+  const cel = quadroCom({ ...progDeTeste(), diasPulados: ["2026-09-10"] });
+  assert.deepEqual(
+    [...mergeBoards(pc, cel).board.programacoes[0].diasPulados!].sort(),
+    ["2026-09-07", "2026-09-10"]
+  );
+});
+
+test("migração descarta programação sem dia válido e preserva o vínculo do bloco", () => {
+  const b = migrateBoard({
+    topics: [], tasks: [],
+    programacoes: [
+      { id: "a", title: "SDR", startTime: "08:00", endTime: "18:00", weekdays: [1, 1, 9, "x", 5] },
+      { id: "b", title: "Nada", startTime: "08:00", endTime: "18:00", weekdays: [] },
+    ],
+    schedule: [{ id: "prog-a-2026-09-10", date: "2026-09-10", title: "SDR", plannedMinutes: 600, accumulatedMs: 0, order: 0, programacaoId: "a" }],
+  });
+  assert.equal(b.programacoes.length, 1);
+  assert.deepEqual(b.programacoes[0].weekdays, [1, 5]);
+  assert.equal(b.programacoes[0].autoStart, true);
+  assert.equal(b.schedule[0].programacaoId, "a");
+});
+
+test("descreve os dias e recusa programação que termina antes de começar", () => {
+  assert.equal(descreverDias([5, 4, 3, 2, 1]), "Seg a Sex");
+  assert.equal(descreverDias([0, 1, 2, 3, 4, 5, 6]), "Todo dia");
+  assert.equal(descreverDias([6, 0]), "Fim de semana");
+  assert.equal(descreverDias([1, 3]), "Seg, Qua");
+  const base = { title: "SDR", weekdays: DIAS_UTEIS, autoStart: true };
+  assert.equal(problemaDaProgramacao({ ...base, startTime: "18:00", endTime: "08:00" }), "O fim precisa vir depois do início.");
+  assert.equal(problemaDaProgramacao({ ...base, startTime: "08:00", endTime: "18:00" }), null);
+});
+
+test("programação criada depois do fim do expediente não gera o bloco de hoje", () => {
+  // Criada às 21h do dia 10 — que em UTC já é meia-noite do dia 11.
+  const p = progDeTeste({}, "2026-09-11T00:00:00.000Z");
+  const hoje = materializarProgramacoes(quadroCom(p), "2026-09-10", local("2026-09-10T21:30:00"));
+  assert.equal(hoje.board.schedule.length, 0);
+  assert.equal(hoje.mudou, false);
+  // A partir do dia seguinte funciona normalmente.
+  const amanha = materializarProgramacoes(quadroCom(p), "2026-09-11", local("2026-09-11T09:00:00"));
+  assert.equal(amanha.board.schedule.length, 1);
+  assert.ok(amanha.board.schedule[0].startedAt);
 });

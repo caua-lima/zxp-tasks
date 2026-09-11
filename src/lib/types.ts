@@ -158,6 +158,8 @@ export interface ScheduleBlock {
   resumedAt?: string;
   /** Bloco em espera de onde este aqui continua, quando for o caso. */
   continuaDe?: string;
+  /** Programação que gerou este bloco, quando ele veio de uma. */
+  programacaoId?: string;
   order: number;
   /**
    * Projeto a que este bloco pertence, e a tarefa criada junto com ele.
@@ -219,6 +221,34 @@ export interface Meta {
   archivedAt?: string;
 }
 
+/**
+ * Um bloco que se repete sozinho: "SDR, de segunda a sexta, das 8h às 18h".
+ *
+ * O app não precisa estar aberto no horário. Como o cronômetro guarda o
+ * instante de início, o bloco é criado quando o app abre — já rodando desde
+ * o horário certo, ou já fechado se o expediente terminou.
+ */
+export interface Programacao {
+  id: string;
+  title: string;
+  topicId?: string;
+  /** Dias da semana em que vale: 0 = domingo … 6 = sábado. */
+  weekdays: number[];
+  /** Horário local "HH:MM". */
+  startTime: string;
+  endTime: string;
+  /** Liga o cronômetro sozinho no horário de início. */
+  autoStart: boolean;
+  /**
+   * Dias em que o bloco foi apagado de propósito (feriado, folga). Sem este
+   * registro, a próxima checagem recriaria o bloco e seria impossível tirar
+   * o dia.
+   */
+  diasPulados?: string[];
+  createdAt: string;
+  pausedAt?: string;
+}
+
 export interface BoardSettings {
   /**
    * Deixa mais de um cronômetro correr ao mesmo tempo.
@@ -241,6 +271,7 @@ export interface Board {
   weeklyReviews: WeeklyReviewNote[];
   settings: BoardSettings;
   metas: Meta[];
+  programacoes: Programacao[];
 }
 
 export const CURRENT_SCHEMA_VERSION = 4;
@@ -255,5 +286,6 @@ export function emptyBoard(): Board {
     weeklyReviews: [],
     settings: { parallelTimers: false },
     metas: [],
+    programacoes: [],
   };
 }

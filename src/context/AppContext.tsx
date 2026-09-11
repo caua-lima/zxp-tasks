@@ -19,6 +19,7 @@ import {
   Topic,
   TopicKind,
   Meta,
+  Programacao,
   WeeklyReviewNote,
   emptyBoard,
 } from "@/lib/types";
@@ -33,6 +34,11 @@ import { fetchCloudBoard, pushBoardToCloud, subscribeToCloudBoard } from "@/lib/
 import { registrarAparelho } from "@/lib/push";
 import { createTask, NewTaskInput } from "@/lib/task-factory";
 import { aplicarConclusaoNasMetas, NovaMetaInput, novaMeta, registrarNaMeta } from "@/lib/metas";
+import {
+  materializarProgramacoes,
+  NovaProgramacaoInput,
+  novaProgramacao,
+} from "@/lib/programacao";
 import {
   completeBlock,
   completedBlockData,
@@ -114,6 +120,12 @@ interface AppContextValue {
   /** Soma ou subtrai no registro de um dia da meta. */
   registrarMeta: (metaId: string, dia: string, delta: number) => void;
   arquivarMeta: (metaId: string) => void;
+  /** Blocos que se repetem sozinhos, como o expediente do trabalho. */
+  programacoes: Programacao[];
+  addProgramacao: (input: NovaProgramacaoInput) => Programacao;
+  /** Pausa ou retoma uma programação sem apagá-la. */
+  alternarProgramacao: (id: string) => void;
+  removerProgramacao: (id: string) => void;
   /**
    * Começa a tarefa agora: cria (ou reaproveita) o bloco de hoje e liga o
    * cronômetro. Devolve false se a tarefa não existir mais.
@@ -225,6 +237,35 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (Notification.permission !== "granted") return;
     void registrarAparelho();
   }, [userId]);
+
+  /**
+   * Programações: garante os blocos de hoje e fecha o expediente no horário.
+   *
+   * Roda ao carregar, a cada minuto e ao voltar pro app. Não depende de o app
+   * estar aberto às 8h: o cronômetro guarda instantes, então materializar às
+   * 9h30 produz o mesmo bloco que estaria rodando desde as 8h. A virada de
+   * meia-noite também sai daqui — cada checagem usa o dia de agora.
+   */
+  useEffect(() => {
+    if (!ready) return;
+    function aplicar() {
+      setBoard((b) => {
+        const r = materializarProgramacoes(b, todayISO(), Date.now());
+        // Devolve o MESMO objeto quando nada mudou: sem isto, cada minuto
+        // dispararia uma gravação e uma sincronização à toa.
+        return r.mudou ? r.board : b;
+      });
+    }
+    // Primeira rodada fora do corpo do efeito, e não como setState síncrono.
+    const primeira = setTimeout(aplicar, 0);
+    const intervalo = setInterval(aplicar, 60_000);
+    document.addEventListener("visibilitychange", aplicar);
+    return () => {
+      clearTimeout(primeira);
+      clearInterval(intervalo);
+      document.removeEventListener("visibilitychange", aplicar);
+    };
+  }, [ready]);
 
   /**
    * Rede de segurança do Realtime: ao voltar pro app, relê a nuvem.
@@ -631,7 +672,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const removeBlock = useCallback((id: string) => {
-    setBoard((b) => ({ ...b, schedule: b.schedule.filter((x) => x.id !== id) }));
+    setBoard((b) => {
+      const alvo = b.schedule.find((x) => x.id === id);
+      const schedule = b.schedule.filter((x) => x.id !== id);
+      if (!alvo?.programacaoId) return { ...b, schedule };
+      // Apagar o bloco de uma programação é tirar o dia (feriado, folga).
+      // Registra o dia como pulado — senão a checagem do próximo minuto
+      // recriaria o bloco e seria impossível tirar o dia de folga.
+      return {
+        ...b,
+        schedule,
+        programacoes: (b.programacoes ?? []).map((p) =>
+          p.id === alvo.programacaoId
+            ? { ...p, diasPulados: [...new Set([...(p.diasPulados ?? []), alvo.date])] }
+            : p
+        ),
+      };
+    });
   }, []);
 
   /**
@@ -868,6 +925,36 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
+  // ── Programações ───────────────────────────────────────────────────────
+  const addProgramacao = useCallback((input: NovaProgramacaoInput) => {
+    const programacao = novaProgramacao(input, uuid(), new Date().toISOString());
+    setBoard((b) => {
+      const comNova = { ...b, programacoes: [...(b.programacoes ?? []), programacao] };
+      // Materializa na hora: quem acabou de programar quer ver o bloco de
+      // hoje aparecer, não esperar a próxima checagem de minuto.
+      return materializarProgramacoes(comNova, todayISO(), Date.now()).board;
+    });
+    return programacao;
+  }, []);
+
+  const alternarProgramacao = useCallback((id: string) => {
+    const nowIso = new Date().toISOString();
+    setBoard((b) => ({
+      ...b,
+      programacoes: (b.programacoes ?? []).map((p) =>
+        p.id === id ? { ...p, pausedAt: p.pausedAt ? undefined : nowIso } : p
+      ),
+    }));
+  }, []);
+
+  /** Para de gerar blocos novos; os dias que já aconteceram ficam no histórico. */
+  const removerProgramacao = useCallback((id: string) => {
+    setBoard((b) => ({
+      ...b,
+      programacoes: (b.programacoes ?? []).filter((p) => p.id !== id),
+    }));
+  }, []);
+
   /** Copia a estrutura de um dia pro outro, com os cronômetros zerados. */
   const copyDay = useCallback((fromDate: string, toDate: string) => {
     let copiados = 0;
@@ -965,6 +1052,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       addMeta,
       registrarMeta,
       arquivarMeta,
+      programacoes: board.programacoes ?? [],
+      addProgramacao,
+      alternarProgramacao,
+      removerProgramacao,
       syncStatus,
       lastSyncedAt,
     }),
@@ -1012,6 +1103,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       addMeta,
       registrarMeta,
       arquivarMeta,
+      addProgramacao,
+      alternarProgramacao,
+      removerProgramacao,
       syncStatus,
       lastSyncedAt,
     ]
