@@ -260,6 +260,140 @@ export function MindMap({ topicId, filters }: MindMapProps) {
     dragState.current = null;
   }
 
+  /**
+   * Gera um arquivo do mapa — SVG puro (texto, retângulos, curvas), sem o
+   * `foreignObject` com HTML que a tela usa pra ficar bonita interativamente.
+   * Fora do navegador (num visualizador de imagem, no Illustrator, num PDF)
+   * `foreignObject` costuma não renderizar; texto e formas simples abrem em
+   * qualquer lugar, e SVG imprime nítido em qualquer tamanho — melhor do que
+   * virar PNG.
+   */
+  function baixarMapa() {
+    const caixas: { x: number; y: number; w: number; h: number }[] = [];
+    layout.topicNodes.forEach((n) => caixas.push({ ...PILULA, x: n.x, y: n.y }));
+    layout.taskNodes.forEach((n) => caixas.push({ ...CARTAO, x: n.x, y: n.y }));
+    if (!topicId) caixas.push({ x: 0, y: 0, w: 88, h: 88 });
+    if (caixas.length === 0) return;
+
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const c of caixas) {
+      minX = Math.min(minX, c.x - c.w / 2);
+      maxX = Math.max(maxX, c.x + c.w / 2);
+      minY = Math.min(minY, c.y - c.h / 2);
+      maxY = Math.max(maxY, c.y + c.h / 2);
+    }
+
+    const pad = 40;
+    const headerH = 64;
+    const footerH = 46;
+    const w = Math.round(maxX - minX + pad * 2);
+    const h = Math.round(maxY - minY + pad * 2 + headerH + footerH);
+    const offX = pad - minX;
+    const offY = pad + headerH - minY;
+
+    const esc = (s: string) =>
+      s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const truncar = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+
+    const partes: string[] = [];
+    partes.push(`<rect width="${w}" height="${h}" fill="#10100E"/>`);
+    partes.push(
+      `<text x="${pad}" y="30" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="#F6F3E8">ZXP Tasks</text>`
+    );
+    const subtitulo = topicId && visibleTopics[0]
+      ? `Mapa mental — ${visibleTopics[0].name}`
+      : "Mapa mental — todos os projetos";
+    partes.push(
+      `<text x="${pad}" y="49" font-family="Arial, sans-serif" font-size="11" fill="rgba(246,243,232,0.65)">${esc(
+        subtitulo
+      )} · ${new Date().toLocaleDateString("pt-BR")}</text>`
+    );
+
+    if (!topicId) {
+      layout.topicNodes.forEach((n, tId) => {
+        const t = topics.find((x) => x.id === tId);
+        if (!t) return;
+        partes.push(
+          `<path d="M ${offX} ${offY} C ${offX + n.x / 2} ${offY}, ${offX + n.x / 2} ${offY + n.y}, ${offX + n.x} ${offY + n.y}" fill="none" stroke="${t.color}" stroke-width="2.5" opacity="0.55"/>`
+        );
+      });
+      partes.push(`<circle cx="${offX}" cy="${offY}" r="44" fill="${MARCA_AZUL}"/>`);
+      partes.push(
+        `<text x="${offX}" y="${offY + 5}" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" font-weight="600" fill="#10100E">ZXP</text>`
+      );
+    }
+
+    visibleTopics.forEach((t) => {
+      const node = layout.topicNodes.get(t.id);
+      if (!node) return;
+      const topicTasks = rendered.filter((x) => x.topicId === t.id);
+      const x = offX + node.x;
+      const y = offY + node.y;
+
+      topicTasks.forEach((task) => {
+        const tn = layout.taskNodes.get(task.id);
+        if (!tn) return;
+        const tx = offX + tn.x;
+        const ty = offY + tn.y;
+        partes.push(
+          `<path d="M ${x} ${y} C ${(x + tx) / 2} ${y}, ${(x + tx) / 2} ${ty}, ${tx} ${ty}" fill="none" stroke="${t.color}" stroke-width="1.5" opacity="${task.completedAt ? 0.18 : 0.4}"/>`
+        );
+      });
+
+      partes.push(`<rect x="${x - 74}" y="${y - 21}" width="148" height="42" rx="21" fill="${t.color}"/>`);
+      partes.push(
+        `<text x="${x - 6}" y="${y + 4}" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="600" fill="#10100E">${esc(truncar(t.name, 16))}</text>`
+      );
+      partes.push(
+        `<text x="${x + 58}" y="${y + 4}" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="600" fill="#10100E">${topicTasks.length}</text>`
+      );
+
+      topicTasks.forEach((task) => {
+        const tn = layout.taskNodes.get(task.id);
+        if (!tn) return;
+        const tx = offX + tn.x;
+        const ty = offY + tn.y;
+        const overdue = isTaskOverdue(task);
+        const op = task.completedAt ? 0.55 : 1;
+        partes.push(
+          `<rect x="${tx - 78}" y="${ty - 19}" width="156" height="38" rx="9" fill="#242320" stroke="${overdue ? "#D65A4A" : "#3A3934"}" stroke-width="${overdue ? 2 : 1}" opacity="${op}"/>`
+        );
+        partes.push(`<rect x="${tx - 78}" y="${ty - 19}" width="4" height="38" fill="${PRIORITY_COLOR[task.priority]}" opacity="${op}"/>`);
+        partes.push(`<circle cx="${tx - 63}" cy="${ty - 4}" r="3" fill="${STATUS_COLOR[task.status]}"/>`);
+        partes.push(
+          `<text x="${tx - 55}" y="${ty - 1}" font-family="Arial, sans-serif" font-size="10.5" fill="#F6F3E8" opacity="${op}">${esc(truncar(task.title, 20))}</text>`
+        );
+        partes.push(
+          `<text x="${tx - 55}" y="${ty + 12}" font-family="Arial, sans-serif" font-size="8.5" fill="rgba(246,243,232,0.65)">${esc(STATUS_LABEL[task.status])}</text>`
+        );
+      });
+    });
+
+    let lx = pad;
+    const ly = h - footerH + 22;
+    Object.entries(STATUS_LABEL).forEach(([key, lbl]) => {
+      partes.push(`<circle cx="${lx}" cy="${ly}" r="4" fill="${STATUS_COLOR[key]}"/>`);
+      partes.push(
+        `<text x="${lx + 10}" y="${ly + 4}" font-family="Arial, sans-serif" font-size="10" fill="#F6F3E8">${lbl}</text>`
+      );
+      lx += 92;
+    });
+    partes.push(
+      `<text x="${w - pad}" y="${h - 16}" text-anchor="end" font-family="Arial, sans-serif" font-size="9" fill="rgba(246,243,232,0.5)">ZXP Solutions · Onyx Blue</text>`
+    );
+
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${partes.join("")}</svg>`;
+    const blob = new Blob([svg], { type: "image/svg+xml" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `mapa-mental-zxp-${new Date().toISOString().slice(0, 10)}.svg`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
   if (topics.length === 0) {
     return (
       <div className="flex h-full items-center justify-center p-6 text-center text-sm text-[var(--muted)]">
@@ -279,6 +413,13 @@ export function MindMap({ topicId, filters }: MindMapProps) {
           className="min-h-[36px] rounded-md bg-[var(--surface)] px-2.5 text-xs font-medium text-[var(--foreground)] shadow hover:bg-[var(--surface2)]"
         >
           {asList ? "Ver mapa" : "Ver em lista"}
+        </button>
+        <button
+          onClick={baixarMapa}
+          title="Baixa um arquivo .svg do mapa — abre em qualquer visualizador de imagem e imprime nítido em qualquer tamanho"
+          className="min-h-[36px] rounded-md bg-[var(--surface)] px-2.5 text-xs font-medium text-[var(--foreground)] shadow hover:bg-[var(--surface2)]"
+        >
+          ⭳ Baixar
         </button>
         {!asList && (
           <>
