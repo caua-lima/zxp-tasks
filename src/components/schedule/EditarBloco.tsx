@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { ScheduleBlock, Topic } from "@/lib/types";
-import { DURATION_PRESETS } from "@/lib/schedule";
+import { DURATION_PRESETS, elapsedMs, isRunning, MINUTE_MS } from "@/lib/schedule";
 import { Modal } from "../shared/Modal";
 
 const campo =
@@ -31,6 +31,13 @@ export function EditarBloco({
   const [minutes, setMinutes] = useState(block.plannedMinutes);
   const [topicId, setTopicId] = useState(block.topicId ?? "");
   const [tempoLivre, setTempoLivre] = useState(!!block.openEnded);
+  const rodando = isRunning(block);
+  // Quanto já foi cronometrado, em minutos — pra corrigir quem esqueceu de
+  // concluir e só percebeu horas depois, com o relógio já bem passado do
+  // combinado.
+  const [tempoGasto, setTempoGasto] = useState(() =>
+    Math.round(elapsedMs(block) / MINUTE_MS)
+  );
 
   // Um bloco que já tem tarefa não pode trocar de projeto por aqui: a tarefa
   // ficaria numa pasta e o bloco apontando pra outra.
@@ -48,6 +55,10 @@ export function EditarBloco({
       // que nunca foi de tempo livre.
       openEnded: tempoLivre ? true : undefined,
       ...(projetoTravado ? {} : { topicId: topicId || undefined }),
+      // Só mexe no tempo já gasto quando o cronômetro está parado: com ele
+      // rodando, o valor mostrado na tela já está andando e salvar por cima
+      // congelaria um número que segundos depois estaria errado de novo.
+      ...(rodando ? {} : { accumulatedMs: Math.max(0, Math.round(tempoGasto)) * MINUTE_MS }),
     });
     if (block.taskId && nome !== block.title) {
       updateTask(block.taskId, { title: nome });
@@ -144,12 +155,29 @@ export function EditarBloco({
               &ldquo;passou do tempo&rdquo;.
             </p>
           )}
-          {block.accumulatedMs > 0 && !tempoLivre && (
-            <p className="mt-1 text-[11px] text-[var(--muted)]">
-              O tempo já cronometrado não é apagado — só muda o quanto estava
-              planejado.
-            </p>
-          )}
+        </div>
+
+        <div>
+          <label htmlFor="bloco-tempo-gasto" className={rotulo}>
+            Tempo já gasto
+          </label>
+          <div className="flex items-center gap-2">
+            <input
+              id="bloco-tempo-gasto"
+              type="number"
+              min={0}
+              disabled={rodando}
+              value={tempoGasto}
+              onChange={(e) => setTempoGasto(Math.max(0, Number(e.target.value) || 0))}
+              className={`${campo} w-24 tabular-nums disabled:opacity-50`}
+            />
+            <span className="text-xs text-[var(--muted)]">minutos</span>
+          </div>
+          <p className="mt-1 text-[11px] text-[var(--muted)]">
+            {rodando
+              ? "Pause ou conclua o bloco pra corrigir o tempo — enquanto roda, o relógio muda sozinho."
+              : "Pra quando o cronômetro passou do combinado porque você esqueceu de concluir. Corrigir aqui não mexe no que já foi planejado."}
+          </p>
         </div>
 
         <div>
