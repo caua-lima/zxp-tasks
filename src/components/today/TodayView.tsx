@@ -56,10 +56,10 @@ function Empty({ children }: { children: React.ReactNode }) {
 }
 
 export function TodayView({
-  onOpenKanban,
+  onOpenProjects,
   priorityFilter = null,
 }: {
-  onOpenKanban: () => void;
+  onOpenProjects: () => void;
   priorityFilter?: TaskPriority | null;
 }) {
   const {
@@ -405,10 +405,10 @@ export function TodayView({
       </Section>
 
       <button
-        onClick={onOpenKanban}
+        onClick={onOpenProjects}
         className="w-full rounded-xl border border-dashed border-[var(--border)] py-3 text-sm text-[var(--muted)] hover:bg-[var(--surface)]"
       >
-        Ver quadro completo
+        Ver todos os projetos
       </button>
 
       {modalOpen && (

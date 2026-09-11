@@ -9,7 +9,7 @@ const SHORTCUTS: { keys: string; description: string }[] = [
   { keys: "E", description: "Editar a última tarefa aberta" },
   { keys: "D", description: "Concluir a última tarefa aberta" },
   { keys: "G depois H", description: "Ir para Hoje" },
-  { keys: "G depois K", description: "Ir para o Kanban" },
+  { keys: "G depois M", description: "Ir para o Mapa mental" },
   { keys: "?", description: "Mostrar esta ajuda" },
   { keys: "Esc", description: "Fechar modal, menu ou busca" },
 ];

@@ -24,7 +24,6 @@ export type ViewKey =
   | "metas"
   | "report"
   | "today"
-  | "kanban"
   | "mindmap"
   | "review"
   | "project";
@@ -43,7 +42,6 @@ const VIEWS: { key: ViewKey; label: string }[] = [
 const EXTRA_VIEWS: { key: ViewKey; label: string }[] = [
   { key: "today", label: "Hoje (foco)" },
   { key: "report", label: "Relatório" },
-  { key: "kanban", label: "Kanban" },
   { key: "mindmap", label: "Mapa mental" },
   { key: "review", label: "Revisão semanal" },
 ];

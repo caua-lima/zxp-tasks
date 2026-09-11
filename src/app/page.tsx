@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppProvider, useApp } from "@/context/AppContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { Sidebar, ViewKey } from "@/components/Sidebar";
-import { KanbanBoard } from "@/components/KanbanBoard";
 import { MindMap } from "@/components/MindMap";
 import { TopBar } from "@/components/TopBar";
 import { TodayView } from "@/components/today/TodayView";
@@ -90,7 +89,6 @@ function HomeInner() {
           c: "schedule",
           o: "goals",
           h: "today",
-          k: "kanban",
           m: "mindmap",
           r: "review",
           l: "report",
@@ -142,7 +140,6 @@ function HomeInner() {
       { id: "goals", label: "Ir para Projetos", hint: "G P", run: () => setView("goals") },
       { id: "metas", label: "Ir para Metas", run: () => setView("metas") },
       { id: "today", label: "Ir para Hoje (foco)", hint: "G H", run: () => setView("today") },
-      { id: "kanban", label: "Ir para Kanban", hint: "G K", run: () => setView("kanban") },
       { id: "mind", label: "Ir para Mapa mental", hint: "G M", run: () => setView("mindmap") },
       {
         id: "review",
@@ -168,7 +165,7 @@ function HomeInner() {
         label: "Ver todos os tópicos",
         run: () => {
           setSelectedTopicId(null);
-          setView("kanban");
+          setView("goals");
         },
       },
       ...topics
@@ -189,7 +186,7 @@ function HomeInner() {
   if (!ready) return null;
 
   const filterMode: "full" | "priority" | "none" =
-    view === "kanban" || view === "mindmap"
+    view === "mindmap"
       ? "full"
       : view === "today"
         ? "priority"
@@ -201,8 +198,8 @@ function HomeInner() {
         selectedTopicId={selectedTopicId}
         onSelectTopic={(id) => {
           setSelectedTopicId(id);
-          // Clicar num tópico abre o projeto; "todos" volta pro quadro.
-          setView(id ? "project" : "kanban");
+          // Clicar num tópico abre o projeto; "todos" volta pra lista deles.
+          setView(id ? "project" : "goals");
         }}
         view={view}
         onChangeView={setView}
@@ -234,12 +231,9 @@ function HomeInner() {
           )}
           {view === "today" && (
             <TodayView
-              onOpenKanban={() => setView("kanban")}
+              onOpenProjects={() => setView("goals")}
               priorityFilter={filters.priority ?? null}
             />
-          )}
-          {view === "kanban" && (
-            <KanbanBoard topicId={selectedTopicId} filters={filters} sortKey={sortKey} />
           )}
           {view === "mindmap" && <MindMap topicId={selectedTopicId} filters={filters} />}
           {view === "review" && <WeeklyReview />}
