@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import webpush from "web-push";
+import { endpointDePushValido } from "@/lib/push-endpoint";
 
 /**
  * Envia um aviso pros outros aparelhos da mesma conta.
@@ -35,15 +36,23 @@ export async function POST(request: Request) {
   const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
   if (!token) return NextResponse.json({ erro: "sem token" }, { status: 401 });
 
-  let corpoDaRequisicao: { titulo?: unknown; corpo?: unknown; exceto?: unknown };
+  let corpoBruto: unknown;
   try {
-    corpoDaRequisicao = await request.json();
+    corpoBruto = await request.json();
   } catch {
     return NextResponse.json({ erro: "json invalido" }, { status: 400 });
   }
+  // `JSON.parse` aceita `null`, número, string e array como documento
+  // válido — o tipo declarado antes fingia que só um objeto chegava aqui, e
+  // `corpoBruto.titulo` em cima de `null` derrubava a rota com uma exceção
+  // não tratada antes de qualquer validação de verdade acontecer.
+  if (!corpoBruto || typeof corpoBruto !== "object" || Array.isArray(corpoBruto)) {
+    return NextResponse.json({ erro: "corpo invalido" }, { status: 400 });
+  }
+  const corpoDaRequisicao = corpoBruto as { titulo?: unknown; corpo?: unknown; exceto?: unknown };
 
-  const titulo = typeof corpoDaRequisicao.titulo === "string" ? corpoDaRequisicao.titulo : "";
-  const corpo = typeof corpoDaRequisicao.corpo === "string" ? corpoDaRequisicao.corpo : "";
+  const titulo = typeof corpoDaRequisicao.titulo === "string" ? corpoDaRequisicao.titulo.slice(0, 200) : "";
+  const corpo = typeof corpoDaRequisicao.corpo === "string" ? corpoDaRequisicao.corpo.slice(0, 500) : "";
   const exceto = typeof corpoDaRequisicao.exceto === "string" ? corpoDaRequisicao.exceto : null;
   if (!titulo) return NextResponse.json({ erro: "sem titulo" }, { status: 400 });
 
@@ -60,7 +69,13 @@ export async function POST(request: Request) {
     .select("endpoint, p256dh, auth");
   if (error) return NextResponse.json({ erro: "falha ao ler inscricoes" }, { status: 500 });
 
-  const inscricoes = ((data ?? []) as Inscricao[]).filter((i) => i.endpoint !== exceto);
+  // A defesa de verdade contra SSRF: o RLS garante que cada pessoa só grava
+  // na PRÓPRIA linha, mas não impede ela de gravar um destino qualquer —
+  // este servidor é quem faz a requisição de saída de verdade, então é aqui
+  // que o destino precisa ser validado, não só no formulário do cliente.
+  const inscricoes = ((data ?? []) as Inscricao[]).filter(
+    (i) => i.endpoint !== exceto && endpointDePushValido(i.endpoint)
+  );
   if (inscricoes.length === 0) return NextResponse.json({ enviados: 0 });
 
   webpush.setVapidDetails(VAPID_ASSUNTO, VAPID_PUBLICA, VAPID_PRIVADA);

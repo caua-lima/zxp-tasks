@@ -58,6 +58,7 @@ import { filterTasks, sortTasks } from "./task-filters";
 import { classificarErroDeGravacao, interpretarConteudoSalvo } from "./storage";
 import { concluirTarefaNoBoard } from "./task-completion";
 import { MARCA_AZUL } from "./marca";
+import { endpointDePushValido } from "./push-endpoint";
 import { taskBelongsToTopic } from "./task-utils";
 import { validateBackup, mergeImportedData, mergeBoards } from "./task-backup";
 import { calculateWeeklyMetrics } from "./weekly-review";
@@ -2406,6 +2407,38 @@ test("migração preserva as metas do bloco sem repetir nem aceitar lixo", () =>
     schedule: [{ id: "a", date: "2026-09-05", title: "Ler", plannedMinutes: 20, accumulatedMs: 0, order: 0, metaIds: ["m1", "m1", 3] }],
   });
   assert.deepEqual(b.schedule[0].metaIds, ["m1"]);
+});
+
+// ── Destino de push (defesa contra SSRF) ──────────────────────────────────
+
+test("aceita os serviços de push de verdade dos navegadores suportados", () => {
+  assert.equal(endpointDePushValido("https://fcm.googleapis.com/fcm/send/abc"), true);
+  assert.equal(endpointDePushValido("https://updates.push.services.mozilla.com/wpush/v2/x"), true);
+  assert.equal(endpointDePushValido("https://web.push.apple.com/abc"), true);
+  assert.equal(endpointDePushValido("https://br1.notify.windows.com/xyz"), true);
+});
+
+test("recusa host arbitrário, mesmo em HTTPS", () => {
+  assert.equal(endpointDePushValido("https://meuservidor.com/coleta"), false);
+  assert.equal(endpointDePushValido("https://fcm.googleapis.com.evil.com/x"), false);
+});
+
+test("recusa destino local, privado ou de metadata", () => {
+  assert.equal(endpointDePushValido("https://127.0.0.1:9443/x"), false);
+  assert.equal(endpointDePushValido("https://169.254.169.254/latest/meta-data"), false);
+  assert.equal(endpointDePushValido("https://192.168.0.10/x"), false);
+});
+
+test("recusa esquema que não é https, e credenciais embutidas na URL", () => {
+  assert.equal(endpointDePushValido("http://fcm.googleapis.com/fcm/send/abc"), false);
+  assert.equal(endpointDePushValido("https://usuario:senha@fcm.googleapis.com/x"), false);
+});
+
+test("recusa entrada que não é sequer uma URL válida", () => {
+  assert.equal(endpointDePushValido(""), false);
+  assert.equal(endpointDePushValido(null), false);
+  assert.equal(endpointDePushValido(42), false);
+  assert.equal(endpointDePushValido("não é url nenhuma"), false);
 });
 
 // ── Conclusão de tarefa — mesma função em qualquer caminho ────────────────

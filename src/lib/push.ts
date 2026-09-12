@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { endpointDePushValido } from "./push-endpoint";
 
 /**
  * Notificação que sai de um aparelho e chega nos outros.
@@ -94,6 +95,11 @@ export async function registrarAparelho(): Promise<boolean> {
         userVisibleOnly: true,
         applicationServerKey: base64UrlParaBytes(chave),
       }));
+
+    // O navegador é quem gera esse endpoint — não devia vir de outro lugar,
+    // mas validar aqui também é de graça e barra qualquer coisa fora do
+    // esperado antes de chegar no banco.
+    if (!endpointDePushValido(sub.endpoint)) return false;
 
     const bruto = sub.toJSON() as { endpoint?: string; keys?: Record<string, string> };
     const { error } = await supabase.from(TABELA).upsert(
