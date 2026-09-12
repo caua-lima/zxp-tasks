@@ -1,4 +1,9 @@
-const CACHE = "zxp-tasks-v5";
+// Todo cache deste app usa este prefixo — é o que permite limpar só o que é
+// nosso na ativação, sem arriscar apagar um cache de outra coisa que algum
+// dia exista sob esta mesma origem (o Cache API já é isolado por origem,
+// mas nada garante que só este service worker cria caches aqui).
+const PREFIX = "zxp-tasks-";
+const CACHE = PREFIX + "v5";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -8,7 +13,11 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) =>
+        Promise.all(
+          keys.filter((k) => k !== CACHE && k.startsWith(PREFIX)).map((k) => caches.delete(k))
+        )
+      )
       .then(() => self.clients.claim())
   );
 });
@@ -35,8 +44,17 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(request, copy));
+          // Só resposta de verdade vira fallback offline. Cachear um 404/500
+          // faria a PRÓXIMA vez offline abrir a página de erro do servidor
+          // em vez do app — trocar um problema passageiro por um permanente.
+          if (res.ok) {
+            const copy = res.clone();
+            // `waitUntil` estende a vida do evento até a escrita terminar —
+            // sem isso, o navegador podia encerrar o service worker logo
+            // depois de `respondWith` resolver, cancelando a gravação no
+            // meio e deixando o cache silenciosamente desatualizado.
+            event.waitUntil(caches.open(CACHE).then((c) => c.put(request, copy)));
+          }
           return res;
         })
         .catch(() => caches.match(request).then((cached) => cached || caches.match("/")))
@@ -51,7 +69,7 @@ self.addEventListener("fetch", (event) => {
         fetch(request).then((res) => {
           if (res.ok && url.pathname.startsWith("/_next/static/")) {
             const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put(request, copy));
+            event.waitUntil(caches.open(CACHE).then((c) => c.put(request, copy)));
           }
           return res;
         })

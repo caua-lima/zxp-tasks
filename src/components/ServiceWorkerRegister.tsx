@@ -36,7 +36,13 @@ export function ServiceWorkerRegister() {
         for (const reg of regs) reg.unregister();
       });
       if (typeof caches !== "undefined") {
-        caches.keys().then((keys) => keys.forEach((k) => caches.delete(k)));
+        // Só os caches DESTE app — o mesmo prefixo usado em public/sw.js.
+        // Apagar QUALQUER cache da origem (como era antes) tiraria também
+        // o de qualquer outra coisa que um dia exista aqui, sem relação
+        // nenhuma com este service worker.
+        caches
+          .keys()
+          .then((keys) => keys.filter((k) => k.startsWith("zxp-tasks-")).forEach((k) => caches.delete(k)));
       }
       return;
     }
