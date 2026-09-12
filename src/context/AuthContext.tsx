@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase, supabaseConfigured } from "@/lib/supabase";
+import { desativarPushDesteAparelho } from "@/lib/push";
 
 /**
  * Resultado do cadastro. `precisaConfirmarEmail` é true quando o Supabase
@@ -100,6 +101,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function logout() {
     if (!supabase) return;
+    // Enquanto ainda autenticado: apagar a própria inscrição de push
+    // depende disso — depois do signOut, o RLS não deixaria mais.
+    await desativarPushDesteAparelho();
     await supabase.auth.signOut();
   }
 

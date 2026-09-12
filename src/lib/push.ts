@@ -119,6 +119,34 @@ export async function registrarAparelho(): Promise<boolean> {
 }
 
 /**
+ * Desliga o push DESTE aparelho — chamada antes de sair da conta.
+ *
+ * Sem isto, a inscrição sobrevivia no navegador e no banco depois do
+ * logout: outro aparelho ainda logado na conta anterior continuaria
+ * enviando avisos pra cá, e a próxima conta a entrar neste mesmo aparelho
+ * reaproveitaria o mesmo `endpoint` — o upsert por `endpoint` tentaria
+ * alterar uma linha que pertence à conta ANTERIOR, e o RLS bloquearia.
+ *
+ * Roda ANTES do `signOut()`: apagar a própria linha depende de ainda estar
+ * autenticado como a conta dona dela.
+ */
+export async function desativarPushDesteAparelho(): Promise<void> {
+  if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    const sub = await reg?.pushManager.getSubscription();
+    if (!sub) return;
+    if (supabase) {
+      await supabase.from(TABELA).delete().eq("endpoint", sub.endpoint);
+    }
+    await sub.unsubscribe();
+  } catch {
+    // Sair da conta não pode travar por causa disso — pior um aparelho que
+    // continua inscrito do que a pessoa presa sem conseguir sair.
+  }
+}
+
+/**
  * Manda o aviso pros OUTROS aparelhos da conta.
  *
  * O aparelho que disparou a ação já mostrou a notificação local na hora —
