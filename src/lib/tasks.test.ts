@@ -55,6 +55,7 @@ import {
   suggestFocusTasks,
 } from "./task-utils";
 import { filterTasks, sortTasks } from "./task-filters";
+import { classificarErroDeGravacao, interpretarConteudoSalvo } from "./storage";
 import { taskBelongsToTopic } from "./task-utils";
 import { validateBackup, mergeImportedData, mergeBoards } from "./task-backup";
 import { calculateWeeklyMetrics } from "./weekly-review";
@@ -2324,6 +2325,38 @@ test("tópico já com grupo próprio não é reatribuído pela migração", () =
   });
   assert.equal(b.topics[0].groupId, "meu-grupo");
   assert.deepEqual(b.groups.map((g) => g.name), ["Meus projetos"]);
+});
+
+describe("armazenamento local — corrupção não vira board vazio silenciosamente", () => {
+  test("nada salvo ainda: vazio, sem confundir com corrompido", () => {
+    const r = interpretarConteudoSalvo(null);
+    assert.equal(r.status, "vazio");
+  });
+
+  test("JSON válido carrega normalmente", () => {
+    const r = interpretarConteudoSalvo(JSON.stringify({ topics: [], tasks: [] }));
+    assert.equal(r.status, "ok");
+  });
+
+  test("JSON ilegível preserva o texto bruto em vez de virar vazio silencioso", () => {
+    const r = interpretarConteudoSalvo("{ isso não é json");
+    assert.equal(r.status, "corrompido");
+    assert.equal(r.status === "corrompido" && r.bruto, "{ isso não é json");
+  });
+
+  test("erro de cota do navegador é reconhecido pelo nome padrão", () => {
+    const erro = new DOMException("mock", "QuotaExceededError");
+    assert.equal(classificarErroDeGravacao(erro), "cota-excedida");
+  });
+
+  test("erro de cota do Firefox antigo (nome diferente) também é reconhecido", () => {
+    const erro = new DOMException("mock", "NS_ERROR_DOM_QUOTA_REACHED");
+    assert.equal(classificarErroDeGravacao(erro), "cota-excedida");
+  });
+
+  test("erro qualquer não vira cota por engano", () => {
+    assert.equal(classificarErroDeGravacao(new Error("outra coisa")), "desconhecido");
+  });
 });
 
 test("migração aceita o teto de auto-conclusão só quando é um número positivo", () => {

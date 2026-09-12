@@ -31,8 +31,38 @@ function isTyping(target: EventTarget | null): boolean {
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
 }
 
+/**
+ * O quadro na tela continua funcionando (fica em memória), mas algo no
+ * armazenamento deste navegador não está bem — silenciar isso é o que fazia
+ * um board corrompido virar vazio sem ninguém notar.
+ */
+function AvisoDeArmazenamento({
+  tipo,
+}: {
+  tipo: "corrompido" | "cota-excedida" | "indisponivel" | "desconhecido";
+}) {
+  const texto: Record<typeof tipo, string> = {
+    corrompido:
+      "O que estava salvo neste navegador ficou ilegível. O app abriu vazio, mas uma cópia do conteúdo original foi guardada — exporte os dados (Dados > Exportar) assim que puder pra não depender só dela.",
+    "cota-excedida":
+      "O armazenamento deste navegador está cheio. As últimas alterações podem não ter sido salvas aqui — exporte um backup e considere apagar backups antigos em Dados.",
+    indisponivel:
+      "Não consegui salvar neste navegador agora (aba anônima, armazenamento bloqueado). O que você fizer nesta sessão pode se perder ao fechar a aba.",
+    desconhecido:
+      "Não consegui salvar as últimas alterações neste navegador. Exporte um backup em Dados pra não correr risco.",
+  };
+  return (
+    <div
+      role="alert"
+      className="border-b border-[var(--warning)] bg-[var(--surface2)] px-4 py-2 text-xs text-[var(--foreground)]"
+    >
+      ⚠️ {texto[tipo]}
+    </div>
+  );
+}
+
 function HomeInner() {
-  const { topics, tasks, ready, setTaskStatus, getLastOpenedTaskId } = useApp();
+  const { topics, tasks, ready, setTaskStatus, getLastOpenedTaskId, storageError } = useApp();
   const { showToast } = useToast();
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
   const [view, setView] = useState<ViewKey>("schedule");
@@ -220,6 +250,7 @@ function HomeInner() {
           onOpenData={() => setDataOpen(true)}
           onOpenPalette={() => setPaletteOpen(true)}
         />
+        {storageError && <AvisoDeArmazenamento tipo={storageError} />}
         <PuxarParaRecarregar className="min-h-0 flex-1 overflow-y-auto">
           {view === "schedule" && <ScheduleView />}
           {view === "goals" && (

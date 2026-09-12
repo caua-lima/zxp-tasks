@@ -160,6 +160,12 @@ interface AppContextValue {
   /** Sincronização com a nuvem (opcional — só ativa com usuário logado). */
   syncStatus: SyncStatus;
   lastSyncedAt: string | null;
+  /**
+   * `null` quando o armazenamento local está bem. Quando não está, o board
+   * na tela continua funcionando (em memória) mas pode não estar sendo
+   * salvo — a interface precisa avisar em vez de fingir que está tudo bem.
+   */
+  storageError: "corrompido" | "cota-excedida" | "indisponivel" | "desconhecido" | null;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -167,17 +173,30 @@ const AppContext = createContext<AppContextValue | null>(null);
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [board, setBoard] = useState<Board>(emptyBoard);
   const [ready, setReady] = useState(false);
+  const [storageError, setStorageError] = useState<AppContextValue["storageError"]>(null);
 
   useEffect(() => {
     // localStorage não existe no SSR; ler durante o render causaria
     // divergência de hidratação.
+    const resultado = loadBoard();
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setBoard(loadBoard());
+    setBoard(resultado.board);
+    if (resultado.status === "corrompido") {
+      setStorageError("corrompido");
+    }
     setReady(true);
   }, []);
 
   useEffect(() => {
-    if (ready) saveBoard(board);
+    if (!ready) return;
+    const resultado = saveBoard(board);
+    // Sucesso limpa um erro anterior (ex.: cota que foi liberada); um board
+    // corrompido detectado na carga não é apagado por uma gravação normal
+    // subsequente — só some quando a pessoa agir (ex.: importar de novo).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setStorageError((atual) =>
+      resultado.ok ? (atual === "corrompido" ? atual : null) : resultado.motivo
+    );
   }, [board, ready]);
 
   // ── Sincronização com a nuvem (opcional) ──────────────────────────────
@@ -1142,6 +1161,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       removerProgramacao,
       syncStatus,
       lastSyncedAt,
+      storageError,
     }),
     [
       board,
@@ -1195,6 +1215,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       removerProgramacao,
       syncStatus,
       lastSyncedAt,
+      storageError,
     ]
   );
 
