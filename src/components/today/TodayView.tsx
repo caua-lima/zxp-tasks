@@ -58,9 +58,12 @@ function Empty({ children }: { children: React.ReactNode }) {
 export function TodayView({
   onOpenProjects,
   priorityFilter = null,
+  searchTerm = "",
 }: {
   onOpenProjects: () => void;
   priorityFilter?: TaskPriority | null;
+  /** Vem da busca da barra superior — antes aparecia na tela mas não filtrava nada aqui. */
+  searchTerm?: string;
 }) {
   const {
     tasks,
@@ -81,10 +84,15 @@ export function TodayView({
   // O filtro de prioridade vale para as seções de trabalho (atrasadas,
   // próximas, vitórias rápidas). O progresso do dia continua contando tudo:
   // filtrar a régua junto faria o número do cabeçalho mentir.
+  const termo = searchTerm.trim().toLowerCase();
   const active = useMemo(
     () =>
-      visibleTasks(tasks).filter((t) => !priorityFilter || t.priority === priorityFilter),
-    [tasks, priorityFilter]
+      visibleTasks(tasks).filter(
+        (t) =>
+          (!priorityFilter || t.priority === priorityFilter) &&
+          (!termo || t.title.toLowerCase().includes(termo))
+      ),
+    [tasks, priorityFilter, termo]
   );
   const allActive = useMemo(() => visibleTasks(tasks), [tasks]);
   const topicMap = useMemo(
@@ -166,6 +174,11 @@ export function TodayView({
               <p className="mt-1 text-xs text-[var(--accent)]">
                 Filtrando por prioridade {PRIORITY_LABEL[priorityFilter].toLowerCase()} — as
                 listas abaixo mostram só essas.
+              </p>
+            )}
+            {termo && (
+              <p className="mt-1 text-xs text-[var(--accent)]">
+                Buscando por &ldquo;{searchTerm.trim()}&rdquo; — as listas abaixo mostram só o que combina.
               </p>
             )}
           </div>

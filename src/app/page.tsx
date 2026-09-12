@@ -265,13 +265,16 @@ function HomeInner() {
             <TodayView
               onOpenProjects={() => setView("goals")}
               priorityFilter={filters.priority ?? null}
+              searchTerm={filters.search ?? ""}
             />
           )}
           {/* Sempre a vida inteira, nunca só o projeto selecionado — o mapa
               de UM projeto já existe dentro dele mesmo (aba "Mapa mental"
               do projeto). Repetir o recorte aqui seria a mesma tela duas
               vezes, só que com menos contexto em volta. */}
-          {view === "mindmap" && <MindMap topicId={null} filters={filters} />}
+          {view === "mindmap" && (
+            <MindMap topicId={null} filters={filters} sortKey={sortKey} />
+          )}
           {view === "review" && <WeeklyReview />}
           {view === "report" && <RelatorioView />}
           {view === "metas" && <MetasView />}

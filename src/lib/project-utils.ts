@@ -1,6 +1,6 @@
 import { Task, TaskPriority } from "./types";
 import { daysBetween, todayISO } from "./date-utils";
-import { getTaskPriorityScore, isTaskOverdue } from "./task-utils";
+import { getTaskPriorityScore, isTaskOverdue, taskBelongsToTopic } from "./task-utils";
 
 function isActive(task: Task): boolean {
   return !task.deletedAt && !task.archivedAt;
@@ -19,7 +19,7 @@ export function getNextAction(
   today: string = todayISO()
 ): Task | null {
   const candidates = tasks.filter(
-    (t) => t.topicId === topicId && isActive(t) && t.status !== "done"
+    (t) => taskBelongsToTopic(t, topicId) && isActive(t) && t.status !== "done"
   );
   if (candidates.length === 0) return null;
 
@@ -45,7 +45,7 @@ export function getRecentlyCompleted(
   limit = 5
 ): Task[] {
   return tasks
-    .filter((t) => t.topicId === topicId && !t.deletedAt && t.status === "done" && t.completedAt)
+    .filter((t) => taskBelongsToTopic(t, topicId) && !t.deletedAt && t.status === "done" && t.completedAt)
     .sort((a, b) => (b.completedAt ?? "").localeCompare(a.completedAt ?? ""))
     .slice(0, limit);
 }
@@ -66,7 +66,7 @@ export function topicStats(
   topicId: string,
   today: string = todayISO()
 ): TopicStats {
-  const topicTasks = tasks.filter((t) => t.topicId === topicId && isActive(t));
+  const topicTasks = tasks.filter((t) => taskBelongsToTopic(t, topicId) && isActive(t));
   const done = topicTasks.filter((t) => t.status === "done").length;
   const doing = topicTasks.filter((t) => t.status === "doing").length;
   const todo = topicTasks.filter((t) => t.status === "todo").length;
@@ -127,7 +127,7 @@ export function topicInsights(
   topicId: string,
   today: string = todayISO()
 ): TopicInsights {
-  const topicTasks = tasks.filter((t) => t.topicId === topicId && isActive(t));
+  const topicTasks = tasks.filter((t) => taskBelongsToTopic(t, topicId) && isActive(t));
   const completed = topicTasks.filter((t) => t.status === "done" && t.completedAt);
 
   const within = (days: number) =>

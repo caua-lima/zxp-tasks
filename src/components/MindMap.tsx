@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { Task, Topic } from "@/lib/types";
-import { TaskFilters, filterTasks } from "@/lib/task-filters";
-import { checklistProgress, isTaskOverdue } from "@/lib/task-utils";
+import { SortKey, TaskFilters, filterTasks, sortTasks } from "@/lib/task-filters";
+import { checklistProgress, isTaskOverdue, taskBelongsToTopic } from "@/lib/task-utils";
 import { PRIORITY_COLOR, PRIORITY_LABEL } from "@/lib/priority";
 import { formatDateShort } from "@/lib/date-utils";
 import { MARCA_AZUL } from "@/lib/marca";
@@ -53,9 +53,11 @@ interface Node {
 interface MindMapProps {
   topicId: string | null;
   filters: TaskFilters;
+  /** Só afeta a versão em lista — o mapa em árvore já se organiza por status. */
+  sortKey?: SortKey;
 }
 
-export function MindMap({ topicId, filters }: MindMapProps) {
+export function MindMap({ topicId, filters, sortKey = "priority" }: MindMapProps) {
   const { topics, tasks: allTasks } = useApp();
   const [modalTask, setModalTask] = useState<Task | null>(null);
   const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
@@ -132,7 +134,10 @@ export function MindMap({ topicId, filters }: MindMapProps) {
     const topicNodes = new Map<string, Node & { angle: number }>();
     const taskNodes = new Map<string, Node>();
 
-    const tarefasDe = (id: string) => rendered.filter((t) => t.topicId === id);
+    // Vale o principal E os extras — sem isto, uma tarefa vinculada a um
+    // segundo projeto era contada pelo filtro mas nunca ganhava um lugar no
+    // desenho: sumia do mapa mesmo aparecendo na lista.
+    const tarefasDe = (id: string) => rendered.filter((t) => taskBelongsToTopic(t, id));
 
     if (topicId) {
       // Um tópico só: ele é o centro e as tarefas descem em duas colunas,
@@ -326,7 +331,7 @@ export function MindMap({ topicId, filters }: MindMapProps) {
     visibleTopics.forEach((t) => {
       const node = layout.topicNodes.get(t.id);
       if (!node) return;
-      const topicTasks = rendered.filter((x) => x.topicId === t.id);
+      const topicTasks = rendered.filter((x) => taskBelongsToTopic(x, t.id));
       const x = offX + node.x;
       const y = offY + node.y;
 
@@ -457,7 +462,7 @@ export function MindMap({ topicId, filters }: MindMapProps) {
       {asList ? (
         <div className="h-full overflow-y-auto p-4 pt-16">
           <ul className="mx-auto max-w-2xl space-y-2">
-            {tasks.map((task) => {
+            {sortTasks(tasks, sortKey).map((task) => {
               const topic = topics.find((t) => t.id === task.topicId);
               const { done, total } = checklistProgress(task);
               return (
@@ -524,7 +529,7 @@ export function MindMap({ topicId, filters }: MindMapProps) {
               {visibleTopics.map((topic) => {
                 const node = layout.topicNodes.get(topic.id);
                 if (!node) return null;
-                const topicTasks = rendered.filter((t) => t.topicId === topic.id);
+                const topicTasks = rendered.filter((t) => taskBelongsToTopic(t, topic.id));
                 return (
                   <g key={topic.id}>
                     {!topicId && (

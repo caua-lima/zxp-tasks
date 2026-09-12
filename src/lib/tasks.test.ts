@@ -1899,6 +1899,22 @@ test("progresso do projeto conta as tarefas que vieram por extra", () => {
   assert.equal(p.done, 1);
 });
 
+test("próxima ação, estatísticas, concluídas recentes e insights do projeto também contam pelo extra", () => {
+  // "Gravar aula" é da Mentoria (principal) e do Marketing (extra) ao mesmo
+  // tempo — abrir a página de Marketing precisa mostrá-la igual à de Mentoria.
+  const lista = [
+    tarefa({ id: "k1", topicId: "mentoria", extraTopicIds: ["marketing"], status: "doing" }),
+    tarefa({
+      id: "k2", topicId: "mentoria", extraTopicIds: ["marketing"], status: "done",
+      completedAt: "2026-09-05T10:00:00.000Z", createdAt: "2026-09-01T10:00:00.000Z",
+    }),
+  ];
+  assert.equal(getNextAction(lista, "marketing", "2026-09-10")?.id, "k1");
+  assert.equal(topicStats(lista, "marketing", "2026-09-10").total, 2);
+  assert.deepEqual(getRecentlyCompleted(lista, "marketing").map((t) => t.id), ["k2"]);
+  assert.equal(topicInsights(lista, "marketing", "2026-09-10").completedLast30, 1);
+});
+
 test("migração ignora extra repetido e o próprio projeto principal", () => {
   const board = migrateBoard({
     topics: [{ id: "a", name: "A", createdAt: "2026-09-01" }],
