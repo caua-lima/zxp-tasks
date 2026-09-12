@@ -325,6 +325,22 @@ function migrateMeta(raw: unknown): Meta | null {
   };
 }
 
+/**
+ * `dailyFocus[dia]` precisa ser uma lista de ids de tarefa — um valor
+ * qualquer (número, string solta) vindo de um backup editado à mão quebrava
+ * `.map`/`.includes` em runtime assim que a tela de Hoje tentava usar.
+ */
+function migrateDailyFocus(v: unknown): Record<string, string[]> {
+  if (!v || typeof v !== "object") return {};
+  const resultado: Record<string, string[]> = {};
+  for (const [dia, valor] of Object.entries(v as Record<string, unknown>)) {
+    if (!Array.isArray(valor)) continue;
+    const ids = valor.filter((id): id is string => typeof id === "string" && !!id);
+    if (ids.length > 0) resultado[dia] = ids;
+  }
+  return resultado;
+}
+
 function migrateWeeklyReview(raw: unknown): WeeklyReviewNote | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
@@ -358,10 +374,18 @@ export function migrateBoard(raw: unknown): Board {
     ? r.groups.map(migrateGrupo).filter((g): g is Grupo => g !== null)
     : [];
 
+  const settingsBrutos =
+    typeof r.settings === "object" && r.settings !== null
+      ? (r.settings as Record<string, unknown>)
+      : {};
+  const jaSemeouGrupos = settingsBrutos.groupsSeeded === true;
+
   // Quadro de antes dos grupos personalizados: nasce com as três seções que
   // já existiam (uma por vertente em uso), pra ninguém abrir o app depois
-  // da atualização e ver tudo despejado num "Outros" só.
-  if (groups.length === 0 && topics.length > 0) {
+  // da atualização e ver tudo despejado num "Outros" só. Só roda UMA vez —
+  // sem a marca `groupsSeeded`, apagar todos os grupos de propósito fazia a
+  // próxima migração recriar os mesmos grupos sem chance de ficar sem eles.
+  if (groups.length === 0 && topics.length > 0 && !jaSemeouGrupos) {
     const emUso = new Set(topics.map((t) => t.kind ?? "project"));
     groups = (Object.keys(GRUPO_PADRAO) as TopicKind[])
       .filter((kind) => emUso.has(kind))
@@ -379,10 +403,7 @@ export function migrateBoard(raw: unknown): Board {
   const schedule = Array.isArray(r.schedule)
     ? r.schedule.map(migrateScheduleBlock).filter((b): b is ScheduleBlock => b !== null)
     : [];
-  const dailyFocus =
-    r.dailyFocus && typeof r.dailyFocus === "object"
-      ? (r.dailyFocus as Record<string, string[]>)
-      : {};
+  const dailyFocus = migrateDailyFocus(r.dailyFocus);
 
   const programacoes = Array.isArray(r.programacoes)
     ? r.programacoes.map(migrateProgramacao).filter((p): p is Programacao => p !== null)
@@ -405,10 +426,10 @@ export function migrateBoard(raw: unknown): Board {
     // Board salvo antes das preferências não tem `settings`; o padrão é o
     // comportamento antigo (um cronômetro por vez).
     settings: {
-      parallelTimers:
-        typeof r.settings === "object" &&
-        r.settings !== null &&
-        (r.settings as Record<string, unknown>).parallelTimers === true,
+      parallelTimers: settingsBrutos.parallelTimers === true,
+      // Verdadeiro se já rodou (agora ou antes) — impede a próxima carga de
+      // recriar grupos que a pessoa apagou de propósito.
+      groupsSeeded: jaSemeouGrupos || groups.length > 0,
     },
   };
 }

@@ -2353,6 +2353,25 @@ test("quadro sem tópico nenhum não inventa grupo", () => {
   assert.deepEqual(migrateBoard({ topics: [], tasks: [] }).groups, []);
 });
 
+test("apagar todos os grupos de propósito não os recria na próxima carga", () => {
+  const b = migrateBoard({
+    topics: [{ id: "p", name: "Mentoria", kind: "project" }],
+    tasks: [],
+    groups: [],
+    settings: { groupsSeeded: true },
+  });
+  assert.deepEqual(b.groups, []);
+  assert.equal(b.settings.groupsSeeded, true);
+});
+
+test("dailyFocus com valor que não é lista de ids é descartado, sem quebrar", () => {
+  const b = migrateBoard({
+    topics: [], tasks: [],
+    dailyFocus: { "2026-09-12": 42, "2026-09-11": ["k1", 3, "k2"], "2026-09-10": "k1" },
+  });
+  assert.deepEqual(b.dailyFocus, { "2026-09-11": ["k1", "k2"] });
+});
+
 test("tópico já com grupo próprio não é reatribuído pela migração", () => {
   const b = migrateBoard({
     topics: [{ id: "p", name: "Mentoria", kind: "project", groupId: "meu-grupo" }],

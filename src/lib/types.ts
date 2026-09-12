@@ -303,6 +303,13 @@ export interface Programacao {
 
 export interface BoardSettings {
   /**
+   * Já rodou a semeadura das três seções padrão de grupo (Projetos,
+   * Trabalho, Conquistas pessoais) uma vez. Sem isto, apagar todos os
+   * grupos de propósito faria a próxima migração (qualquer carga do board)
+   * recriar os mesmos grupos — a pessoa nunca conseguiria ficar sem eles.
+   */
+  groupsSeeded?: boolean;
+  /**
    * Deixa mais de um cronômetro correr ao mesmo tempo.
    *
    * Desligado, começar um bloco pausa o que estiver rodando — bom pra quem
