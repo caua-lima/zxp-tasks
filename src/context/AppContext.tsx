@@ -369,42 +369,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const addTopic = useCallback(
     (name: string, kind: TopicKind = "project", groupId?: string) => {
-      const id = uuid();
-      const createdAt = new Date().toISOString();
-      let topic!: Topic;
-      setBoard((b) => {
-        topic = {
-          id,
-          name: name.trim(),
-          color: nextTopicColor(b.topics.length),
-          kind,
-          // Sem grupo escolhido, cai no primeiro que existir — só fica
-          // realmente sem grupo em quadro que ainda não tem nenhum.
-          groupId: groupId ?? b.groups[0]?.id,
-          createdAt,
-        };
-        return { ...b, topics: [...b.topics, topic] };
-      });
+      // Montado ANTES de chamar setBoard: o React pode adiar o updater (duas
+      // chamadas de setBoard no mesmo evento, StrictMode, atualização em
+      // lote), e devolver uma variável só preenchida DENTRO do updater dava
+      // `undefined` pra quem chamou mesmo com o tópico já criado de verdade.
+      const topic: Topic = {
+        id: uuid(),
+        name: name.trim(),
+        color: nextTopicColor(board.topics.length),
+        kind,
+        // Sem grupo escolhido, cai no primeiro que existir — só fica
+        // realmente sem grupo em quadro que ainda não tem nenhum.
+        groupId: groupId ?? board.groups[0]?.id,
+        createdAt: new Date().toISOString(),
+      };
+      setBoard((b) => ({ ...b, topics: [...b.topics, topic] }));
       return topic;
     },
-    []
+    [board.topics.length, board.groups]
   );
 
-  const addGroup = useCallback((name: string) => {
-    const id = uuid();
-    const createdAt = new Date().toISOString();
-    let grupo!: Grupo;
-    setBoard((b) => {
-      grupo = {
-        id,
+  const addGroup = useCallback(
+    (name: string) => {
+      const grupo: Grupo = {
+        id: uuid(),
         name: name.trim(),
-        order: b.groups.length === 0 ? 0 : Math.max(...b.groups.map((g) => g.order)) + 1,
-        createdAt,
+        order: board.groups.length === 0 ? 0 : Math.max(...board.groups.map((g) => g.order)) + 1,
+        createdAt: new Date().toISOString(),
       };
-      return { ...b, groups: [...b.groups, grupo] };
-    });
-    return grupo;
-  }, []);
+      setBoard((b) => ({ ...b, groups: [...b.groups, grupo] }));
+      return grupo;
+    },
+    [board.groups]
+  );
 
   const renameGroup = useCallback((id: string, name: string) => {
     const trimmed = name.trim();
@@ -561,17 +558,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
-  const skipRecurrence = useCallback((id: string) => {
-    let skipped = false;
-    setBoard((b) => {
-      const target = b.tasks.find((t) => t.id === id);
+  const skipRecurrence = useCallback(
+    (id: string) => {
+      const target = board.tasks.find((t) => t.id === id);
       const next = target ? skipOccurrence(target) : null;
-      if (!next) return b;
-      skipped = true;
-      return { ...b, tasks: b.tasks.map((t) => (t.id === id ? next : t)) };
-    });
-    return skipped;
-  }, []);
+      if (!next) return false;
+      setBoard((b) => ({ ...b, tasks: b.tasks.map((t) => (t.id === id ? next : t)) }));
+      return true;
+    },
+    [board.tasks]
+  );
 
   const duplicateTask = useCallback((id: string) => {
     setBoard((b) => {
@@ -906,64 +902,66 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
    * viraria "passou do tempo" quinze minutos depois, sem que ninguém tivesse
    * combinado quinze minutos.
    */
-  const startTaskNow = useCallback((taskId: string) => {
-    const nowIso = new Date().toISOString();
-    const nowMs = Date.now();
-    const hoje = todayISO();
-    const novoBlocoId = uuid();
-    let criou = false;
+  const startTaskNow = useCallback(
+    (taskId: string) => {
+      // Decisão tomada aqui, fora do updater, com o board que o componente
+      // já tem na mão — devolver um booleano preenchido só DENTRO do
+      // updater dava sempre `false` quando o React adiava a execução dele.
+      const task = board.tasks.find((t) => t.id === taskId && !t.deletedAt);
+      if (!task) return false;
 
-    setBoard((b) => {
-      const task = b.tasks.find((t) => t.id === taskId && !t.deletedAt);
-      if (!task) return b;
-      criou = true;
-
-      const paralelo = b.settings?.parallelTimers === true;
+      const nowIso = new Date().toISOString();
+      const nowMs = Date.now();
+      const hoje = todayISO();
+      const paralelo = board.settings?.parallelTimers === true;
       // Reaproveita o bloco de hoje que já existe pra esta tarefa: criar
       // outro faria dois cronômetros contarem o mesmo trabalho.
-      const existente = b.schedule.find(
+      const existente = board.schedule.find(
         (x) => x.date === hoje && x.taskId === taskId && !x.completedAt && !x.skippedAt
       );
+      const novoBlocoId = uuid();
       const alvo = existente?.id ?? novoBlocoId;
-
-      const doDia = b.schedule.filter((x) => x.date === hoje);
+      const doDia = board.schedule.filter((x) => x.date === hoje);
       const proximaOrdem = doDia.length === 0 ? 0 : Math.max(...doDia.map((x) => x.order)) + 1;
 
-      const schedule = existente
-        ? b.schedule
-        : [
-            ...b.schedule,
-            {
-              id: novoBlocoId,
-              date: hoje,
-              title: task.title,
-              plannedMinutes: task.estimatedMinutes ?? 30,
-              accumulatedMs: 0,
-              order: proximaOrdem,
-              topicId: task.topicId,
-              taskId: task.id,
-              openEnded: task.estimatedMinutes === undefined ? true : undefined,
-            } satisfies ScheduleBlock,
-          ];
+      setBoard((b) => {
+        const schedule = existente
+          ? b.schedule
+          : [
+              ...b.schedule,
+              {
+                id: novoBlocoId,
+                date: hoje,
+                title: task.title,
+                plannedMinutes: task.estimatedMinutes ?? 30,
+                accumulatedMs: 0,
+                order: proximaOrdem,
+                topicId: task.topicId,
+                taskId: task.id,
+                openEnded: task.estimatedMinutes === undefined ? true : undefined,
+              } satisfies ScheduleBlock,
+            ];
 
-      return {
-        ...b,
-        schedule: schedule.map((x) => {
-          if (x.id === alvo) return startBlock(x, nowIso);
-          if (paralelo) return x;
-          return x.startedAt && !x.completedAt ? pauseBlock(x, nowMs) : x;
-        }),
-        tasks:
-          task.status === "todo"
-            ? b.tasks.map((t) =>
-                t.id === taskId ? { ...t, status: "doing" as const, updatedAt: nowIso } : t
-              )
-            : b.tasks,
-      };
-    });
+        return {
+          ...b,
+          schedule: schedule.map((x) => {
+            if (x.id === alvo) return startBlock(x, nowIso);
+            if (paralelo) return x;
+            return x.startedAt && !x.completedAt ? pauseBlock(x, nowMs) : x;
+          }),
+          tasks:
+            task.status === "todo"
+              ? b.tasks.map((t) =>
+                  t.id === taskId ? { ...t, status: "doing" as const, updatedAt: nowIso } : t
+                )
+              : b.tasks,
+        };
+      });
 
-    return criou;
-  }, []);
+      return true;
+    },
+    [board.tasks, board.schedule, board.settings]
+  );
 
   const skipBlockToday = useCallback((id: string) => {
     const nowIso = new Date().toISOString();
@@ -1069,12 +1067,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   /** Copia a estrutura de um dia pro outro, com os cronômetros zerados. */
-  const copyDay = useCallback((fromDate: string, toDate: string) => {
-    let copiados = 0;
-    setBoard((b) => {
-      const origem = b.schedule.filter((x) => x.date === fromDate);
-      if (origem.length === 0) return b;
-      copiados = origem.length;
+  const copyDay = useCallback(
+    (fromDate: string, toDate: string) => {
+      const origem = board.schedule.filter((x) => x.date === fromDate);
+      if (origem.length === 0) return 0;
       const novos = origem.map((x, i) => ({
         id: uuid(),
         date: toDate,
@@ -1083,10 +1079,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         accumulatedMs: 0,
         order: i,
       }));
-      return { ...b, schedule: [...b.schedule.filter((x) => x.date !== toDate), ...novos] };
-    });
-    return copiados;
-  }, []);
+      setBoard((b) => ({
+        ...b,
+        schedule: [...b.schedule.filter((x) => x.date !== toDate), ...novos],
+      }));
+      return origem.length;
+    },
+    [board.schedule]
+  );
 
   const exportData = useCallback(() => JSON.stringify(board, null, 2), [board]);
 
@@ -1095,24 +1095,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const validation = validateBackup(json);
       if (!validation.valid) return null;
       const incoming = migrateBoard(JSON.parse(json));
-      let report: MergeReport = { topicsAdded: 0, tasksAdded: 0, duplicatesSkipped: 0 };
-      setBoard((b) => {
-        pushBackup(b, mode === "replace" ? "importação (substituir)" : "importação (mesclar)");
-        if (mode === "replace") {
-          report = {
-            topicsAdded: incoming.topics.length,
-            tasksAdded: incoming.tasks.length,
-            duplicatesSkipped: 0,
-          };
+
+      if (mode === "replace") {
+        const report: MergeReport = {
+          topicsAdded: incoming.topics.length,
+          tasksAdded: incoming.tasks.length,
+          duplicatesSkipped: 0,
+        };
+        setBoard((b) => {
+          pushBackup(b, "importação (substituir)");
           return incoming;
-        }
-        const merged = mergeImportedData(b, incoming);
-        report = merged.report;
-        return merged.board;
-      });
-      return report;
+        });
+        return report;
+      }
+
+      // Calculado aqui, contra o board que o componente já tem — devolver
+      // um relatório preenchido só DENTRO do updater dava contagem zerada
+      // (a tela dizia "nada foi importado" mesmo com a mesclagem aplicada).
+      pushBackup(board, "importação (mesclar)");
+      const merged = mergeImportedData(board, incoming);
+      // No raríssimo caso de o board ter mudado entre o render e este
+      // clique, recalcula contra a versão de verdade em vez de sobrescrever
+      // uma mudança concorrente com um resultado desatualizado.
+      setBoard((b) => (b === board ? merged.board : mergeImportedData(b, incoming).board));
+      return merged.report;
     },
-    []
+    [board]
   );
 
   const value = useMemo<AppContextValue>(
