@@ -119,7 +119,13 @@ export function TodayView({
     const id = setInterval(() => setAgora(Date.now()), 1000);
     return () => clearInterval(id);
   }, [algumRodando]);
-  const totaisDoDia = useMemo(() => scheduleTotals(blocosDeHoje, agora), [blocosDeHoje, agora]);
+  // Intervalo fica de fora do total de horas — como já é no Cronograma.
+  // Somar o café ao trabalho faria os dois lugares mostrarem números
+  // diferentes pro mesmo dia.
+  const totaisDoDia = useMemo(
+    () => scheduleTotals(blocosDeHoje.filter((b) => !b.isBreak), agora),
+    [blocosDeHoje, agora]
+  );
 
   const overdue = useMemo(() => getOverdueTasks(active, today), [active, today]);
   const dueToday = useMemo(() => getTasksDueToday(active, today), [active, today]);
@@ -134,10 +140,13 @@ export function TodayView({
   const doneToday = allActive.filter(
     (t) => t.completedAt && localDayOf(t.completedAt) === today
   ).length;
-  const totalToday =
-    doneToday +
-    getTasksDueToday(allActive, today).length +
-    focusTasks.filter((t) => t.status !== "done").length;
+  // Uma tarefa com prazo hoje E em foco ao mesmo tempo contava duas vezes
+  // no denominador — um Set por id garante que cada tarefa conta uma só vez.
+  const pendentesHojeIds = new Set([
+    ...getTasksDueToday(allActive, today).map((t) => t.id),
+    ...focusTasks.filter((t) => t.status !== "done").map((t) => t.id),
+  ]);
+  const totalToday = doneToday + pendentesHojeIds.size;
 
   function complete(task: Task) {
     setTaskStatus(task.id, "done");

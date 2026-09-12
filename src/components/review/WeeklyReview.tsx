@@ -7,9 +7,19 @@ import { addDaysISO, startOfWeekISO, todayISO, formatDateShort } from "@/lib/dat
 import { useToast } from "../shared/Toast";
 import { CartaoDaSemana } from "./CartaoDaSemana";
 
-function Stat({ label, value, tone }: { label: string; value: string; tone?: string }) {
+function Stat({
+  label,
+  value,
+  tone,
+  title,
+}: {
+  label: string;
+  value: string;
+  tone?: string;
+  title?: string;
+}) {
   return (
-    <div className="rounded-lg border border-[var(--border)] bg-[var(--surface2)] p-3">
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--surface2)] p-3" title={title}>
       <p
         className="font-[family-name:var(--font-display)] text-xl font-semibold tabular-nums"
         style={{ color: tone ?? "var(--foreground)" }}
@@ -168,6 +178,13 @@ export function WeeklyReview() {
 
       {!modoFoto && (
         <>
+      {!ehSemanaAtual && (
+        <p className="rounded-md border border-[var(--border)] bg-[var(--surface2)] px-3 py-2 text-[11px] text-[var(--muted)]">
+          &ldquo;Atrasadas&rdquo; e &ldquo;abertas&rdquo; abaixo mostram o estado ATUAL dessas
+          tarefas, não uma fotografia de como elas estavam no fim desta semana — o app não
+          guarda esse histórico.
+        </p>
+      )}
       <section>
         <h2 className="mb-2 text-sm font-semibold text-[var(--foreground)]">Execução</h2>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -179,7 +196,11 @@ export function WeeklyReview() {
             value={String(metrics.overdue)}
             tone={metrics.overdue > 0 ? "var(--danger)" : undefined}
           />
-          <Stat label="Concluídas / criadas" value={`${metrics.completionRate}%`} />
+          <Stat
+            label="Concluídas / criadas"
+            value={`${metrics.completionRate}%`}
+            title="Pode passar de 100% — acontece quando você conclui tarefas antigas na mesma semana em que criou poucas novas."
+          />
         </div>
       </section>
 
