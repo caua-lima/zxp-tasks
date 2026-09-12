@@ -1233,6 +1233,28 @@ describe("relógio do dia (união dos intervalos, não soma das durações)", ()
     ]);
   });
 
+  test("zerar o cronômetro também limpa as sessões — relatório não mostra dois números diferentes", () => {
+    let b = startBlock(bloco(), new Date(T0).toISOString());
+    b = pauseBlock(b, T0 + 30 * MINUTE_MS);
+    const zerado = resetBlock(b);
+    assert.equal(zerado.accumulatedMs, 0);
+    assert.deepEqual(allSessions(zerado, T0 + 99 * MINUTE_MS), []);
+  });
+
+  test("bloco legado com 60 acumulados e 30 rodando dá 90 no total, não 60", () => {
+    // accumulatedMs vem de ANTES deste recurso existir — nenhuma sessão
+    // registrada ainda — e o bloco está rodando um trecho novo por cima.
+    const b = { ...bloco(), accumulatedMs: 60 * MINUTE_MS, startedAt: new Date(T0).toISOString() };
+    const agora = T0 + 30 * MINUTE_MS;
+    const sessoes = allSessions(b, agora);
+    const total = sessoes.reduce(
+      (soma, s) => soma + (new Date(s.end).getTime() - new Date(s.start).getTime()),
+      0
+    );
+    assert.equal(total, 90 * MINUTE_MS);
+    assert.equal(wallClockMs([b], agora), 90 * MINUTE_MS);
+  });
+
   test("bloco de antes deste recurso (sem sessions) vira uma aproximação, não some do total", () => {
     const antigo = bloco({ accumulatedMs: 20 * MINUTE_MS, completedAt: new Date(T0).toISOString() });
     const sessoes = allSessions(antigo);

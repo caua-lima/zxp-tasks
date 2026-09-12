@@ -204,6 +204,10 @@ export function resetBlock(block: ScheduleBlock): ScheduleBlock {
   return {
     ...block,
     accumulatedMs: 0,
+    // Sem isto, o relatório de relógio (que lê `sessions`) continuava
+    // mostrando o tempo de antes do reset enquanto o "acumulado" já
+    // mostrava zero — dois números diferentes pro mesmo bloco.
+    sessions: undefined,
     startedAt: undefined,
     completedAt: undefined,
     skippedAt: undefined,
@@ -273,14 +277,16 @@ export function allSessions(block: ScheduleBlock, now: number = Date.now()): Ses
 
   const duracao = (s: Sessao) =>
     Math.max(0, new Date(s.end).getTime() - new Date(s.start).getTime());
-  const somaConhecida =
-    registradas.reduce((soma, s) => soma + duracao(s), 0) +
-    emAndamento.reduce((soma, s) => soma + duracao(s), 0);
-  const faltante = block.accumulatedMs - somaConhecida;
+  // Só as sessões FECHADAS entram nessa soma. `accumulatedMs` só junta o que
+  // já foi pausado (ver `elapsedMs`) — o trecho em andamento nunca fez parte
+  // dele. Incluir `emAndamento` aqui subtraía o mesmo tempo duas vezes e
+  // escondia parte do acumulado de um bloco legado que estivesse rodando.
+  const somaFechada = registradas.reduce((soma, s) => soma + duracao(s), 0);
+  const faltante = block.accumulatedMs - somaFechada;
   if (faltante <= 0) return [...registradas, ...emAndamento];
 
-  const ancora = registradas[0]?.start ?? emAndamento[0]?.start ?? block.completedAt ??
-    block.skippedAt ?? block.parkedAt;
+  const ancora = registradas[0]?.start ?? block.completedAt ?? block.skippedAt ??
+    block.parkedAt ?? emAndamento[0]?.start;
   if (!ancora) return [...registradas, ...emAndamento];
 
   const aproximada: Sessao = {
