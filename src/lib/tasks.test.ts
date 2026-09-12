@@ -57,6 +57,7 @@ import {
 import { filterTasks, sortTasks } from "./task-filters";
 import { classificarErroDeGravacao, interpretarConteudoSalvo } from "./storage";
 import { concluirTarefaNoBoard } from "./task-completion";
+import { MARCA_AZUL } from "./marca";
 import { taskBelongsToTopic } from "./task-utils";
 import { validateBackup, mergeImportedData, mergeBoards } from "./task-backup";
 import { calculateWeeklyMetrics } from "./weekly-review";
@@ -168,6 +169,32 @@ describe("migração de dados antigos", () => {
       tasks: [{ id: "a", topicId: "t1", title: "Sem data" }],
     });
     assert.equal(board.tasks[0].createdAt, "1970-01-01T00:00:00.000Z");
+  });
+
+  test("migração recusa cor de tópico fora do formato hex — vira a cor da marca", () => {
+    const b = migrateBoard({
+      topics: [
+        { id: "a", name: "A", color: "#3D8BFF", createdAt: "2026-01-01" },
+        { id: "b", name: "B", color: '" onload="alert(1)', createdAt: "2026-01-01" },
+        { id: "c", name: "C", color: "vermelho", createdAt: "2026-01-01" },
+      ],
+      tasks: [],
+    });
+    assert.equal(b.topics.find((t) => t.id === "a")!.color, "#3D8BFF");
+    assert.equal(b.topics.find((t) => t.id === "b")!.color, MARCA_AZUL);
+    assert.equal(b.topics.find((t) => t.id === "c")!.color, MARCA_AZUL);
+  });
+
+  test("migração recusa URL com esquema que não é http/https", () => {
+    const b = migrateBoard({
+      topics: [topic()],
+      tasks: [
+        { id: "a", topicId: "t1", title: "Com link", url: "https://loja.com/x" },
+        { id: "b", topicId: "t1", title: "Esquema perigoso", url: "javascript:alert(1)" },
+      ],
+    });
+    assert.equal(b.tasks.find((t) => t.id === "a")!.url, "https://loja.com/x");
+    assert.equal(b.tasks.find((t) => t.id === "b")!.url, undefined);
   });
 
   test("migração preserva o tópico excluído (tombstone), não some ele do array", () => {

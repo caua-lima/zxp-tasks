@@ -16,6 +16,7 @@ import {
   emptyBoard,
 } from "./types";
 import { MARCA_AZUL } from "./marca";
+import { normalizeUrl } from "./wishlist";
 
 /**
  * Sem createdAt confiável não dá pra inventar "quando" a tarefa nasceu —
@@ -26,6 +27,15 @@ const SAFE_FALLBACK_DATE = "1970-01-01T00:00:00.000Z";
 
 const VALID_PRIORITIES: TaskPriority[] = ["critical", "high", "medium", "low"];
 const VALID_STATUSES: TaskStatus[] = ["todo", "doing", "done"];
+
+/**
+ * Hex estrito (#RGB ou #RRGGBB). O Mapa Mental monta o SVG do jeito exportado
+ * interpolando a cor direto num atributo `fill`/`stroke`, sem escapar aspas —
+ * uma cor vinda de um backup com marcação embutida (`"><script>...`) entraria
+ * como XML de verdade. Restringir ao formato hex torna isso impossível por
+ * construção, sem precisar confiar na serialização de string manual.
+ */
+const HEX_COLOR = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
 function asString(v: unknown): string | undefined {
   return typeof v === "string" && v.length > 0 ? v : undefined;
@@ -107,7 +117,13 @@ function migrateTask(raw: unknown): Task | null {
         ? Math.round(r.priceCents)
         : undefined,
     priceParts: asString(r.priceParts),
-    url: asString(r.url),
+    // Mesma validação do formulário (só http/https reconstruído por
+    // `new URL`) — sem isto, um backup editado à mão podia gravar
+    // `javascript:` ou qualquer outro esquema num link clicável.
+    url: (() => {
+      const raw = asString(r.url);
+      return raw ? normalizeUrl(raw) : undefined;
+    })(),
     store: asString(r.store),
     energy:
       r.energy === "deep" || r.energy === "normal" || r.energy === "quick"
@@ -147,8 +163,9 @@ function migrateTopic(raw: unknown): Topic | null {
   return {
     id,
     name,
-    // Tópico sem cor cai na assinatura do app, não no dourado do Market.
-    color: asString(r.color) ?? MARCA_AZUL,
+    // Tópico sem cor (ou com uma fora do formato hex — nunca confiável pra
+    // interpolar num SVG) cai na assinatura do app, não no dourado do Market.
+    color: HEX_COLOR.test(asString(r.color) ?? "") ? (r.color as string) : MARCA_AZUL,
     icon: asString(r.icon),
     description: asString(r.description),
     // Tópico salvo antes das listas de desejos não tem `kind` — vira projeto,
