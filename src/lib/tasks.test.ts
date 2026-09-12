@@ -10,7 +10,7 @@ process.env.TZ = "America/Sao_Paulo";
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { Board, ScheduleBlock, Task, Topic, emptyBoard } from "./types";
+import { Board, Programacao, ScheduleBlock, Task, Topic, emptyBoard } from "./types";
 import { migrateBoard } from "./task-migrations";
 import { montarRelatorio, tempoPorProjeto } from "./report";
 import {
@@ -461,6 +461,67 @@ describe("backup e importação", () => {
     const incoming = { ...emptyBoard(), topics: [], tasks: [task({ topicId: "fantasma" })] };
     const { board } = mergeImportedData(current, incoming);
     assert.equal(board.tasks.length, 0);
+  });
+
+  test("merge de backup traz cronograma, grupos e revisões — não só tópico e tarefa", () => {
+    const current = emptyBoard();
+    const incoming = {
+      ...emptyBoard(),
+      schedule: [
+        { id: "b1", date: "2026-09-05", title: "Bloco", plannedMinutes: 30, accumulatedMs: 0, order: 0 },
+      ],
+      groups: [{ id: "g1", name: "Trabalho", order: 0, createdAt: "2026-09-01T10:00:00Z" }],
+      weeklyReviews: [
+        {
+          id: "r1", weekStart: "2026-08-31", stuck: "", toArchive: "", nextPriority: "",
+          wastingTime: "", createdAt: "2026-09-01T10:00:00Z",
+        },
+      ],
+    };
+    const { board, report } = mergeImportedData(current, incoming);
+    assert.equal(board.schedule.length, 1);
+    assert.equal(board.groups.length, 1);
+    assert.equal(board.weeklyReviews.length, 1);
+    assert.equal(report.scheduleAdded, 1);
+    assert.equal(report.groupsAdded, 1);
+    assert.equal(report.weeklyReviewsAdded, 1);
+  });
+
+  test("merge de backup une metas e programações pelo mesmo critério da sincronização", () => {
+    const programacaoDeTeste: Programacao = {
+      id: "p1", title: "SDR", weekdays: [1, 2, 3, 4, 5], startTime: "08:00", endTime: "18:00",
+      autoStart: true, createdAt: "2026-09-01T10:00:00.000Z",
+    };
+    const current = {
+      ...emptyBoard(),
+      metas: [{ ...metaDeTeste(), registros: { "2026-09-01": 2 } }],
+      programacoes: [{ ...programacaoDeTeste, diasPulados: ["2026-09-05"] }],
+    };
+    const incoming = {
+      ...emptyBoard(),
+      metas: [{ ...metaDeTeste(), registros: { "2026-09-01": 5, "2026-09-02": 1 } }],
+      programacoes: [{ ...programacaoDeTeste, diasPulados: ["2026-09-06"] }],
+    };
+    const { board, report } = mergeImportedData(current, incoming);
+    assert.deepEqual(board.metas[0].registros, { "2026-09-01": 5, "2026-09-02": 1 });
+    assert.deepEqual(
+      [...board.programacoes[0].diasPulados!].sort(),
+      ["2026-09-05", "2026-09-06"]
+    );
+    assert.equal(report.metasAdded, 0);
+    assert.equal(report.programacoesAdded, 0);
+  });
+
+  test("merge de backup traz foco do dia só de dias que ainda não existem", () => {
+    const current = { ...emptyBoard(), dailyFocus: { "2026-09-05": ["t1"] } };
+    const incoming = {
+      ...emptyBoard(),
+      dailyFocus: { "2026-09-05": ["t9"], "2026-09-04": ["t2"] },
+    };
+    const { board, report } = mergeImportedData(current, incoming);
+    assert.deepEqual(board.dailyFocus["2026-09-05"], ["t1"]);
+    assert.deepEqual(board.dailyFocus["2026-09-04"], ["t2"]);
+    assert.equal(report.dailyFocusAdded, 1);
   });
 });
 

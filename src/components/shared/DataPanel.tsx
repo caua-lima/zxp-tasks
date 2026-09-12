@@ -2,7 +2,8 @@
 
 import { useRef, useState } from "react";
 import { useApp } from "@/context/AppContext";
-import { estimateSizeKb, validateBackup } from "@/lib/task-backup";
+import { useAuth } from "@/context/AuthContext";
+import { BackupValidation, estimateSizeKb, validateBackup } from "@/lib/task-backup";
 import { lastBackupDate } from "@/lib/storage";
 import { Modal } from "./Modal";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -11,13 +12,15 @@ import { useToast } from "./Toast";
 export function DataPanel({ onClose }: { onClose: () => void }) {
   const { board, tasks, topics, exportData, importData, restoreTask, purgeTask, emptyTrash } =
     useApp();
+  const { user } = useAuth();
   const { showToast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [pending, setPending] = useState<{ json: string; topics: number; tasks: number } | null>(
+  const [pending, setPending] = useState<{ json: string; validation: BackupValidation } | null>(
     null
   );
   const [confirmEmpty, setConfirmEmpty] = useState(false);
   const [confirmPurge, setConfirmPurge] = useState<string | null>(null);
+  const [confirmReplace, setConfirmReplace] = useState(false);
 
   const trash = tasks.filter((t) => t.deletedAt);
   const active = tasks.filter((t) => !t.deletedAt);
@@ -43,7 +46,7 @@ export function DataPanel({ onClose }: { onClose: () => void }) {
       showToast(validation.error ?? "Arquivo inválido.");
       return;
     }
-    setPending({ json, topics: validation.topics, tasks: validation.tasks });
+    setPending({ json, validation });
   }
 
   function runImport(mode: "merge" | "replace") {
@@ -55,7 +58,8 @@ export function DataPanel({ onClose }: { onClose: () => void }) {
       return;
     }
     showToast(
-      `Importado: ${report.tasksAdded} tarefas, ${report.topicsAdded} tópicos` +
+      `Importado: ${report.tasksAdded} tarefas, ${report.topicsAdded} tópicos, ` +
+        `${report.scheduleAdded} blocos de cronograma` +
         (report.duplicatesSkipped > 0 ? ` · ${report.duplicatesSkipped} ignorados` : "")
     );
   }
@@ -90,11 +94,21 @@ export function DataPanel({ onClose }: { onClose: () => void }) {
             {last ? new Date(last).toLocaleString("pt-BR") : "nenhum ainda"}
           </p>
 
-          <div className="rounded-lg border border-[var(--warning)] bg-[var(--surface2)] p-3">
+          <div className="rounded-lg border border-[var(--border)] bg-[var(--surface2)] p-3">
             <p className="text-xs leading-relaxed text-[var(--foreground)]">
-              Seus dados ficam <strong>somente neste navegador</strong>. Se limpar os dados do
-              navegador sem backup, suas tarefas podem ser perdidas. Não há sincronização entre
-              dispositivos.
+              {user ? (
+                <>
+                  Seus dados sincronizam com a sua conta e acompanham você em qualquer aparelho
+                  logado. O backup exportado aqui é uma cópia extra — útil pra migrar de conta ou
+                  se algo der errado do lado do servidor.
+                </>
+              ) : (
+                <>
+                  Seus dados ficam <strong>somente neste navegador</strong>. Se limpar os dados do
+                  navegador sem backup, suas tarefas podem ser perdidas. Entre numa conta para
+                  sincronizar entre aparelhos.
+                </>
+              )}
             </p>
           </div>
 
@@ -176,13 +190,75 @@ export function DataPanel({ onClose }: { onClose: () => void }) {
         </div>
       </Modal>
 
-      {pending && (
-        <ConfirmDialog
+      {pending && !confirmReplace && (
+        <Modal
           title="Importar backup"
-          message={`O arquivo tem ${pending.tasks} tarefas e ${pending.topics} tópicos. "Mesclar" mantém o que já existe e adiciona o que falta. Um snapshot dos dados atuais é guardado antes de qualquer mudança.`}
-          confirmLabel="Mesclar"
-          onCancel={() => setPending(null)}
-          onConfirm={() => runImport("merge")}
+          onClose={() => setPending(null)}
+          footer={
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                onClick={() => setPending(null)}
+                className="rounded-md px-3 py-1.5 text-sm font-medium text-[var(--muted)] hover:bg-[var(--surface)]"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => setConfirmReplace(true)}
+                className="rounded-md px-3 py-1.5 text-sm font-medium"
+                style={{ backgroundColor: "var(--danger)", color: "#fff" }}
+              >
+                Substituir tudo
+              </button>
+              <button
+                onClick={() => runImport("merge")}
+                className="rounded-md bg-[var(--accent)] px-3 py-1.5 text-sm font-medium text-[var(--accent-ink)] hover:bg-[var(--accent-dark)]"
+              >
+                Mesclar
+              </button>
+            </div>
+          }
+        >
+          <div className="space-y-3 text-sm">
+            <p className="text-[var(--muted)]">
+              Um snapshot dos dados atuais é guardado antes de qualquer mudança.
+            </p>
+            <ul className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-md border border-[var(--border)] bg-[var(--surface2)] p-3 text-xs">
+              {[
+                ["Tópicos", pending.validation.topics],
+                ["Tarefas", pending.validation.tasks],
+                ["Blocos de cronograma", pending.validation.schedule],
+                ["Metas", pending.validation.metas],
+                ["Programações", pending.validation.programacoes],
+                ["Grupos", pending.validation.groups],
+                ["Revisões semanais", pending.validation.weeklyReviews],
+                ["Dias com foco marcado", pending.validation.dailyFocusDays],
+              ].map(([label, value]) => (
+                <li key={label} className="flex justify-between gap-2 text-[var(--foreground)]">
+                  <span className="text-[var(--muted)]">{label}</span>
+                  <span className="tabular-nums">{value}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs text-[var(--muted)]">
+              <strong>Mesclar</strong> mantém o que já existe e adiciona o que falta.{" "}
+              <strong>Substituir tudo</strong> apaga os dados atuais e coloca os do arquivo no
+              lugar.
+            </p>
+          </div>
+        </Modal>
+      )}
+
+      {pending && confirmReplace && (
+        <ConfirmDialog
+          title="Substituir todos os dados?"
+          message="Tudo o que existe agora — tópicos, tarefas, cronograma, metas — é trocado pelo conteúdo do arquivo. Um snapshot do que existe é guardado antes, mas a troca em si não tem desfazer pela interface."
+          confirmLabel="Substituir tudo"
+          danger
+          onCancel={() => setConfirmReplace(false)}
+          onConfirm={() => {
+            setConfirmReplace(false);
+            runImport("replace");
+          }}
         />
       )}
 

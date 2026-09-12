@@ -1111,6 +1111,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const report: MergeReport = {
           topicsAdded: incoming.topics.length,
           tasksAdded: incoming.tasks.length,
+          groupsAdded: (incoming.groups ?? []).length,
+          scheduleAdded: incoming.schedule.length,
+          weeklyReviewsAdded: incoming.weeklyReviews.length,
+          metasAdded: (incoming.metas ?? []).length,
+          programacoesAdded: (incoming.programacoes ?? []).length,
+          dailyFocusAdded: Object.keys(incoming.dailyFocus ?? {}).length,
           duplicatesSkipped: 0,
         };
         setBoard((b) => {
