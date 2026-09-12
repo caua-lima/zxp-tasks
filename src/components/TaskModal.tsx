@@ -95,7 +95,7 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
   // trocar o tópico no meio da edição troca a cara do modal na hora.
   const selectedTopic = topics.find((t) => t.id === topicId);
   // Só projetos ativos e diferentes do principal entram como extra.
-  const outrosProjetos = topics.filter((t) => !t.archivedAt && t.id !== topicId);
+  const outrosProjetos = topics.filter((t) => !t.archivedAt && !t.deletedAt && t.id !== topicId);
   const metasAtivas = metas.filter((m) => !m.archivedAt);
   const kind = topicKind(selectedTopic);
   const wishlist = kind === "wishlist";
@@ -297,11 +297,17 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
                 className={field}
               >
                 {topics.length === 0 && <option value="">Crie um tópico primeiro</option>}
-                {topics.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
+                {topics
+                  // Um tópico excluído não é oferecido pra ninguém escolher —
+                  // só continua aparecendo se for JUSTAMENTE o desta tarefa,
+                  // pra o campo não ficar em branco quando o tópico dela sumiu.
+                  .filter((t) => !t.deletedAt || t.id === topicId)
+                  .map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                      {t.deletedAt ? " (excluído)" : ""}
+                    </option>
+                  ))}
               </select>
             </div>
             <div>

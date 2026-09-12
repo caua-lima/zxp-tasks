@@ -66,7 +66,10 @@ export function ProjectView({ topicId }: { topicId: string }) {
   const [editingAutoComplete, setEditingAutoComplete] = useState(false);
   const [autoCompleteDraft, setAutoCompleteDraft] = useState("");
 
-  const topic = topics.find((t) => t.id === topicId);
+  // Excluído conta como "não encontrado" aqui: o registro continua existindo
+  // só pra tarefas órfãs terem uma referência válida, não pra abrir a
+  // página do projeto de novo.
+  const topic = topics.find((t) => t.id === topicId && !t.deletedAt);
 
   const stats = useMemo(() => topicStats(tasks, topicId), [tasks, topicId]);
   const insights = useMemo(() => topicInsights(tasks, topicId), [tasks, topicId]);

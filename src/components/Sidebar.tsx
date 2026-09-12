@@ -337,8 +337,8 @@ export function Sidebar({
   const [criandoGrupo, setCriandoGrupo] = useState(false);
   const [novoGrupoNome, setNovoGrupoNome] = useState("");
 
-  const activeTopics = topics.filter((t) => !t.archivedAt);
-  const archivedTopics = topics.filter((t) => t.archivedAt);
+  const activeTopics = topics.filter((t) => !t.archivedAt && !t.deletedAt);
+  const archivedTopics = topics.filter((t) => t.archivedAt && !t.deletedAt);
   const gruposOrdenados = [...groups].sort((a, b) => a.order - b.order);
   const idsDeGrupo = new Set(gruposOrdenados.map((g) => g.id));
 

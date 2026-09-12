@@ -346,7 +346,7 @@ export function ScheduleView() {
   // Lista de desejos não recebe bloco de tempo: "comprar uma calça" não é
   // uma sessão de trabalho cronometrada.
   const projetosDisponiveis = useMemo(
-    () => topics.filter((t) => !t.archivedAt && topicKind(t) !== "wishlist"),
+    () => topics.filter((t) => !t.archivedAt && !t.deletedAt && topicKind(t) !== "wishlist"),
     [topics]
   );
   const metasAtivas = useMemo(() => metas.filter((m) => !m.archivedAt), [metas]);

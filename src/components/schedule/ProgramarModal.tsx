@@ -50,7 +50,7 @@ export function ProgramarModal({ onClose }: { onClose: () => void }) {
   const [erro, setErro] = useState("");
 
   const projetos = useMemo(
-    () => topics.filter((t) => !t.archivedAt && topicKind(t) !== "wishlist"),
+    () => topics.filter((t) => !t.archivedAt && !t.deletedAt && topicKind(t) !== "wishlist"),
     [topics]
   );
   const nomeDoProjeto = (id?: string) => topics.find((t) => t.id === id)?.name;

@@ -167,6 +167,7 @@ function migrateTopic(raw: unknown): Topic | null {
     groupId: asString(r.groupId),
     createdAt: asString(r.createdAt) ?? SAFE_FALLBACK_DATE,
     archivedAt: asString(r.archivedAt) ?? undefined,
+    deletedAt: asString(r.deletedAt) ?? undefined,
   };
 }
 

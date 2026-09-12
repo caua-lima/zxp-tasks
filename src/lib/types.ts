@@ -116,6 +116,13 @@ export interface Topic {
   groupId?: string;
   createdAt: string;
   archivedAt?: string | null;
+  /**
+   * Excluído — diferente de arquivado. Some da barra lateral e de qualquer
+   * lista, mas o registro continua existindo: tarefas na lixeira que
+   * apontam pra este tópico continuam com uma referência válida, em vez de
+   * ficarem órfãs quando o tópico some do array de verdade.
+   */
+  deletedAt?: string | null;
 }
 
 /**

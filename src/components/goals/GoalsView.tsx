@@ -17,7 +17,7 @@ export function GoalsView({ onOpenTopic }: { onOpenTopic: (id: string) => void }
   const [name, setName] = useState("");
   const [kind, setKind] = useState<TopicKind>("wishlist");
 
-  const active = useMemo(() => topics.filter((t) => !t.archivedAt), [topics]);
+  const active = useMemo(() => topics.filter((t) => !t.archivedAt && !t.deletedAt), [topics]);
 
   function handleAdd(e: React.FormEvent) {
     e.preventDefault();

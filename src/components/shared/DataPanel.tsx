@@ -146,6 +146,12 @@ export function DataPanel({ onClose }: { onClose: () => void }) {
                   >
                     <span className="min-w-0 flex-1 truncate text-sm text-[var(--muted)]">
                       {t.title}
+                      {(() => {
+                        const topico = topics.find((x) => x.id === t.topicId);
+                        return topico?.deletedAt ? (
+                          <span className="text-[11px]"> · {topico.name} (excluído)</span>
+                        ) : null;
+                      })()}
                     </span>
                     <button
                       onClick={() => {

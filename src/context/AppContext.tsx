@@ -443,15 +443,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const restoreTopic = useCallback((id: string) => {
     setBoard((b) => ({
       ...b,
-      topics: b.topics.map((t) => (t.id === id ? { ...t, archivedAt: undefined } : t)),
+      topics: b.topics.map((t) => (t.id === id ? { ...t, archivedAt: undefined, deletedAt: undefined } : t)),
     }));
   }, []);
 
+  /**
+   * "Excluir" some da barra lateral, mas não remove o registro do tópico —
+   * só marca `deletedAt`. Removê-lo de verdade do array quebrava a
+   * referência de qualquer tarefa que fosse pra lixeira junto: `topicId`
+   * passava a apontar pra nada, a tarefa ficava órfã, e mesclagem/importação
+   * a descartavam por não achar o tópico dela em lugar nenhum.
+   */
   const deleteTopic = useCallback((id: string) => {
     const now = new Date().toISOString();
     setBoard((b) => ({
       ...b,
-      topics: b.topics.filter((t) => t.id !== id),
+      topics: b.topics.map((t) => (t.id === id ? { ...t, deletedAt: now } : t)),
       // Tarefas do tópico vão pra lixeira, não somem.
       tasks: b.tasks.map((t) => (t.topicId === id ? { ...t, deletedAt: now } : t)),
     }));

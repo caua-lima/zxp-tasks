@@ -170,6 +170,16 @@ describe("migração de dados antigos", () => {
     assert.equal(board.tasks[0].createdAt, "1970-01-01T00:00:00.000Z");
   });
 
+  test("migração preserva o tópico excluído (tombstone), não some ele do array", () => {
+    const board = migrateBoard({
+      topics: [{ id: "t1", name: "Sumido", createdAt: "2026-01-01", deletedAt: "2026-09-01T10:00:00.000Z" }],
+      tasks: [{ id: "a", topicId: "t1", title: "Órfã da lixeira", deletedAt: "2026-09-01T10:00:00.000Z" }],
+    });
+    assert.equal(board.topics.length, 1);
+    assert.ok(board.topics[0].deletedAt);
+    assert.equal(board.tasks.length, 1);
+  });
+
   test("prioridade de 3 níveis antiga continua válida; valor inválido cai pra medium", () => {
     const board = migrateBoard({
       topics: [topic()],
@@ -1429,6 +1439,13 @@ describe("mescla automática entre aparelhos", () => {
     const remoto = board({ tasks: [task({ id: "x", topicId: "nao-existe" })] });
     const { board: r } = mergeBoards(local, remoto);
     assert.equal(r.tasks.length, 0);
+  });
+
+  test("tarefa apontando pra tópico EXCLUÍDO (não removido, só marcado) não é descartada", () => {
+    const local = board({ topics: [topic({ id: "a", deletedAt: "2026-09-01T10:00:00.000Z" })] });
+    const remoto = board({ tasks: [task({ id: "x", topicId: "a", deletedAt: "2026-09-01T10:00:00.000Z" })] });
+    const { board: r } = mergeBoards(local, remoto);
+    assert.equal(r.tasks.length, 1);
   });
 
   test("foco do dia: dia só do remoto entra, dia em comum fica com o local", () => {

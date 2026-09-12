@@ -200,7 +200,7 @@ function HomeInner() {
         },
       },
       ...topics
-        .filter((t) => !t.archivedAt)
+        .filter((t) => !t.archivedAt && !t.deletedAt)
         .map((t) => ({
           id: `topic-${t.id}`,
           label: `Abrir projeto: ${t.name}`,
