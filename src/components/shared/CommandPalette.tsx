@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { Task } from "@/lib/types";
+import { entrarNaPilha, sairDaPilha, souOTopoDaPilha } from "./modal-stack";
 
 export interface Command {
   id: string;
@@ -17,11 +18,16 @@ interface CommandPaletteProps {
   onClose: () => void;
 }
 
+const FOCUSABLE = 'a[href], button:not([disabled]), textarea, input, select';
+
 export function CommandPalette({ commands, onOpenTask, onClose }: CommandPaletteProps) {
   const { tasks } = useApp();
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState(0);
   const desceuNoFundo = useRef(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const idRef = useRef<symbol | null>(null);
+  if (idRef.current === null) idRef.current = Symbol("command-palette");
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -43,9 +49,23 @@ export function CommandPalette({ commands, onOpenTask, onClose }: CommandPalette
     return matched.slice(0, 12);
   }, [commands, query, tasks, onOpenTask]);
 
+  // Entrada/saída da pilha de diálogos empilháveis: só uma vez por montagem,
+  // igual ao Modal — ver comentário em modal-stack.ts.
   useEffect(() => {
+    const meuId = idRef.current as symbol;
+    entrarNaPilha(meuId);
+    return () => sairDaPilha(meuId);
+  }, []);
+
+  useEffect(() => {
+    const meuId = idRef.current as symbol;
+
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (!souOTopoDaPilha(meuId)) return;
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
       if (e.key === "ArrowDown") {
         e.preventDefault();
         setIndex((i) => Math.min(i + 1, results.length - 1));
@@ -58,6 +78,21 @@ export function CommandPalette({ commands, onOpenTask, onClose }: CommandPalette
         e.preventDefault();
         results[index]?.run();
         onClose();
+      }
+      if (e.key === "Tab" && dialogRef.current) {
+        const items = Array.from(
+          dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE)
+        ).filter((el) => el.offsetParent !== null);
+        if (items.length === 0) return;
+        const first = items[0];
+        const last = items[items.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
       }
     }
     document.addEventListener("keydown", onKey);
@@ -78,6 +113,7 @@ export function CommandPalette({ commands, onOpenTask, onClose }: CommandPalette
       }}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Paleta de comandos"

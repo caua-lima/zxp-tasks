@@ -37,6 +37,11 @@ export function TaskCard({
       onDragStart={onDragStart}
       onClick={onClick}
       onKeyDown={(e) => {
+        // Sem este check, Enter/Espaço num botão filho (▶ Iniciar, ←, →)
+        // também abre o modal do card: `keydown` chega até aqui por
+        // propagação mesmo quando o `onClick` do botão faz `stopPropagation`
+        // — isso impede o CLIQUE de subir, não a TECLA.
+        if (e.target !== e.currentTarget) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           onClick();

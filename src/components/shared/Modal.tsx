@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { entrarNaPilha, sairDaPilha, souOTopoDaPilha } from "./modal-stack";
 
 interface ModalProps {
   title: string;
@@ -15,6 +16,18 @@ const FOCUSABLE =
 
 export function Modal({ title, onClose, children, footer, wide }: ModalProps) {
   const ref = useRef<HTMLDivElement>(null);
+  const idRef = useRef<symbol | null>(null);
+  if (idRef.current === null) idRef.current = Symbol("modal");
+
+  // O efeito de foco/teclado roda só na montagem (deps `[]`) pra não reiniciar
+  // o foco nem reanexar o listener a cada re-render do pai — por isso ele lê
+  // `onClose` por uma ref, sempre com o valor mais recente, em vez de depender
+  // dele diretamente.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
   /**
    * Só fecha no clique de fundo se o dedo/mouse TAMBÉM desceu no fundo.
    *
@@ -28,13 +41,16 @@ export function Modal({ title, onClose, children, footer, wide }: ModalProps) {
   const desceuNoFundo = useRef(false);
 
   useEffect(() => {
+    const meuId = idRef.current as symbol;
+    entrarNaPilha(meuId);
     const previouslyFocused = document.activeElement as HTMLElement | null;
     ref.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
 
     function onKey(e: KeyboardEvent) {
+      if (!souOTopoDaPilha(meuId)) return;
       if (e.key === "Escape") {
         e.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key !== "Tab" || !ref.current) return;
@@ -56,9 +72,10 @@ export function Modal({ title, onClose, children, footer, wide }: ModalProps) {
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("keydown", onKey);
+      sairDaPilha(meuId);
       previouslyFocused?.focus();
     };
-  }, [onClose]);
+  }, []);
 
   return (
     <div
