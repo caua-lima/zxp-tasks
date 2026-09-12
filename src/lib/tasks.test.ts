@@ -571,6 +571,13 @@ describe("recorrência — nova ocorrência", () => {
     assert.equal(proxima!.dueDate, "2026-08-17");
   });
 
+  test("concluir às 22h30 no Brasil usa o dia LOCAL, não o dia UTC (já é 17 lá)", () => {
+    const original = task({ recurrence: { frequency: "daily" }, dueDate: undefined });
+    // 22h30 de 16/09 em Brasília = 01h30 de 17/09 em UTC.
+    const proxima = createRecurringTask(original, "novo-id", "2026-09-17T01:30:00.000Z");
+    assert.equal(proxima!.dueDate, "2026-09-17");
+  });
+
   test("nova ocorrência nasce sem a marca de já ter gerado — a corrente continua", () => {
     const original = task({
       recurrence: { frequency: "daily" },
@@ -715,6 +722,13 @@ describe("pular ocorrência", () => {
 
   test("tarefa não recorrente não pode ser pulada", () => {
     assert.equal(skipOccurrence(task({ dueDate: "2026-08-16" })), null);
+  });
+
+  test("sem prazo, pular às 22h30 no Brasil usa o dia LOCAL como base", () => {
+    const original = task({ recurrence: { frequency: "daily" }, dueDate: undefined });
+    // 22h30 de 16/09 em Brasília = 01h30 de 17/09 em UTC.
+    const pulada = skipOccurrence(original, "2026-09-17T01:30:00.000Z");
+    assert.equal(pulada!.dueDate, "2026-09-17");
   });
 });
 

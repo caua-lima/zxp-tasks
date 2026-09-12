@@ -1,5 +1,5 @@
 import { Recurrence, Task } from "./types";
-import { addDaysISO, todayISO } from "./date-utils";
+import { addDaysISO, localDayOf, todayISO } from "./date-utils";
 
 /**
  * Próxima data de uma recorrência a partir de `from`.
@@ -57,7 +57,9 @@ export function createRecurringTask(
 ): Task | null {
   if (!task.recurrence) return null;
 
-  const base = task.dueDate ?? now.slice(0, 10);
+  // Dia LOCAL, não UTC: concluir às 22h30 no Brasil já é dia seguinte em
+  // UTC, e a próxima ocorrência nasceria um dia adiantada.
+  const base = task.dueDate ?? localDayOf(now);
   return {
     ...task,
     id: newId,
@@ -88,7 +90,7 @@ export function skipOccurrence(
   now: string = new Date().toISOString()
 ): Task | null {
   if (!task.recurrence) return null;
-  const base = task.dueDate ?? now.slice(0, 10);
+  const base = task.dueDate ?? localDayOf(now);
   return {
     ...task,
     dueDate: nextOccurrence(task.recurrence, base),

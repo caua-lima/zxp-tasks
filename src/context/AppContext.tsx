@@ -575,6 +575,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         completedAt: undefined,
         deletedAt: undefined,
         archivedAt: undefined,
+        // A cópia é uma série nova: se herdasse `true` de uma original já
+        // concluída, a corrente de recorrência dela nasceria travada, sem
+        // nunca gerar a primeira próxima ocorrência.
+        recurrenceSpawned: false,
         createdAt: now,
         updatedAt: now,
       };
