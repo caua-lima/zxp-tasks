@@ -466,7 +466,8 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
                 <p id="task-price-ajuda" className="mt-1 text-[11px] text-[var(--muted)]">
                   {priceInvalid ? (
                     <span className="text-[var(--danger)]">
-                      Não achei nenhum valor aí. Escreva algo como 1.500 ou 1.2k + 300.
+                      Não consegui entender esse valor — cada parte separada por &ldquo;+&rdquo;
+                      precisa ter só um número. Escreva algo como 1.500 ou 1.2k + 300.
                     </span>
                   ) : precoTemPartes ? (
                     <span className="text-[var(--foreground)]">

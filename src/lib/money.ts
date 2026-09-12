@@ -74,25 +74,36 @@ export interface ValorComposto {
  * de cabeça antes de digitar é justamente o tipo de conta que ela abriu o
  * app pra não fazer.
  *
- * A regra é simples de propósito: soma TODO número que aparecer no texto, o
- * resto é rótulo livre. Aceita o sufixo "k" ("1.2k" = 1.200) porque é como
- * preço costuma ser falado.
+ * Gramática explícita, não "soma todo número do texto": o "+" é o ÚNICO
+ * separador de partes. Cada parte entre "+" pode ter um rótulo livre em
+ * volta, mas só pode conter UM valor reconhecido — duas partes sem "+"
+ * ("iPhone 15 5000", "2 x 300") não dizem qual número é o preço, e somar os
+ * dois de qualquer jeito já produziu total errado sem avisar ninguém. Sinal
+ * de negativo também não é uma operação suportada aqui. Nesses casos a
+ * função devolve `null`, o mesmo valor de "não tem preço nenhum" — quem
+ * chama já trata os dois como "preço inválido, não salva".
  *
- * Devolve `null` quando não há número nenhum — campo vazio precisa continuar
- * distinguível de "custa zero".
+ * Aceita o sufixo "k" ("1.2k" = 1.200) porque é como preço costuma ser
+ * falado. Devolve `null` quando não há número nenhum — campo vazio precisa
+ * continuar distinguível de "custa zero".
  */
 export function parseValorComposto(input: string): ValorComposto | null {
   const parts: number[] = [];
-  // Um número é uma sequência de dígitos com pontos/vírgulas no meio; o "k"
-  // logo depois multiplica por mil. Tudo que não casa é rótulo e é ignorado.
-  const regex = /\d[\d.,]*\s*k?/gi;
+  // Sinal opcional (pra DETECTAR negativo, não pra aceitar) + dígitos com
+  // ponto/vírgula no meio + "k" opcional logo depois.
+  const regex = /-?\d[\d.,]*\s*k?/gi;
 
-  for (const match of input.matchAll(regex)) {
-    const bruto = match[0].trim();
+  for (const segmento of input.split("+")) {
+    const encontrados = [...segmento.matchAll(regex)];
+    if (encontrados.length === 0) continue; // parte só com rótulo — ignora
+    if (encontrados.length > 1) return null; // dois números na mesma parte: ambíguo
+
+    const bruto = encontrados[0][0].trim();
+    if (bruto.startsWith("-")) return null; // negativo não é suportado
     const temK = /k$/i.test(bruto);
     const numero = temK ? bruto.slice(0, -1).trim() : bruto;
     const cents = parseBRL(numero);
-    if (cents === null) continue;
+    if (cents === null) return null;
     parts.push(temK ? cents * 1000 : cents);
   }
 

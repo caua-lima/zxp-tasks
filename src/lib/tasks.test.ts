@@ -1496,6 +1496,22 @@ test("parseValorComposto devolve null quando não há número — vazio não é 
   assert.equal(parseValorComposto("mão de obra"), null);
 });
 
+test("parseValorComposto rejeita valor negativo em vez de virar positivo", () => {
+  assert.equal(parseValorComposto("-100"), null);
+  assert.equal(parseValorComposto("frete -50 + 300"), null);
+});
+
+test("parseValorComposto rejeita dois números na mesma parte (ambíguo)", () => {
+  // Sem "+", não dá pra saber qual dos dois números é o preço.
+  assert.equal(parseValorComposto("iPhone 15 5000"), null);
+  assert.equal(parseValorComposto("2 x 300"), null);
+});
+
+test("parseValorComposto: uma parte sem número nenhum é só rótulo, não quebra o resto", () => {
+  const r = parseValorComposto("frete grátis + 300");
+  assert.deepEqual(r, { cents: 30000, parts: [30000] });
+});
+
 test("migração preserva o vínculo do bloco com projeto e tarefa", () => {
   const board = migrateBoard({
     topics: [{ id: "t1", name: "Mercado Livre", kind: "work", createdAt: "2026-01-01" }],
