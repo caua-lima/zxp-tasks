@@ -28,12 +28,16 @@ export interface NewTaskInput {
  * desejo, mesmo funcionando ao editar. Aqui dá pra travar isso com teste.
  */
 export function createTask(input: NewTaskInput, id: string, now: string): Task {
+  const status = input.status ?? "todo";
   return {
     id,
     topicId: input.topicId,
     title: input.title.trim(),
     description: input.description?.trim() ?? "",
-    status: input.status ?? "todo",
+    status,
+    // Nascer "done" sem completedAt fazia a tarefa aparecer como concluída
+    // sem data — relatório e métricas por dia não tinham onde encaixá-la.
+    completedAt: status === "done" ? now : undefined,
     priority: input.priority ?? "medium",
     dueDate: input.dueDate ?? undefined,
     energy: input.energy,

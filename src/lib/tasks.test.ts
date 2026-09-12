@@ -56,6 +56,7 @@ import {
 } from "./task-utils";
 import { filterTasks, sortTasks } from "./task-filters";
 import { classificarErroDeGravacao, interpretarConteudoSalvo } from "./storage";
+import { concluirTarefaNoBoard } from "./task-completion";
 import { taskBelongsToTopic } from "./task-utils";
 import { validateBackup, mergeImportedData, mergeBoards } from "./task-backup";
 import { calculateWeeklyMetrics } from "./weekly-review";
@@ -1060,6 +1061,15 @@ describe("criação de tarefa (o construtor não pode engolir campo)", () => {
     assert.equal(criada.priority, "medium");
     assert.deepEqual(criada.tags, []);
     assert.equal(criada.priceCents, undefined);
+  });
+
+  test("nascer já concluída carimba completedAt sozinha", () => {
+    const criada = createTask(
+      { topicId: "t1", title: "Já fiz isso", status: "done" },
+      "id",
+      "2026-08-16T10:00:00.000Z"
+    );
+    assert.equal(criada.completedAt, "2026-08-16T10:00:00.000Z");
   });
 });
 
@@ -2274,6 +2284,48 @@ test("migração preserva as metas do bloco sem repetir nem aceitar lixo", () =>
     schedule: [{ id: "a", date: "2026-09-05", title: "Ler", plannedMinutes: 20, accumulatedMs: 0, order: 0, metaIds: ["m1", "m1", 3] }],
   });
   assert.deepEqual(b.schedule[0].metaIds, ["m1"]);
+});
+
+// ── Conclusão de tarefa — mesma função em qualquer caminho ────────────────
+
+test("concluir gera a próxima ocorrência de uma tarefa recorrente", () => {
+  const board = {
+    ...emptyBoard(),
+    tasks: [tarefa({ id: "k1", topicId: "a", status: "doing", recurrence: { frequency: "daily" }, dueDate: "2026-09-05" })],
+  };
+  const d = concluirTarefaNoBoard(board, "k1", "2026-09-05T20:00:00.000Z", "2026-09-05", () => "k2");
+  const original = d.tasks.find((t) => t.id === "k1")!;
+  const proxima = d.tasks.find((t) => t.id === "k2");
+  assert.equal(original.status, "done");
+  assert.ok(original.completedAt);
+  assert.equal(original.recurrenceSpawned, true);
+  assert.ok(proxima);
+  assert.equal(proxima!.status, "todo");
+  assert.equal(proxima!.dueDate, "2026-09-06");
+});
+
+test("concluir marca as metas ligadas à tarefa", () => {
+  const board = {
+    ...emptyBoard(),
+    metas: [metaDeTeste()],
+    tasks: [tarefa({ id: "k1", topicId: "a", status: "doing", metaIds: ["m1"] })],
+  };
+  const d = concluirTarefaNoBoard(board, "k1", "2026-09-05T20:00:00.000Z", "2026-09-05", () => "novo");
+  assert.equal(d.metas[0].registros["2026-09-05"], 2);
+});
+
+test("concluir uma tarefa já concluída não reprocessa (idempotente)", () => {
+  const board = {
+    ...emptyBoard(),
+    tasks: [
+      tarefa({
+        id: "k1", topicId: "a", status: "done", completedAt: "2026-09-01T10:00:00.000Z",
+        recurrence: { frequency: "daily" }, recurrenceSpawned: true,
+      }),
+    ],
+  };
+  const d = concluirTarefaNoBoard(board, "k1", "2026-09-05T20:00:00.000Z", "2026-09-05", () => "outra");
+  assert.equal(d, board);
 });
 
 // ── Conclusão automática por tempo do projeto ─────────────────────────────

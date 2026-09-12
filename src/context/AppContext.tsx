@@ -28,14 +28,14 @@ import { loadBoard, pushBackup, saveBoard } from "@/lib/storage";
 import { nextTopicColor } from "@/lib/colors";
 import { migrateBoard } from "@/lib/task-migrations";
 import { mergeBoards, mergeImportedData, MergeReport, validateBackup } from "@/lib/task-backup";
-import { createRecurringTask, skipOccurrence } from "@/lib/recurrence";
+import { skipOccurrence } from "@/lib/recurrence";
 import { todayISO } from "@/lib/date-utils";
 import { useAuth } from "./AuthContext";
 import { fetchCloudBoard, pushBoardToCloud, subscribeToCloudBoard } from "@/lib/cloud-sync";
 import { registrarAparelho } from "@/lib/push";
 import { createTask, NewTaskInput } from "@/lib/task-factory";
+import { concluirTarefaNoBoard } from "@/lib/task-completion";
 import {
-  aplicarConclusaoNasMetas,
   aplicarMetasDoBloco,
   NovaMetaInput,
   novaMeta,
@@ -485,36 +485,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
    */
   const setTaskStatus = useCallback((id: string, status: TaskStatus) => {
     const now = new Date().toISOString();
-    setBoard((b) => {
-      const target = b.tasks.find((t) => t.id === id);
-      const shouldSpawn =
-        status === "done" && !!target?.recurrence && !target.recurrenceSpawned;
-
-      const tasks = b.tasks.map((t) => {
-        if (t.id !== id) return t;
-        if (status === "done") {
-          return {
-            ...t,
-            status,
-            completedAt: t.completedAt ?? now,
-            recurrenceSpawned: t.recurrenceSpawned || shouldSpawn,
-            updatedAt: now,
-          };
-        }
-        return { ...t, status, completedAt: undefined, updatedAt: now };
-      });
-
-      if (shouldSpawn && target) {
-        const next = createRecurringTask(target, uuid(), now);
-        if (next) tasks.push(next);
-      }
-      const proximo = { ...b, tasks };
-      // Só na TRANSIÇÃO pra feito: remarcar uma tarefa que já estava feita
-      // não pode reprocessar a meta.
-      return status === "done" && target && target.status !== "done"
-        ? aplicarConclusaoNasMetas(proximo, [id], todayISO())
-        : proximo;
-    });
+    if (status === "done") {
+      // Mesma função que finishBlock/autoConcluirBlocos/"já fiz" chamam —
+      // concluir pelo quadro, pelo cronograma ou sozinho por tempo dá
+      // sempre o mesmo resultado (recorrência, metas, completedAt).
+      setBoard((b) => concluirTarefaNoBoard(b, id, now, todayISO(), uuid));
+      return;
+    }
+    setBoard((b) => ({
+      ...b,
+      tasks: b.tasks.map((t) => (t.id === id ? { ...t, status, completedAt: undefined, updatedAt: now } : t)),
+    }));
   }, []);
 
   const trashTask = useCallback((id: string) => {
@@ -690,9 +671,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         };
 
         if (!criarTarefa) {
-          const proximo = { ...b, schedule: [...b.schedule, block] };
-          // "Já fiz" conta na meta no dia do bloco, que é o dia em que foi feito.
-          return opcoes?.jaFeito ? aplicarMetasDoBloco(proximo, block, date) : proximo;
+          let proximo = { ...b, schedule: [...b.schedule, block] };
+          if (opcoes?.jaFeito) {
+            // "Já fiz" com uma tarefa que já existia no projeto marcava só o
+            // bloco — a tarefa continuava em aberto no quadro, como se nada
+            // tivesse acontecido. Mesma conclusão de qualquer outro caminho,
+            // recorrência inclusive.
+            if (existente) {
+              proximo = concluirTarefaNoBoard(proximo, existente.id, now, date, uuid);
+            }
+            // Conta na meta no dia do BLOCO, que é o dia em que foi feito —
+            // pode não ser hoje, se a pessoa estiver registrando um dia atrás.
+            proximo = aplicarMetasDoBloco(proximo, block, date);
+          }
+          return proximo;
         }
 
         const task = createTask(
@@ -713,8 +705,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           novaTarefaId,
           now
         );
-        const tarefaFinal = opcoes?.jaFeito ? { ...task, completedAt: now } : task;
-        const proximo = { ...b, tasks: [...b.tasks, tarefaFinal], schedule: [...b.schedule, block] };
+        // `createTask` já carimba `completedAt` sozinho quando nasce "done".
+        const proximo = { ...b, tasks: [...b.tasks, task], schedule: [...b.schedule, block] };
         return opcoes?.jaFeito ? aplicarMetasDoBloco(proximo, block, date) : proximo;
       });
     },
@@ -862,26 +854,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
    */
   const finishBlock = useCallback((id: string) => {
     const nowIso = new Date().toISOString();
+    const dia = todayISO();
     setBoard((b) => {
       const block = b.schedule.find((x) => x.id === id);
-      const task = block?.taskId ? b.tasks.find((t) => t.id === block.taskId) : undefined;
-      const concluirTarefa = task && task.status !== "done";
-
-      const proximo = {
+      let proximo = {
         ...b,
         schedule: b.schedule.map((x) => (x.id === id ? completeBlock(x, nowIso) : x)),
-        tasks: concluirTarefa
-          ? b.tasks.map((t) =>
-              t.id === task.id
-                ? { ...t, status: "done" as const, completedAt: nowIso, updatedAt: nowIso }
-                : t
-            )
-          : b.tasks,
       };
+      // Mesma função de conclusão usada em qualquer outro caminho — sem
+      // isso, concluir uma tarefa recorrente PELO CRONOGRAMA não gerava a
+      // próxima ocorrência (só concluir pelo quadro gerava).
+      if (block?.taskId) {
+        proximo = concluirTarefaNoBoard(proximo, block.taskId, nowIso, dia, uuid);
+      }
       // Concluir o bloco marca o dia nas metas dele e nas da tarefa que ele
       // carrega. Não depende de a tarefa estar mudando pra feita: um bloco sem
       // projeto também conta, e marcar de novo é inofensivo (vale o maior).
-      return block ? aplicarMetasDoBloco(proximo, block, todayISO()) : proximo;
+      return block ? aplicarMetasDoBloco(proximo, block, dia) : proximo;
     });
   }, []);
 

@@ -1,5 +1,6 @@
 import { Board, ScheduleBlock, Sessao } from "./types";
 import { aplicarMetasDoBloco } from "./metas";
+import { concluirTarefaNoBoard } from "./task-completion";
 import { todayISO } from "./date-utils";
 
 export const MINUTE_MS = 60_000;
@@ -392,9 +393,11 @@ export function completedBlockData(minutosGastos: number, nowIso: string) {
  */
 export function autoConcluirBlocos(
   board: Board,
-  now: number = Date.now()
+  now: number = Date.now(),
+  gerarId: () => string = () => crypto.randomUUID()
 ): { board: Board; mudou: boolean } {
   const nowIso = new Date(now).toISOString();
+  const dia = todayISO();
   let atual = board;
   let mudou = false;
 
@@ -404,20 +407,14 @@ export function autoConcluirBlocos(
     if (!limite || elapsedMs(block, now) < limite * MINUTE_MS) continue;
 
     mudou = true;
-    const task = block.taskId ? atual.tasks.find((t) => t.id === block.taskId) : undefined;
-    const concluirTarefa = task && task.status !== "done";
     atual = {
       ...atual,
       schedule: atual.schedule.map((x) => (x.id === block.id ? completeBlock(x, nowIso) : x)),
-      tasks: concluirTarefa
-        ? atual.tasks.map((t) =>
-            t.id === task!.id
-              ? { ...t, status: "done" as const, completedAt: nowIso, updatedAt: nowIso }
-              : t
-          )
-        : atual.tasks,
     };
-    atual = aplicarMetasDoBloco(atual, block, todayISO());
+    // Mesma função de conclusão dos outros caminhos — sem isso, uma tarefa
+    // recorrente concluída sozinha por tempo nunca gerava a próxima.
+    if (block.taskId) atual = concluirTarefaNoBoard(atual, block.taskId, nowIso, dia, gerarId);
+    atual = aplicarMetasDoBloco(atual, block, dia);
   }
 
   return mudou ? { board: atual, mudou } : { board, mudou };
