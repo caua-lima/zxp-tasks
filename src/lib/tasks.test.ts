@@ -1946,6 +1946,30 @@ test("retomar em outro dia deixa o tempo no dia antigo e cria continuação hoje
   assert.equal(novo!.continuaDe, "a");
 });
 
+test("retomar em outro dia preserva a meta e a marca de intervalo", () => {
+  const p = {
+    ...bloco({ id: "a", date: "2026-09-09", plannedMinutes: 60 }),
+    accumulatedMs: 20 * 60_000,
+    parkedAt: "2026-09-09T13:00:00.000Z",
+    metaIds: ["m1"],
+    isBreak: true,
+  };
+  const { novo } = retomarBloco(p, "2026-09-10", "2026-09-10T09:00:00.000Z", "n1", 0);
+  assert.deepEqual(novo!.metaIds, ["m1"]);
+  assert.equal(novo!.isBreak, true);
+});
+
+test("retomar não copia o vínculo de programação — a continuação é manual", () => {
+  const p = {
+    ...bloco({ id: "a", date: "2026-09-09", plannedMinutes: 60 }),
+    accumulatedMs: 20 * 60_000,
+    parkedAt: "2026-09-09T13:00:00.000Z",
+    programacaoId: "prog-1",
+  };
+  const { novo } = retomarBloco(p, "2026-09-10", "2026-09-10T09:00:00.000Z", "n1", 0);
+  assert.equal(novo!.programacaoId, undefined);
+});
+
 test("retomar bloco que já tinha estourado volta com o planejado original", () => {
   const p = {
     ...bloco({ id: "a", date: "2026-09-09", plannedMinutes: 30 }),

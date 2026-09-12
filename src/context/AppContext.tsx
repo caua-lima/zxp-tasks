@@ -1066,23 +1066,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
-  /** Copia a estrutura de um dia pro outro, com os cronômetros zerados. */
+  /**
+   * Copia a estrutura de um dia pro outro, com os cronômetros zerados.
+   *
+   * Aditiva de propósito: nunca apaga um bloco que já exista no dia de
+   * destino. A UI só oferece o botão num dia vazio, mas a função não
+   * depende disso pra ser segura — um bloco chegado de outro aparelho
+   * bem na hora não pode ser descartado por uma cópia.
+   */
   const copyDay = useCallback(
     (fromDate: string, toDate: string) => {
       const origem = board.schedule.filter((x) => x.date === fromDate);
       if (origem.length === 0) return 0;
-      const novos = origem.map((x, i) => ({
+      const doDestino = board.schedule.filter((x) => x.date === toDate);
+      const primeiraOrdem = doDestino.length === 0 ? 0 : Math.max(...doDestino.map((x) => x.order)) + 1;
+      const novos: ScheduleBlock[] = origem.map((x, i) => ({
         id: uuid(),
         date: toDate,
         title: x.title,
         plannedMinutes: x.plannedMinutes,
         accumulatedMs: 0,
-        order: i,
+        order: primeiraOrdem + i,
+        // Continua sendo a mesma NATUREZA de bloco — intervalo, tempo livre,
+        // vínculo de projeto/tarefa/meta — só o cronômetro é que zera.
+        // `programacaoId` fica de fora: a cópia não é a ocorrência gerada
+        // pela programação daquele dia.
+        topicId: x.topicId,
+        taskId: x.taskId,
+        metaIds: x.metaIds,
+        isBreak: x.isBreak,
+        openEnded: x.openEnded,
       }));
-      setBoard((b) => ({
-        ...b,
-        schedule: [...b.schedule.filter((x) => x.date !== toDate), ...novos],
-      }));
+      setBoard((b) => ({ ...b, schedule: [...b.schedule, ...novos] }));
       return origem.length;
     },
     [board.schedule]

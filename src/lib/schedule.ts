@@ -184,7 +184,16 @@ export function retomarBloco(
       topicId: block.topicId,
       taskId: block.taskId,
       openEnded: block.openEnded,
+      // A meta e a classificação de intervalo são do TRABALHO que continua,
+      // não do bloco de ontem em si — sem isto, retomar em outro dia parava
+      // de contar pra meta e um intervalo retomado virava trabalho comum.
+      metaIds: block.metaIds,
+      isBreak: block.isBreak,
       continuaDe: block.id,
+      // `programacaoId` fica de fora de propósito: o bloco novo não é o
+      // expediente de hoje gerado pela programação, é uma continuação
+      // manual — copiar o id faria dois blocos reivindicarem a mesma
+      // identidade de ocorrência programada.
     },
   };
 }
