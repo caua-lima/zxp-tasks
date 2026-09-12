@@ -53,6 +53,21 @@ export function WeeklyReview() {
   const [toArchive, setToArchive] = useState(existing?.toArchive ?? "");
   const [nextPriority, setNextPriority] = useState(existing?.nextPriority ?? "");
   const [wastingTime, setWastingTime] = useState(existing?.wastingTime ?? "");
+  // O `useState` acima só roda na primeira montagem — sem isto, trocar de
+  // semana mantinha o texto da semana anterior na tela, e salvar gravava
+  // esse texto errado na semana nova. Ajuste durante a renderização (não um
+  // efeito): React relê isto ANTES de pintar a tela, então não existe um
+  // frame mostrando o texto errado. Depende só de `weekStart` de propósito —
+  // uma atualização remota da MESMA semana sendo editada não apaga o que a
+  // pessoa está digitando.
+  const [semanaDoRascunho, setSemanaDoRascunho] = useState(weekStart);
+  if (semanaDoRascunho !== weekStart) {
+    setSemanaDoRascunho(weekStart);
+    setStuck(existing?.stuck ?? "");
+    setToArchive(existing?.toArchive ?? "");
+    setNextPriority(existing?.nextPriority ?? "");
+    setWastingTime(existing?.wastingTime ?? "");
+  }
 
   // A revisão anterior fecha o ciclo: o que você definiu como prioridade da
   // semana que vem é justamente o que precisa ser cobrado agora.
