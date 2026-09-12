@@ -174,6 +174,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [board, setBoard] = useState<Board>(emptyBoard);
   const [ready, setReady] = useState(false);
   const [storageError, setStorageError] = useState<AppContextValue["storageError"]>(null);
+  // Estado, não uma leitura direta: sem isso, a virada de meia-noite só
+  // aparecia na tela se alguma OUTRA coisa forçasse um re-render — o board
+  // podia continuar exatamente igual (nada mudou às 00h) e "hoje" ficava
+  // preso no dia de ontem até a pessoa mexer em algo.
+  const [today, setToday] = useState(todayISO());
 
   useEffect(() => {
     // localStorage não existe no SSR; ler durante o render causaria
@@ -286,6 +291,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!ready) return;
     function aplicar() {
+      // Bail-out embutido do React: devolver a MESMA string quando o dia
+      // não virou não gera render extra nenhum minuto — só na virada real.
+      setToday((atual) => {
+        const agora = todayISO();
+        return agora === atual ? atual : agora;
+      });
       setBoard((b) => {
         const r1 = materializarProgramacoes(b, todayISO(), Date.now());
         // Mesma checagem que abre o expediente sozinho também fecha, no
@@ -586,7 +597,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const today = todayISO();
   const focusToday = useMemo(() => board.dailyFocus[today] ?? [], [board.dailyFocus, today]);
 
   const toggleFocus = useCallback(
