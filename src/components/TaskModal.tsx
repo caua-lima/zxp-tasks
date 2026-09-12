@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { v4 as uuid } from "uuid";
 import { useApp } from "@/context/AppContext";
 import {
@@ -88,6 +88,84 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
   );
   const [url, setUrl] = useState(task?.url ?? "");
   const [store, setStore] = useState(task?.store ?? "");
+  const [confirmDescartar, setConfirmDescartar] = useState(false);
+
+  // Fotografia dos campos como abriram — nunca muda depois, mesmo que a
+  // tarefa mude por sincronização enquanto o modal está aberto. `useState`
+  // com inicializador preguiçoso (em vez de `useRef`) porque o lint novo
+  // proíbe ler `ref.current` durante a renderização.
+  const [valoresIniciais] = useState(() => ({
+    title,
+    description,
+    dueDate,
+    topicId,
+    status,
+    priority,
+    energy,
+    estimate,
+    checklist,
+    extras,
+    metasLigadas,
+    priceText,
+    url,
+    store,
+  }));
+
+  const sujo = useMemo(() => {
+    const atuais = {
+      title,
+      description,
+      dueDate,
+      topicId,
+      status,
+      priority,
+      energy,
+      estimate,
+      checklist,
+      extras,
+      metasLigadas,
+      priceText,
+      url,
+      store,
+    };
+    return JSON.stringify(atuais) !== JSON.stringify(valoresIniciais);
+  }, [
+    title,
+    description,
+    dueDate,
+    topicId,
+    status,
+    priority,
+    energy,
+    estimate,
+    checklist,
+    extras,
+    metasLigadas,
+    priceText,
+    url,
+    store,
+    valoresIniciais,
+  ]);
+
+  /**
+   * Fechar sem salvar é fácil demais de fazer sem querer — Esc, tocar fora
+   * do modal, ou trocar de aba. Só interrompe quando há algo pra perder;
+   * uma tarefa aberta e fechada sem mexer não precisa de confirmação nenhuma.
+   */
+  function tentarFechar() {
+    if (sujo) setConfirmDescartar(true);
+    else onClose();
+  }
+
+  useEffect(() => {
+    if (!sujo) return;
+    function avisar(e: BeforeUnloadEvent) {
+      e.preventDefault();
+      e.returnValue = "";
+    }
+    window.addEventListener("beforeunload", avisar);
+    return () => window.removeEventListener("beforeunload", avisar);
+  }, [sujo]);
 
   const done = checklist.filter((c) => c.completed).length;
 
@@ -166,7 +244,7 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
     <>
       <Modal
         title={task ? "Editar tarefa" : "Nova tarefa"}
-        onClose={onClose}
+        onClose={tentarFechar}
         wide
         footer={
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -222,7 +300,7 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={tentarFechar}
                 className="rounded-md px-3 py-1.5 text-sm font-medium text-[var(--muted)] hover:bg-[var(--surface)]"
               >
                 Cancelar
@@ -659,6 +737,20 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
             trashTask(task.id);
             showToast("Tarefa movida para a lixeira.");
             setConfirmTrash(false);
+            onClose();
+          }}
+        />
+      )}
+
+      {confirmDescartar && (
+        <ConfirmDialog
+          title="Descartar alterações?"
+          message="O que foi digitado aqui ainda não foi salvo."
+          confirmLabel="Descartar"
+          danger
+          onCancel={() => setConfirmDescartar(false)}
+          onConfirm={() => {
+            setConfirmDescartar(false);
             onClose();
           }}
         />

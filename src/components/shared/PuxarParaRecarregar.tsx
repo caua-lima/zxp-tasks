@@ -67,15 +67,25 @@ export function PuxarParaRecarregar({
       setPuxada(0);
     }
 
+    // `touchcancel` é o navegador interrompendo o gesto (ligação chegando,
+    // troca de app, gesto do sistema por cima) — não é o dedo soltando de
+    // propósito. Tratar igual a `touchend` recarregava a página sozinho no
+    // meio de um puxão que a pessoa nunca chegou a completar.
+    function onCancel() {
+      inicioY = null;
+      distancia = 0;
+      setPuxada(0);
+    }
+
     el.addEventListener("touchstart", onStart, { passive: true });
     el.addEventListener("touchmove", onMove, { passive: false });
     el.addEventListener("touchend", onEnd, { passive: true });
-    el.addEventListener("touchcancel", onEnd, { passive: true });
+    el.addEventListener("touchcancel", onCancel, { passive: true });
     return () => {
       el.removeEventListener("touchstart", onStart);
       el.removeEventListener("touchmove", onMove);
       el.removeEventListener("touchend", onEnd);
-      el.removeEventListener("touchcancel", onEnd);
+      el.removeEventListener("touchcancel", onCancel);
     };
   }, []);
 
