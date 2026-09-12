@@ -2251,6 +2251,52 @@ test("programação criada depois do fim do expediente não gera o bloco de hoje
   assert.ok(amanha.board.schedule[0].startedAt);
 });
 
+test("abrir dias depois fecha o expediente que ficou rodando, no horário certo daquele dia", () => {
+  // progDeTeste roda seg-sex, 08h-18h; 2026-09-11 é sexta, 2026-09-14 é segunda.
+  const p = progDeTeste();
+  const board = quadroCom(p);
+  board.schedule = [
+    {
+      id: idDoBlocoProgramado("p1", "2026-09-11"),
+      date: "2026-09-11",
+      title: "SDR",
+      plannedMinutes: 600,
+      accumulatedMs: 0,
+      order: 0,
+      programacaoId: "p1",
+      startedAt: new Date("2026-09-11T08:00:00").toISOString(),
+    },
+  ];
+  const r = materializarProgramacoes(board, "2026-09-14", local("2026-09-14T09:00:00"));
+  const antigo = r.board.schedule.find((b) => b.date === "2026-09-11")!;
+  assert.equal(antigo.accumulatedMs, 10 * 60 * 60_000);
+  assert.equal(antigo.completedAt, new Date("2026-09-11T18:00:00").toISOString());
+  assert.equal(antigo.startedAt, undefined);
+  // Hoje (segunda) continua sendo materializado normalmente, sem ficar
+  // travado por causa da sexta que precisou ser fechada primeiro.
+  assert.ok(r.board.schedule.some((b) => b.date === "2026-09-14"));
+});
+
+test("bloco antigo de programação já apagada fecha mesmo assim, no instante em que o app percebe", () => {
+  const board = { ...emptyBoard(), programacoes: [] };
+  board.schedule = [
+    {
+      id: "prog-sumida-2026-09-11",
+      date: "2026-09-11",
+      title: "SDR",
+      plannedMinutes: 600,
+      accumulatedMs: 0,
+      order: 0,
+      programacaoId: "prog-sumida",
+      startedAt: new Date("2026-09-11T08:00:00").toISOString(),
+    },
+  ];
+  const agora = local("2026-09-14T09:00:00");
+  const r = materializarProgramacoes(board, "2026-09-14", agora);
+  assert.equal(r.mudou, true);
+  assert.equal(r.board.schedule[0].completedAt, new Date(agora).toISOString());
+});
+
 // ── Metas no bloco do cronograma ─────────────────────────────────────────
 
 test("bloco concluído conta nas metas dele e nas da tarefa que carrega", () => {

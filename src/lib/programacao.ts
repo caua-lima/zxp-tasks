@@ -114,6 +114,33 @@ export function valeNoDia(p: Programacao, dia: string): boolean {
 }
 
 /**
+ * Fecha bloco de programação de um dia ANTERIOR que ficou rodando — o app
+ * fechado com o expediente ligado e reaberto dias depois, sem passar pelo
+ * fechamento daquele dia (a checagem abaixo só olha o bloco de HOJE).
+ *
+ * Fecha no horário de fim do PRÓPRIO dia do bloco, lido na programação
+ * (ainda pode existir mesmo pausada ou editada depois). Sem a programação
+ * (apagada nesse meio tempo), fecha agora mesmo — sem um horário de
+ * referência melhor, é o único jeito de não deixar rodando pra sempre.
+ */
+function fecharBlocosDeDiasAnteriores(
+  schedule: ScheduleBlock[],
+  programacoes: Programacao[],
+  hoje: string,
+  agoraMs: number
+): { schedule: ScheduleBlock[]; mudou: boolean } {
+  let mudou = false;
+  const novo = schedule.map((b) => {
+    if (!b.programacaoId || b.date >= hoje || !isRunning(b)) return b;
+    mudou = true;
+    const p = programacoes.find((x) => x.id === b.programacaoId);
+    const fimMs = p ? instanteLocal(b.date, p.endTime) : agoraMs;
+    return completeBlock(b, new Date(fimMs).toISOString());
+  });
+  return { schedule: novo, mudou };
+}
+
+/**
  * Garante que os blocos programados de hoje existam e estejam no estado
  * certo pro horário atual. Idempotente: chamar de novo sem o relógio mudar
  * de fase devolve o MESMO quadro (`mudou: false`), o que evita disparar
@@ -124,8 +151,9 @@ export function materializarProgramacoes(
   hoje: string,
   agoraMs: number
 ): { board: Board; mudou: boolean } {
-  let schedule = board.schedule;
-  let mudou = false;
+  const fechamento = fecharBlocosDeDiasAnteriores(board.schedule, board.programacoes ?? [], hoje, agoraMs);
+  let schedule = fechamento.schedule;
+  let mudou = fechamento.mudou;
 
   for (const p of board.programacoes ?? []) {
     if (!valeNoDia(p, hoje)) continue;
