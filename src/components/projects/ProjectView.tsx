@@ -61,6 +61,8 @@ export function ProjectView({ topicId }: { topicId: string }) {
   // Quadro aberto por padrão: é a visão que responde "o que falta aqui".
   const [visual, setVisual] = useState<"kanban" | "mapa" | "nenhum">("kanban");
   const [confirmArchive, setConfirmArchive] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
   const [editingDescription, setEditingDescription] = useState(false);
   const [descriptionDraft, setDescriptionDraft] = useState("");
   const [editingAutoComplete, setEditingAutoComplete] = useState(false);
@@ -112,6 +114,14 @@ export function ProjectView({ topicId }: { topicId: string }) {
     );
   }
 
+  // Nome vazio deixaria o projeto sem jeito de ser identificado em lugar
+  // nenhum — nem na barra lateral, nem no seletor de tópico da tarefa.
+  function salvarNome() {
+    const limpo = nameDraft.trim();
+    if (limpo) updateTopic(topicId, { name: limpo });
+    setEditingName(false);
+  }
+
   return (
     <div className="mx-auto max-w-3xl space-y-4 p-4">
       <header className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
@@ -123,9 +133,36 @@ export function ProjectView({ topicId }: { topicId: string }) {
                 style={{ backgroundColor: topic.color }}
                 aria-hidden="true"
               />
-              <h1 className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--foreground)]">
-                {topic.name}
-              </h1>
+              {editingName ? (
+                <input
+                  autoFocus
+                  value={nameDraft}
+                  // Nome inteiro selecionado ao abrir: renomear quase sempre é
+                  // trocar o nome, não emendar no fim dele.
+                  onFocus={(e) => e.target.select()}
+                  onChange={(e) => setNameDraft(e.target.value)}
+                  onBlur={salvarNome}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") salvarNome();
+                    if (e.key === "Escape") setEditingName(false);
+                  }}
+                  aria-label={`Renomear ${topic.name}`}
+                  className="min-h-[36px] min-w-0 flex-1 rounded-md border border-[var(--border)] bg-[var(--surface2)] px-2 font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--foreground)] outline-none focus:border-[var(--focus)]"
+                />
+              ) : (
+                <h1 className="min-w-0 font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--foreground)]">
+                  <button
+                    onClick={() => {
+                      setNameDraft(topic.name);
+                      setEditingName(true);
+                    }}
+                    title="Clique para renomear"
+                    className="w-full truncate rounded px-1 text-left hover:bg-[var(--surface2)]"
+                  >
+                    {topic.name}
+                  </button>
+                </h1>
+              )}
               {topic.archivedAt && (
                 <span className="rounded bg-[var(--surface3)] px-1.5 py-0.5 text-[11px] text-[var(--muted)]">
                   Arquivado
