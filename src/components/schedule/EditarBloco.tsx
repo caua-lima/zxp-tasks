@@ -115,7 +115,7 @@ export function EditarBloco({
                 }}
                 aria-pressed={minutes === m && !tempoLivre}
                 className={`min-h-[36px] rounded-md border px-3 text-xs font-medium transition ${
-                  minutes === m
+                  minutes === m && !tempoLivre
                     ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-ink)]"
                     : "border-[var(--border)] text-[var(--muted)] hover:bg-[var(--surface)]"
                 }`}
