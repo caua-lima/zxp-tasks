@@ -1,5 +1,5 @@
 import { Board, ScheduleBlock, Task } from "./types";
-import { elapsedMs, plannedMs, wallClockMs } from "./schedule";
+import { FatiaDeConcorrencia, elapsedMs, plannedMs, tempoPorConcorrencia, wallClockMs } from "./schedule";
 import { addDaysISO, localDayOf, todayISO } from "./date-utils";
 
 /**
@@ -38,6 +38,11 @@ export interface DiaDoRelatorio {
    * média por dia que não infla sozinha por causa de cronômetros paralelos.
    */
   relogioMs: number;
+  /**
+   * O `relogioMs` do dia repartido por quantos cronômetros estavam ligados em
+   * cada instante — some `ms` e você tem o `relogioMs` de volta.
+   */
+  concorrencia: FatiaDeConcorrencia[];
   intervaloMs: number;
   blocosFeitos: number;
   /** Encerrados como "não fiz" — fechados, mas não produtividade. */
@@ -55,6 +60,8 @@ export interface Relatorio {
   totalPlanejadoMs: number;
   totalTrabalhadoMs: number;
   totalRelogioMs: number;
+  /** Soma das fatias de cada dia do período, por nível de concorrência. */
+  concorrencia: FatiaDeConcorrencia[];
   totalIntervaloMs: number;
   blocosFeitos: number;
   blocosNaoFeitos: number;
@@ -63,6 +70,16 @@ export interface Relatorio {
   viradas: ViradaDeDia[];
   /** Dia com mais tempo trabalhado no período; null se ninguém trabalhou. */
   melhorDia: DiaDoRelatorio | null;
+}
+
+function somarConcorrencia(porDia: FatiaDeConcorrencia[][]): FatiaDeConcorrencia[] {
+  const total = new Map<number, number>();
+  for (const dia of porDia) {
+    for (const { nivel, ms } of dia) total.set(nivel, (total.get(nivel) ?? 0) + ms);
+  }
+  return [...total.entries()]
+    .map(([nivel, ms]) => ({ nivel, ms }))
+    .sort((a, b) => a.nivel - b.nivel);
 }
 
 function diasDoIntervalo(de: string, ate: string): string[] {
@@ -121,6 +138,7 @@ export function montarRelatorio(
       plannedMs: trabalho.reduce((soma, b) => soma + plannedMs(b), 0),
       elapsedMs: trabalho.reduce((soma, b) => soma + elapsedMs(b, agora), 0),
       relogioMs: wallClockMs(trabalho, agora),
+      concorrencia: tempoPorConcorrencia(trabalho, agora),
       intervaloMs: intervalos.reduce((soma, b) => soma + elapsedMs(b, agora), 0),
       blocosFeitos: trabalho.filter((b) => b.completedAt).length,
       blocosNaoFeitos: trabalho.filter((b) => b.skippedAt).length,
@@ -139,11 +157,13 @@ export function montarRelatorio(
   const soma = (pegar: (d: DiaDoRelatorio) => number) =>
     linhas.reduce((total, d) => total + pegar(d), 0);
 
-  const comTrabalho = linhas.filter((d) => d.elapsedMs > 0);
+  // Melhor dia pelo relógio, não pela soma: um dia de 4h com três cronômetros
+  // ligados juntos ganharia de um de 9h de trabalho seguido.
+  const comTrabalho = linhas.filter((d) => d.relogioMs > 0);
   const melhorDia =
     comTrabalho.length === 0
       ? null
-      : comTrabalho.reduce((a, b) => (b.elapsedMs > a.elapsedMs ? b : a));
+      : comTrabalho.reduce((a, b) => (b.relogioMs > a.relogioMs ? b : a));
 
   return {
     de,
@@ -152,6 +172,9 @@ export function montarRelatorio(
     totalPlanejadoMs: soma((d) => d.plannedMs),
     totalTrabalhadoMs: soma((d) => d.elapsedMs),
     totalRelogioMs: soma((d) => d.relogioMs),
+    // Dias diferentes nunca se sobrepõem, então somar fatia a fatia por nível
+    // é exato — não precisa varrer o período inteiro de novo.
+    concorrencia: somarConcorrencia(linhas.map((d) => d.concorrencia)),
     totalIntervaloMs: soma((d) => d.intervaloMs),
     blocosFeitos: soma((d) => d.blocosFeitos),
     blocosNaoFeitos: soma((d) => d.blocosNaoFeitos),

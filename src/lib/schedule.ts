@@ -340,6 +340,71 @@ export function wallClockMs(blocks: ScheduleBlock[], now: number = Date.now()): 
   return total;
 }
 
+/** Quanto tempo de relógio houve com exatamente N cronômetros ligados. */
+export interface FatiaDeConcorrencia {
+  /** Quantos blocos estavam rodando ao mesmo tempo: 1 = sozinho, 2 = dupla… */
+  nivel: number;
+  ms: number;
+}
+
+/**
+ * Divide o tempo de relógio pelo número de cronômetros ligados em cada
+ * instante.
+ *
+ * Seis horas com duas tarefas ligadas juntas são SEIS horas de vida, não
+ * doze — a soma simples (`elapsedMs` de cada bloco) conta o mesmo minuto uma
+ * vez por tarefa e infla o dia. Mas dizer só "6h" também esconde algo real:
+ * essas 6h foram divididas entre duas coisas. Por isso a quebra por nível,
+ * em vez de um número só.
+ *
+ * A soma de `ms` de todas as fatias é o tempo de relógio (`wallClockMs`); a
+ * soma de `nivel * ms` é a soma simples por bloco. Intervalo (`isBreak`) fica
+ * de fora, como em todo outro total do dia.
+ */
+export function tempoPorConcorrencia(
+  blocks: ScheduleBlock[],
+  now: number = Date.now()
+): FatiaDeConcorrencia[] {
+  const eventos: { t: number; delta: number }[] = [];
+  for (const bloco of blocks) {
+    if (bloco.isBreak) continue;
+    for (const s of allSessions(bloco, now)) {
+      const inicio = new Date(s.start).getTime();
+      const fim = new Date(s.end).getTime();
+      if (!(fim > inicio)) continue;
+      eventos.push({ t: inicio, delta: 1 });
+      eventos.push({ t: fim, delta: -1 });
+    }
+  }
+  // Empate no mesmo instante: fecha antes de abrir. Um bloco que termina
+  // 14:00 e outro que começa 14:00 são sequência, não sobreposição.
+  eventos.sort((a, b) => a.t - b.t || a.delta - b.delta);
+
+  const porNivel = new Map<number, number>();
+  let ativos = 0;
+  let anterior = 0;
+  for (const { t, delta } of eventos) {
+    if (ativos > 0 && t > anterior) {
+      porNivel.set(ativos, (porNivel.get(ativos) ?? 0) + (t - anterior));
+    }
+    ativos += delta;
+    anterior = t;
+  }
+
+  return [...porNivel.entries()]
+    .filter(([, ms]) => ms > 0)
+    .map(([nivel, ms]) => ({ nivel, ms }))
+    .sort((a, b) => a.nivel - b.nivel);
+}
+
+const NOME_DO_NIVEL = ["", "", "duas", "três", "quatro", "cinco", "seis"];
+
+/** "sozinho numa tarefa", "em duas ao mesmo tempo"… */
+export function rotuloDeConcorrencia(nivel: number): string {
+  if (nivel <= 1) return "sozinho numa tarefa";
+  return `em ${NOME_DO_NIVEL[nivel] ?? nivel} ao mesmo tempo`;
+}
+
 export function blocksOfDay(blocks: ScheduleBlock[], date: string): ScheduleBlock[] {
   return blocks.filter((b) => b.date === date).sort((a, b) => a.order - b.order);
 }

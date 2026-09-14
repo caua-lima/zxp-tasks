@@ -16,7 +16,10 @@ import {
   isParked,
   ordenarParaExibicao,
   remainingMs,
+  rotuloDeConcorrencia,
   scheduleTotals,
+  tempoPorConcorrencia,
+  wallClockMs,
 } from "@/lib/schedule";
 import { addDaysISO, todayISO } from "@/lib/date-utils";
 import { topicKind } from "@/lib/wishlist";
@@ -408,6 +411,17 @@ export function ScheduleView() {
     () => scheduleTotals(blocks.filter((b) => !b.isBreak), now),
     [blocks, now]
   );
+  // O "feitos" do dia é tempo de RELÓGIO. Com dois cronômetros ligados, a soma
+  // por bloco conta o mesmo minuto duas vezes: seis horas divididas entre duas
+  // tarefas viravam "12:00:00 feitos" num dia que teve seis horas.
+  const relogioDoDia = useMemo(
+    () => wallClockMs(blocks.filter((b) => !b.isBreak), now),
+    [blocks, now]
+  );
+  const concorrencia = useMemo(
+    () => tempoPorConcorrencia(blocks.filter((b) => !b.isBreak), now),
+    [blocks, now]
+  );
   // Conta TODOS os cronômetros do dia, intervalo incluído: um intervalo
   // correndo junto com uma tarefa distorce o total do mesmo jeito, e o
   // aviso existe justamente pra isso não passar batido.
@@ -541,10 +555,20 @@ export function ScheduleView() {
             </span>
             <span className="tabular-nums text-[var(--muted)]">
               <strong style={{ color: "var(--accent)" }}>
-                {formatDuration(totals.elapsedMs)}
+                {formatDuration(relogioDoDia)}
               </strong>{" "}
               feitos
             </span>
+            {concorrencia
+              .filter((f) => f.nivel > 1)
+              .map((f) => (
+                <span key={f.nivel} className="tabular-nums text-[var(--muted)]">
+                  <strong className="text-[var(--foreground)]">
+                    {formatDuration(f.ms)}
+                  </strong>{" "}
+                  {rotuloDeConcorrencia(f.nivel)}
+                </span>
+              ))}
             <span className="tabular-nums text-[var(--muted)]">
               <strong style={{ color: "var(--success)" }}>
                 {totals.doneCount}/{totals.total}
@@ -631,7 +655,7 @@ export function ScheduleView() {
               }}
               aria-pressed={minutes === m && !tempoLivre}
               className={`min-h-[36px] rounded-md border px-3 text-xs font-medium transition ${
-                minutes === m
+                minutes === m && !tempoLivre
                   ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-ink)]"
                   : "border-[var(--border)] text-[var(--muted)] hover:bg-[var(--surface2)]"
               }`}

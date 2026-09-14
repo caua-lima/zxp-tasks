@@ -116,7 +116,10 @@ export function CartaoDaSemana({
   );
   const nomeDoProjeto = useMemo(() => new Map(topics.map((t) => [t.id, t])), [topics]);
 
-  const foco = horas(relatorio.totalTrabalhadoMs);
+  // Relógio, não a soma por tarefa: duas tarefas ligadas juntas por 6h são 6h
+  // de vida, não 12. O número grande do cartão é o que vai numa foto pra fora
+  // do app — inflar ele seria mentir de forma especialmente difícil de notar.
+  const foco = horas(relatorio.totalRelogioMs);
   const diasAtivos = relatorio.dias.filter((d) => d.elapsedMs > 0).length;
   const rotuloDoDia = (i: number, iso: string) =>
     ehSemana ? DIAS[i] : String(new Date(iso + "T00:00:00").getDate());
@@ -129,17 +132,17 @@ export function CartaoDaSemana({
   // Só compara quando há com o que comparar: "+100%" partindo de zero não
   // diz nada sobre a semana, só que a anterior estava vazia.
   const variacao =
-    anterior.totalTrabalhadoMs > 0
+    anterior.totalRelogioMs > 0
       ? Math.round(
-          ((relatorio.totalTrabalhadoMs - anterior.totalTrabalhadoMs) /
-            anterior.totalTrabalhadoMs) *
+          ((relatorio.totalRelogioMs - anterior.totalRelogioMs) /
+            anterior.totalRelogioMs) *
             100
         )
       : null;
 
   const maiorDia = Math.max(1, ...relatorio.dias.map((d) => d.elapsedMs));
   const maiorProjeto = Math.max(1, ...projetos.map((p) => p.elapsedMs));
-  const vazia = relatorio.totalTrabalhadoMs === 0 && relatorio.tarefasConcluidas === 0;
+  const vazia = relatorio.totalRelogioMs === 0 && relatorio.tarefasConcluidas === 0;
 
   return (
     <div
@@ -213,7 +216,7 @@ export function CartaoDaSemana({
         <p className="mt-1.5 text-[11px] text-[var(--muted)]">
           {variacao !== null
             ? `${variacao >= 0 ? "acima" : "abaixo"} do período anterior (${curto(
-                anterior.totalTrabalhadoMs
+                anterior.totalRelogioMs
               )})`
             : "tempo medido pelo cronômetro, não estimado"}
         </p>

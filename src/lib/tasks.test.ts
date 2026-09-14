@@ -89,6 +89,7 @@ import {
   scheduleTotals,
   startBlock,
   wallClockMs,
+  tempoPorConcorrencia,
 } from "./schedule";
 import {
   wishlistTotals,
@@ -1407,6 +1408,67 @@ describe("relógio do dia (união dos intervalos, não soma das durações)", ()
     assert.equal(wallClockMs([a, cafe]), 30 * MINUTE_MS);
   });
 
+  test("6h com duas tarefas juntas: 6h de relógio, todas em dupla, nunca 12h", () => {
+    const a = { ...startBlock(bloco({ id: "a" }), new Date(T0).toISOString()) };
+    const b = { ...startBlock(bloco({ id: "b" }), new Date(T0).toISOString()) };
+    const agora = T0 + 6 * 60 * MINUTE_MS;
+    const fatias = tempoPorConcorrencia([a, b], agora);
+    assert.deepEqual(fatias, [{ nivel: 2, ms: 6 * 60 * MINUTE_MS }]);
+    // A soma das fatias é o relógio; nivel × ms devolve a soma simples inflada.
+    assert.equal(
+      fatias.reduce((t, f) => t + f.ms, 0),
+      wallClockMs([a, b], agora)
+    );
+    assert.equal(
+      fatias.reduce((t, f) => t + f.nivel * f.ms, 0),
+      12 * 60 * MINUTE_MS
+    );
+  });
+
+  test("separa o trecho sozinho do trecho em dupla", () => {
+    // a: 0–60min · b: 40–60min → 40min sozinho + 20min em dupla.
+    const a = pauseBlock(startBlock(bloco({ id: "a" }), new Date(T0).toISOString()), T0 + 60 * MINUTE_MS);
+    const b = pauseBlock(
+      startBlock(bloco({ id: "b" }), new Date(T0 + 40 * MINUTE_MS).toISOString()),
+      T0 + 60 * MINUTE_MS
+    );
+    assert.deepEqual(tempoPorConcorrencia([a, b]), [
+      { nivel: 1, ms: 40 * MINUTE_MS },
+      { nivel: 2, ms: 20 * MINUTE_MS },
+    ]);
+  });
+
+  test("três ao mesmo tempo viram nível 3", () => {
+    const fim = new Date(T0 + 30 * MINUTE_MS).toISOString();
+    const tres = ["a", "b", "c"].map((id) =>
+      pauseBlock(startBlock(bloco({ id }), new Date(T0).toISOString()), new Date(fim).getTime())
+    );
+    assert.deepEqual(tempoPorConcorrencia(tres), [{ nivel: 3, ms: 30 * MINUTE_MS }]);
+  });
+
+  test("bloco que termina na hora em que outro começa é sequência, não dupla", () => {
+    const a = pauseBlock(startBlock(bloco({ id: "a" }), new Date(T0).toISOString()), T0 + 30 * MINUTE_MS);
+    const b = pauseBlock(
+      startBlock(bloco({ id: "b" }), new Date(T0 + 30 * MINUTE_MS).toISOString()),
+      T0 + 60 * MINUTE_MS
+    );
+    assert.deepEqual(tempoPorConcorrencia([a, b]), [{ nivel: 1, ms: 60 * MINUTE_MS }]);
+  });
+
+  test("intervalo não entra na conta de concorrência", () => {
+    const a = pauseBlock(startBlock(bloco({ id: "a" }), new Date(T0).toISOString()), T0 + 30 * MINUTE_MS);
+    const cafe = pauseBlock(
+      startBlock(bloco({ id: "cafe", isBreak: true }), new Date(T0).toISOString()),
+      T0 + 30 * MINUTE_MS
+    );
+    assert.deepEqual(tempoPorConcorrencia([a, cafe]), [{ nivel: 1, ms: 30 * MINUTE_MS }]);
+  });
+
+  test("dia sem nada não inventa fatia", () => {
+    assert.deepEqual(tempoPorConcorrencia([]), []);
+    assert.deepEqual(tempoPorConcorrencia([bloco({ id: "parado" })]), []);
+  });
+
   test("migração aceita sessão válida e descarta a que termina antes de começar", () => {
     const b = migrateBoard({
       topics: [], tasks: [],
@@ -1674,6 +1736,42 @@ test("duas tarefas em paralelo dobram o trabalhado (de propósito) mas não o re
   // Sem `sessions` (blocos "antigos") cada um vira uma aproximação isolada;
   // o que importa aqui é que o relógio NUNCA passa da soma das durações.
   assert.ok(r.totalRelogioMs <= r.totalTrabalhadoMs);
+});
+
+test("6h com duas tarefas juntas: relatório diz 6h de relógio e aponta as 6h em dupla", () => {
+  const inicio = "2026-09-06T09:00:00.000Z";
+  const fim = "2026-09-06T15:00:00.000Z";
+  const seisHoras = 6 * 60 * 60_000;
+  const board = boardDeTeste({
+    schedule: [
+      bloco({ id: "a", date: "2026-09-06", accumulatedMs: seisHoras, sessions: [{ start: inicio, end: fim }] }),
+      bloco({ id: "b", date: "2026-09-06", accumulatedMs: seisHoras, sessions: [{ start: inicio, end: fim }] }),
+    ],
+  });
+  const r = montarRelatorio(board, "2026-09-06", "2026-09-06");
+  assert.equal(r.totalRelogioMs, seisHoras);
+  assert.equal(r.totalTrabalhadoMs, 2 * seisHoras);
+  assert.deepEqual(r.concorrencia, [{ nivel: 2, ms: seisHoras }]);
+  // A soma das fatias tem que fechar com o relógio do período.
+  assert.equal(r.concorrencia.reduce((t, f) => t + f.ms, 0), r.totalRelogioMs);
+});
+
+test("concorrência do período soma dia a dia sem misturar dias diferentes", () => {
+  const board = boardDeTeste({
+    schedule: [
+      bloco({ id: "a", date: "2026-09-06", accumulatedMs: 60 * 60_000,
+        sessions: [{ start: "2026-09-06T09:00:00.000Z", end: "2026-09-06T10:00:00.000Z" }] }),
+      bloco({ id: "b", date: "2026-09-06", accumulatedMs: 60 * 60_000,
+        sessions: [{ start: "2026-09-06T09:00:00.000Z", end: "2026-09-06T10:00:00.000Z" }] }),
+      bloco({ id: "c", date: "2026-09-07", accumulatedMs: 30 * 60_000,
+        sessions: [{ start: "2026-09-07T09:00:00.000Z", end: "2026-09-07T09:30:00.000Z" }] }),
+    ],
+  });
+  const r = montarRelatorio(board, "2026-09-06", "2026-09-07");
+  assert.deepEqual(r.concorrencia, [
+    { nivel: 1, ms: 30 * 60_000 },
+    { nivel: 2, ms: 60 * 60_000 },
+  ]);
 });
 
 test("bloco concluído depois da meia-noite aparece como virada de dia", () => {

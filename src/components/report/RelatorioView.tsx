@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { montarRelatorio, tarefasConcluidasNoPeriodo } from "@/lib/report";
-import { formatDuration } from "@/lib/schedule";
+import { formatDuration, rotuloDeConcorrencia } from "@/lib/schedule";
 import { addDaysISO, todayISO } from "@/lib/date-utils";
 
 const PERIODOS = [
@@ -63,7 +63,9 @@ export function RelatorioView() {
     [topics]
   );
 
-  const maiorDoPeriodo = Math.max(1, ...relatorio.dias.map((d) => d.elapsedMs));
+  // Relógio, igual ao cartão do topo: a barra do dia com dois cronômetros
+  // juntos ficaria o dobro do tamanho pra um dia que não foi maior.
+  const maiorDoPeriodo = Math.max(1, ...relatorio.dias.map((d) => d.relogioMs));
 
   return (
     <div className="mx-auto max-w-3xl space-y-4 p-4">
@@ -95,7 +97,7 @@ export function RelatorioView() {
       </header>
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Cartao valor={formatDuration(relatorio.totalTrabalhadoMs)} rotulo="trabalhado" />
+        <Cartao valor={formatDuration(relatorio.totalRelogioMs)} rotulo="tempo de relógio" />
         <Cartao
           valor={`${relatorio.blocosFeitos}/${relatorio.blocosTotal}`}
           rotulo="blocos concluídos"
@@ -107,6 +109,38 @@ export function RelatorioView() {
           destaque={relatorio.blocosNaoFeitos > 0 ? "var(--warning)" : undefined}
         />
       </div>
+
+      {/* Só aparece quando houve mesmo cronômetro em paralelo — pra quem nunca
+          usa dois de uma vez, explicar a diferença seria ruído. */}
+      {relatorio.concorrencia.some((f) => f.nivel > 1) && (
+        <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+          <h2 className="text-sm font-semibold text-[var(--foreground)]">
+            Tempo dividido entre tarefas
+          </h2>
+          <ul className="mt-2 space-y-1">
+            {relatorio.concorrencia.map((f) => (
+              <li
+                key={f.nivel}
+                className="flex items-baseline justify-between gap-3 rounded-md bg-[var(--surface2)] px-2.5 py-1.5 text-xs"
+              >
+                <span className="text-[var(--muted)]">{rotuloDeConcorrencia(f.nivel)}</span>
+                <span className="shrink-0 font-medium tabular-nums text-[var(--foreground)]">
+                  {formatDuration(f.ms)}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-[11px] leading-relaxed text-[var(--muted)]">
+            Somando tarefa por tarefa daria{" "}
+            <span className="tabular-nums">
+              {formatDuration(relatorio.totalTrabalhadoMs)}
+            </span>
+            , porque o mesmo minuto conta uma vez em cada tarefa ligada. O tempo de
+            relógio — <span className="tabular-nums">{formatDuration(relatorio.totalRelogioMs)}</span>{" "}
+            — é o que o período realmente ocupou.
+          </p>
+        </section>
+      )}
 
       {relatorio.viradas.length > 0 && (
         <section className="rounded-xl border border-[var(--warning)] bg-[var(--surface)] p-3">
@@ -146,11 +180,11 @@ export function RelatorioView() {
               <span className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--surface3)]">
                 <span
                   className="block h-full rounded-full bg-[var(--accent)]"
-                  style={{ width: `${(d.elapsedMs / maiorDoPeriodo) * 100}%` }}
+                  style={{ width: `${(d.relogioMs / maiorDoPeriodo) * 100}%` }}
                 />
               </span>
               <span className="w-16 shrink-0 text-right tabular-nums text-[var(--foreground)]">
-                {d.elapsedMs > 0 ? formatDuration(d.elapsedMs) : "—"}
+                {d.relogioMs > 0 ? formatDuration(d.relogioMs) : "—"}
               </span>
               <span
                 className="w-8 shrink-0 text-right tabular-nums text-[var(--success)]"
@@ -170,7 +204,7 @@ export function RelatorioView() {
         <p className="mt-2 text-[11px] text-[var(--muted)]">
           {relatorio.melhorDia &&
             `Melhor dia: ${diaLegivel(relatorio.melhorDia.date)} com ${formatDuration(
-              relatorio.melhorDia.elapsedMs
+              relatorio.melhorDia.relogioMs
             )}. `}
           {formatDuration(relatorio.totalIntervaloMs)} em intervalo no período.
         </p>
