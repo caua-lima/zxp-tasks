@@ -436,44 +436,23 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
 
           {outrosProjetos.length > 0 &&
             (mostrarExtras ? (
-              <div>
-                <span className={label}>Também aparece em</span>
-                <p className="mb-2 text-[11px] text-[var(--muted)]">
-                  A tarefa fica visível nesses projetos também. O de cima continua
-                  sendo o principal.
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {outrosProjetos.map((t) => {
-                    const marcado = extras.includes(t.id);
-                    return (
-                      <button
-                        key={t.id}
-                        type="button"
-                        aria-pressed={marcado}
-                        onClick={() =>
-                          setExtras((atuais) =>
-                            marcado
-                              ? atuais.filter((id) => id !== t.id)
-                              : [...atuais, t.id]
-                          )
-                        }
-                        className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition ${
-                          marcado
-                            ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-ink)]"
-                            : "border-[var(--border)] text-[var(--muted)] hover:bg-[var(--surface)]"
-                        }`}
-                      >
-                        <span
-                          aria-hidden="true"
-                          className="h-2 w-2 rounded-full"
-                          style={{ backgroundColor: t.color }}
-                        />
-                        {t.name}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              <ListaDeMarcar
+                titulo="Também aparece em"
+                ajuda="A tarefa fica visível nesses projetos também. O de cima continua sendo o principal."
+                itens={outrosProjetos.map((t) => ({
+                  id: t.id,
+                  nome: t.name,
+                  cor: t.color,
+                }))}
+                marcados={extras}
+                onAlternar={(id) =>
+                  setExtras((atuais) =>
+                    atuais.includes(id)
+                      ? atuais.filter((x) => x !== id)
+                      : [...atuais, id]
+                  )
+                }
+              />
             ) : (
               <button
                 type="button"
@@ -486,36 +465,23 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
 
           {metasAtivas.length > 0 &&
             (mostrarMetas ? (
-              <div>
-                <span className={label}>Ajuda nas metas</span>
-                <p className="mb-2 text-[11px] text-[var(--muted)]">
-                  Concluir esta tarefa marca o dia como batido nas metas escolhidas.
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {metasAtivas.map((m) => {
-                    const marcada = metasLigadas.includes(m.id);
-                    return (
-                      <button
-                        key={m.id}
-                        type="button"
-                        aria-pressed={marcada}
-                        onClick={() =>
-                          setMetasLigadas((atuais) =>
-                            marcada ? atuais.filter((id) => id !== m.id) : [...atuais, m.id]
-                          )
-                        }
-                        className={`rounded-md border px-2.5 py-1.5 text-xs font-medium transition ${
-                          marcada
-                            ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-ink)]"
-                            : "border-[var(--border)] text-[var(--muted)] hover:bg-[var(--surface)]"
-                        }`}
-                      >
-                        {m.title} · {m.dailyTarget} {m.unit}/dia
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              <ListaDeMarcar
+                titulo="Ajuda nas metas"
+                ajuda="Concluir esta tarefa marca o dia como batido nas metas escolhidas."
+                itens={metasAtivas.map((m) => ({
+                  id: m.id,
+                  nome: m.title,
+                  detalhe: `${m.dailyTarget} ${m.unit}/dia`,
+                }))}
+                marcados={metasLigadas}
+                onAlternar={(id) =>
+                  setMetasLigadas((atuais) =>
+                    atuais.includes(id)
+                      ? atuais.filter((x) => x !== id)
+                      : [...atuais, id]
+                  )
+                }
+              />
             ) : (
               <button
                 type="button"
@@ -756,5 +722,78 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
         />
       )}
     </>
+  );
+}
+
+/**
+ * Lista de marcar com caixa de seleção de verdade.
+ *
+ * Antes isto era uma fileira de pílulas que ficavam azuis quando marcadas:
+ * parecia botão de ação, não escolha múltipla, e com mais de três projetos
+ * virava uma sopa onde não dava pra ver o que estava marcado sem ler item por
+ * item. A linha inteira é a área de toque — no celular, acertar uma pílula de
+ * 24px de altura é uma briga.
+ */
+function ListaDeMarcar({
+  titulo,
+  ajuda,
+  itens,
+  marcados,
+  onAlternar,
+}: {
+  titulo: string;
+  ajuda: string;
+  itens: { id: string; nome: string; cor?: string; detalhe?: string }[];
+  marcados: string[];
+  onAlternar: (id: string) => void;
+}) {
+  return (
+    <div>
+      <span className={label}>
+        {titulo}
+        {marcados.length > 0 && (
+          <span className="ml-1.5 font-normal text-[var(--accent)]">
+            {marcados.length} {marcados.length === 1 ? "marcado" : "marcados"}
+          </span>
+        )}
+      </span>
+      <p className="mb-2 text-[11px] text-[var(--muted)]">{ajuda}</p>
+      <ul className="max-h-48 space-y-0.5 overflow-y-auto rounded-md border border-[var(--border)] bg-[var(--surface)] p-1">
+        {itens.map((item) => {
+          const marcado = marcados.includes(item.id);
+          return (
+            <li key={item.id}>
+              <label
+                className={`flex min-h-[40px] cursor-pointer items-center gap-2.5 rounded px-2 py-1.5 text-sm transition ${
+                  marcado
+                    ? "bg-[var(--surface2)] text-[var(--foreground)]"
+                    : "text-[var(--muted)] hover:bg-[var(--surface2)]"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={marcado}
+                  onChange={() => onAlternar(item.id)}
+                  className="h-4 w-4 shrink-0 accent-[var(--accent)]"
+                />
+                {item.cor && (
+                  <span
+                    aria-hidden="true"
+                    className="h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: item.cor }}
+                  />
+                )}
+                <span className="min-w-0 flex-1 truncate">{item.nome}</span>
+                {item.detalhe && (
+                  <span className="shrink-0 text-[11px] text-[var(--muted)]">
+                    {item.detalhe}
+                  </span>
+                )}
+              </label>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
