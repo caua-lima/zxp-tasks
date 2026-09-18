@@ -37,6 +37,8 @@ import {
   extendBlock,
   isFinished,
   isParked,
+  jaFoiRetomado,
+  listarBlocosEmEspera,
   ordenarParaExibicao,
   parkBlock,
   plannedMs,
@@ -2169,6 +2171,98 @@ test("retomar no mesmo dia só reabre, sem criar bloco novo", () => {
   assert.equal(novo, null);
   assert.equal(antigo.parkedAt, undefined);
   assert.equal(isFinished(antigo), false);
+});
+
+describe("Em espera não lista o mesmo trabalho duas vezes", () => {
+  const espera = (id: string, date: string, over: Partial<ScheduleBlock> = {}): ScheduleBlock => ({
+    ...bloco({ id, date, title: "Auditoria" }),
+    parkedAt: `${date}T18:00:00.000Z`,
+    ...over,
+  });
+
+  test("bloco retomado some mesmo com o carimbo resumedAt perdido — o novo carrega a prova", () => {
+    // O cenário do bug: dia 14 guardado, retomado no 17 (nasceu `novo`), guardado
+    // de novo. Um aparelho desatualizado devolveu o dia 14 sem `resumedAt`.
+    const antigo = espera("a", "2026-09-14");
+    const ponta = espera("b", "2026-09-17", { continuaDe: "a" });
+    const lista = listarBlocosEmEspera([antigo, ponta], "2026-09-18");
+    assert.deepEqual(lista.map((b) => b.id), ["b"]);
+  });
+
+  test("cadeia longa: só a ponta aparece", () => {
+    const a = espera("a", "2026-09-14");
+    const b = espera("b", "2026-09-15", { continuaDe: "a" });
+    const c = espera("c", "2026-09-16", { continuaDe: "b" });
+    assert.deepEqual(listarBlocosEmEspera([a, b, c], "2026-09-18").map((x) => x.id), ["c"]);
+  });
+
+  test("bloco em espera sem continuação continua na lista, o mais recente primeiro", () => {
+    const a = espera("a", "2026-09-14");
+    const b = espera("b", "2026-09-16");
+    assert.deepEqual(listarBlocosEmEspera([a, b], "2026-09-18").map((x) => x.id), ["b", "a"]);
+  });
+
+  test("continuação apagada devolve o antigo pra lista — o trabalho segue em espera", () => {
+    const a = espera("a", "2026-09-14");
+    assert.deepEqual(listarBlocosEmEspera([a], "2026-09-18").map((x) => x.id), ["a"]);
+  });
+
+  test("bloco do dia aberto na tela não entra (já está na própria lista)", () => {
+    const a = espera("a", "2026-09-18");
+    assert.deepEqual(listarBlocosEmEspera([a], "2026-09-18"), []);
+  });
+
+  test("jaFoiRetomado reconhece pelo carimbo e pela continuação", () => {
+    const a = espera("a", "2026-09-14");
+    const comCarimbo = { ...a, resumedAt: "2026-09-17T09:00:00.000Z" };
+    const filho = espera("b", "2026-09-17", { continuaDe: "a" });
+    assert.equal(jaFoiRetomado([a], a), false);
+    assert.equal(jaFoiRetomado([comCarimbo], comCarimbo), true);
+    assert.equal(jaFoiRetomado([a, filho], a), true);
+  });
+});
+
+describe("sincronizar não desfaz uma retomada feita no outro aparelho", () => {
+  const guardado = (over: Partial<ScheduleBlock> = {}): ScheduleBlock => ({
+    ...bloco({ id: "a", date: "2026-09-14", title: "Auditoria" }),
+    parkedAt: "2026-09-14T18:00:00.000Z",
+    ...over,
+  });
+  const quadro = (schedule: ScheduleBlock[]) => ({ ...emptyBoard(), schedule });
+
+  test("local desatualizado adota o resumedAt do remoto em vez de ressuscitar o bloco", () => {
+    const local = quadro([guardado()]);
+    const remoto = quadro([
+      guardado({ resumedAt: "2026-09-17T09:00:00.000Z" }),
+      bloco({ id: "b", date: "2026-09-17", continuaDe: "a" }),
+    ]);
+    const { board } = mergeBoards(local, remoto);
+    const a = board.schedule.find((x) => x.id === "a")!;
+    assert.equal(a.resumedAt, "2026-09-17T09:00:00.000Z");
+    assert.equal(isParked(a), false);
+    assert.equal(board.schedule.length, 2);
+  });
+
+  test("bloco reaberto e guardado DE NOVO depois da retomada remota continua em espera", () => {
+    // parkedAt local é posterior ao resumedAt remoto: a espera daqui é a mais nova.
+    const local = quadro([guardado({ parkedAt: "2026-09-19T08:00:00.000Z" })]);
+    const remoto = quadro([guardado({ resumedAt: "2026-09-17T09:00:00.000Z" })]);
+    const a = mergeBoards(local, remoto).board.schedule[0];
+    assert.equal(a.resumedAt, undefined);
+    assert.equal(isParked(a), true);
+  });
+
+  test("bloco que o local já retomou não é mexido", () => {
+    const local = quadro([guardado({ resumedAt: "2026-09-16T09:00:00.000Z" })]);
+    const remoto = quadro([guardado({ resumedAt: "2026-09-17T09:00:00.000Z" })]);
+    assert.equal(mergeBoards(local, remoto).board.schedule[0].resumedAt, "2026-09-16T09:00:00.000Z");
+  });
+
+  test("bloco local que não está guardado não ganha carimbo de retomada", () => {
+    const local = quadro([bloco({ id: "a", date: "2026-09-14" })]);
+    const remoto = quadro([guardado({ resumedAt: "2026-09-17T09:00:00.000Z" })]);
+    assert.equal(mergeBoards(local, remoto).board.schedule[0].resumedAt, undefined);
+  });
 });
 
 test("retomar em outro dia deixa o tempo no dia antigo e cria continuação hoje", () => {

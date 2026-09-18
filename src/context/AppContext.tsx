@@ -51,6 +51,7 @@ import {
   completeBlock,
   completedBlockData,
   extendBlock,
+  jaFoiRetomado,
   parkBlock,
   pauseBlock,
   reopenBlock,
@@ -987,6 +988,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const block = b.schedule.find((x) => x.id === id);
       // Retomar duas vezes não pode criar duas continuações do mesmo bloco.
       if (!block || !block.parkedAt || block.resumedAt) return b;
+      // Já existe continuação mas o carimbo se perdeu (sincronização): só
+      // restaura o carimbo. Criar outra continuação duplicaria o trabalho.
+      if (jaFoiRetomado(b.schedule, block)) {
+        return {
+          ...b,
+          schedule: b.schedule.map((x) => (x.id === id ? { ...x, resumedAt: nowIso } : x)),
+        };
+      }
       const doDia = b.schedule.filter((x) => x.date === hoje);
       const proxima = doDia.length === 0 ? 0 : Math.max(...doDia.map((x) => x.order)) + 1;
       const { antigo, novo } = retomarBloco(block, hoje, nowIso, novoId, proxima);

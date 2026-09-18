@@ -27,6 +27,31 @@ export function isParked(block: ScheduleBlock): boolean {
 }
 
 /**
+ * Este bloco já virou outro? Existir um bloco com `continuaDe` apontando pra
+ * ele é a prova de que foi retomado — e essa prova não depende de `resumedAt`,
+ * que é só um carimbo no bloco antigo e pode se perder na sincronização entre
+ * aparelhos (o lado desatualizado vence o empate e o apaga).
+ */
+export function jaFoiRetomado(blocks: ScheduleBlock[], block: ScheduleBlock): boolean {
+  return !!block.resumedAt || blocks.some((b) => b.continuaDe === block.id);
+}
+
+/**
+ * O que aparece em "Em espera": guardado, ainda não retomado, e de outro dia
+ * que não o aberto na tela (o do dia aberto já está na própria lista).
+ *
+ * Numa cadeia — retomei o bloco de dia 14 no 17 e guardei de novo — só a
+ * ponta da cadeia é espera de verdade. Sem olhar a continuação, o bloco
+ * antigo aparecia junto com o novo, e o mesmo trabalho ficava listado duas
+ * vezes com dois botões "Retomar" que criariam duas continuações.
+ */
+export function listarBlocosEmEspera(blocks: ScheduleBlock[], dia: string): ScheduleBlock[] {
+  return blocks
+    .filter((b) => isParked(b) && b.date !== dia && !jaFoiRetomado(blocks, b))
+    .sort((a, b) => (a.parkedAt! < b.parkedAt! ? 1 : -1));
+}
+
+/**
  * Tempo já gasto no bloco. O trecho em andamento é calculado a partir do
  * instante de início — por isso o cronômetro continua certo depois de
  * fechar o app, bloquear o celular ou recarregar a página.

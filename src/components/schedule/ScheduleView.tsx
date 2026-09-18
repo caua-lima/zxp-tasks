@@ -12,8 +12,8 @@ import {
   formatDuration,
   isOvertime,
   isRunning,
+  listarBlocosEmEspera,
   progressPercent,
-  isParked,
   ordenarParaExibicao,
   remainingMs,
   rotuloDeConcorrencia,
@@ -338,13 +338,7 @@ export function ScheduleView() {
    * Os do dia aberto na tela ficam de fora: já aparecem na própria lista, com
    * o botão "Retomar" — listar duas vezes seria ruído.
    */
-  const blocosEmEspera = useMemo(
-    () =>
-      schedule
-        .filter((b) => isParked(b) && b.date !== date)
-        .sort((a, b) => (a.parkedAt! < b.parkedAt! ? 1 : -1)),
-    [schedule, date]
-  );
+  const blocosEmEspera = useMemo(() => listarBlocosEmEspera(schedule, date), [schedule, date]);
 
   // Lista de desejos não recebe bloco de tempo: "comprar uma calça" não é
   // uma sessão de trabalho cronometrada.

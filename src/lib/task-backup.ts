@@ -35,6 +35,24 @@ function unirProgramacoes(
   return { unidas: [...unidas, ...novas], adicionadas: novas.length };
 }
 
+/**
+ * Mesmo bloco nos dois lados: uma retomada feita no outro aparelho não pode
+ * ser desfeita só porque este aqui ainda mostra o bloco "em espera".
+ *
+ * Sem isto o lado local vencia o empate por id, o bloco velho voltava pra
+ * lista "Em espera", subia de novo pra nuvem — e o bloco novo que a retomada
+ * tinha criado ficava do lado dele: o mesmo trabalho listado duas vezes.
+ *
+ * O carimbo só é adotado se a espera daqui NÃO for mais nova que a retomada
+ * de lá. Bloco reaberto e guardado de novo depois tem um `parkedAt` posterior,
+ * e essa espera é legítima — aí o local vence, como em qualquer outro campo.
+ */
+function unirRetomada(local: ScheduleBlock, remoto: ScheduleBlock): ScheduleBlock {
+  if (local.resumedAt || !remoto.resumedAt || !local.parkedAt) return local;
+  if (local.parkedAt > remoto.resumedAt) return local;
+  return { ...local, resumedAt: remoto.resumedAt };
+}
+
 export interface BackupValidation {
   valid: boolean;
   error?: string;
@@ -264,6 +282,11 @@ export function mergeBoards(
 
   const blockIds = new Set(local.schedule.map((b) => b.id));
   const novosBlocos = remote.schedule.filter((b) => !blockIds.has(b.id));
+  const blocosRemotos = new Map(remote.schedule.map((b) => [b.id, b]));
+  const blocosLocais = local.schedule.map((b) => {
+    const remoto = blocosRemotos.get(b.id);
+    return remoto ? unirRetomada(b, remoto) : b;
+  });
 
   // Revisão é deduplicada por SEMANA, não por id: os dois aparelhos podem
   // ter criado a revisão da mesma semana com ids diferentes, e mostrar duas
@@ -288,7 +311,7 @@ export function mergeBoards(
       groups: [...gruposLocais, ...novosGrupos],
       topics: [...local.topics, ...novosTopicos],
       tasks: [...local.tasks, ...novasTarefas],
-      schedule: [...local.schedule, ...novosBlocos],
+      schedule: [...blocosLocais, ...novosBlocos],
       weeklyReviews: [...local.weeklyReviews, ...novasRevisoes],
       // Foco do dia: dias que só existem do lado remoto entram; dias em
       // comum ficam com a versão local (o limite de 3 não pode ser furado
