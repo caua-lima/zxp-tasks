@@ -1,6 +1,7 @@
 import { supabase } from "./supabase";
 import { Board } from "./types";
 import { migrateBoard } from "./task-migrations";
+import { assinatura } from "./sync-merge";
 
 const TABLE = "boards";
 
@@ -17,26 +18,6 @@ function sanitize(board: Board): Record<string, unknown> {
 }
 
 /**
- * Assinatura canônica: JSON com as chaves de cada objeto em ordem.
- *
- * `JSON.stringify` puro não serve para comparar com o que volta do banco.
- * O `jsonb` do Postgres não guarda a ordem das chaves — ele devolve o
- * objeto reordenado, então a comparação textual dava "diferente" mesmo
- * quando o conteúdo era idêntico.
- */
-function assinatura(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(assinatura).join(",")}]`;
-  if (value && typeof value === "object") {
-    const obj = value as Record<string, unknown>;
-    return `{${Object.keys(obj)
-      .sort()
-      .map((k) => `${JSON.stringify(k)}:${assinatura(obj[k])}`)
-      .join(",")}}`;
-  }
-  return JSON.stringify(value) ?? "null";
-}
-
-/**
  * Assinatura do conteúdo que já está sincronizado com a nuvem.
  *
  * O Realtime do Supabase devolve as próprias escritas de volta (não existe
@@ -47,13 +28,20 @@ function assinatura(value: unknown): string {
  */
 let ultimoSincronizado: string | null = null;
 
+/**
+ * Quantas vezes uma versão da nuvem foi adotada como base. Um envio que
+ * começou ANTES de chegar uma versão de outro aparelho não pode, ao terminar,
+ * gravar a si mesmo como base — a nuvem pode já ter a versão do outro.
+ */
+let versaoRemota = 0;
+
 export async function pushBoardToCloud(uid: string, board: Board): Promise<void> {
   if (!supabase) throw new Error("Supabase não está configurado.");
   const payload = sanitize(board);
   const marca = assinatura(payload);
   // Nada mudou de fato: não gasta escrita nem provoca um eco desnecessário.
   if (marca === ultimoSincronizado) return;
-  ultimoSincronizado = marca;
+  const versaoNoInicio = versaoRemota;
 
   const { error } = await supabase.from(TABLE).upsert(
     {
@@ -64,7 +52,47 @@ export async function pushBoardToCloud(uid: string, board: Board): Promise<void>
     { onConflict: "user_id" }
   );
 
+  // Só marca como sincronizado DEPOIS de a nuvem confirmar. Marcar antes fazia
+  // um envio que falhou (celular sem sinal) ser considerado feito: a próxima
+  // tentativa com o mesmo conteúdo era pulada e a mudança nunca subia.
   if (error) throw error;
+  ultimoSincronizado = marca;
+  if (versaoRemota === versaoNoInicio) gravarBase(uid, board);
+}
+
+// ── Base da sincronização ────────────────────────────────────────────────
+// A última versão que ESTE aparelho sabe estar igual à nuvem. É o que deixa
+// a mescla distinguir "eu mudei isto aqui" de "isto só está velho aqui" —
+// sem ela, o aparelho parado há dias "desfazia" o que foi feito nos outros.
+
+const CHAVE_BASE = "tarefas-zxp:sync-base:v1";
+
+export function lerBase(uid: string): Board | null {
+  try {
+    const bruto = localStorage.getItem(CHAVE_BASE);
+    if (!bruto) return null;
+    const salvo = JSON.parse(bruto) as { uid?: unknown; board?: unknown };
+    // Base de outra conta não serve de referência pra esta.
+    if (salvo.uid !== uid || !salvo.board) return null;
+    return migrateBoard(salvo.board);
+  } catch {
+    return null;
+  }
+}
+
+function gravarBase(uid: string, board: Board) {
+  try {
+    localStorage.setItem(CHAVE_BASE, JSON.stringify({ uid, board: sanitize(board) }));
+  } catch {
+    // Sem espaço: a próxima mescla roda sem base (a nuvem vence conflitos),
+    // que é o comportamento seguro — só menos preciso.
+  }
+}
+
+/** A versão da nuvem que acabou de ser mesclada passa a ser a base. */
+export function adotarComoBase(uid: string, remoto: Board) {
+  versaoRemota++;
+  gravarBase(uid, remoto);
 }
 
 /**

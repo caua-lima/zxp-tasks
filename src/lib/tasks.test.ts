@@ -62,7 +62,8 @@ import { concluirTarefaNoBoard } from "./task-completion";
 import { MARCA_AZUL } from "./marca";
 import { endpointDePushValido } from "./push-endpoint";
 import { taskBelongsToTopic } from "./task-utils";
-import { validateBackup, mergeImportedData, mergeBoards } from "./task-backup";
+import { validateBackup, mergeImportedData } from "./task-backup";
+import { sincronizarQuadros } from "./sync-merge";
 import { calculateWeeklyMetrics } from "./weekly-review";
 import { addDaysISO, startOfWeekISO, localDayOf, daysBetween, todayISO } from "./date-utils";
 import {
@@ -1550,68 +1551,67 @@ describe("mescla automática entre aparelhos", () => {
       topics: [topic({ id: "b", name: "Outro" })],
       tasks: [task({ id: "2", topicId: "b" })],
     });
-    const { board: r, report } = mergeBoards(local, remoto);
+    const r = sincronizarQuadros(local, null, remoto);
     assert.equal(r.topics.length, 2);
     assert.equal(r.tasks.length, 2);
-    assert.equal(report.topicsAdded, 1);
-    assert.equal(report.tasksAdded, 1);
   });
 
   test("NÃO perde o cronograma do outro aparelho (o bug que a mescla antiga tinha)", () => {
     const local = board({ schedule: [bloco("1", "Leads")] });
     const remoto = board({ schedule: [bloco("2", "Mercado Livre")] });
-    const { board: r } = mergeBoards(local, remoto);
+    const r = sincronizarQuadros(local, null, remoto);
     assert.deepEqual(r.schedule.map((b) => b.title).sort(), ["Leads", "Mercado Livre"]);
   });
 
   test("não perde revisões semanais do outro aparelho", () => {
     const local = board({ weeklyReviews: [revisao("a", "2026-08-31")] });
     const remoto = board({ weeklyReviews: [revisao("b", "2026-09-07")] });
-    const { board: r } = mergeBoards(local, remoto);
+    const r = sincronizarQuadros(local, null, remoto);
     assert.equal(r.weeklyReviews.length, 2);
   });
 
   test("revisão da MESMA semana não duplica, mesmo com ids diferentes", () => {
     const local = board({ weeklyReviews: [revisao("a", "2026-08-31")] });
     const remoto = board({ weeklyReviews: [revisao("outro-id", "2026-08-31")] });
-    const { board: r } = mergeBoards(local, remoto);
+    const r = sincronizarQuadros(local, null, remoto);
     assert.equal(r.weeklyReviews.length, 1);
     assert.equal(r.weeklyReviews[0].id, "a");
   });
 
-  test("id repetido mantém a versão local, sem duplicar", () => {
-    const local = board({ topics: [topic({ id: "a", name: "Local" })] });
-    const remoto = board({ topics: [topic({ id: "a", name: "Remoto" })] });
-    const { board: r } = mergeBoards(local, remoto);
+  test("sem base (aparelho parado há dias), id repetido fica com a nuvem, sem duplicar", () => {
+    const local = board({ topics: [topic({ id: "a", name: "Velho" })] });
+    const remoto = board({ topics: [topic({ id: "a", name: "Renomeado no PC" })] });
+    const r = sincronizarQuadros(local, null, remoto);
     assert.equal(r.topics.length, 1);
-    assert.equal(r.topics[0].name, "Local");
+    assert.equal(r.topics[0].name, "Renomeado no PC");
   });
 
   test("tarefa remota órfã (tópico inexistente) não entra e viraria invisível", () => {
     const local = board({ topics: [topic({ id: "a" })] });
     const remoto = board({ tasks: [task({ id: "x", topicId: "nao-existe" })] });
-    const { board: r } = mergeBoards(local, remoto);
+    const r = sincronizarQuadros(local, null, remoto);
     assert.equal(r.tasks.length, 0);
   });
 
   test("tarefa apontando pra tópico EXCLUÍDO (não removido, só marcado) não é descartada", () => {
     const local = board({ topics: [topic({ id: "a", deletedAt: "2026-09-01T10:00:00.000Z" })] });
     const remoto = board({ tasks: [task({ id: "x", topicId: "a", deletedAt: "2026-09-01T10:00:00.000Z" })] });
-    const { board: r } = mergeBoards(local, remoto);
+    const r = sincronizarQuadros(local, null, remoto);
     assert.equal(r.tasks.length, 1);
   });
 
-  test("foco do dia: dia só do remoto entra, dia em comum fica com o local", () => {
+  test("foco do dia: dia só do remoto entra; dia mudado só aqui fica com o daqui", () => {
+    const base = board({ dailyFocus: { "2026-09-05": ["t0"] } });
     const local = board({ dailyFocus: { "2026-09-05": ["t1"] } });
-    const remoto = board({ dailyFocus: { "2026-09-05": ["t9"], "2026-09-04": ["t2"] } });
-    const { board: r } = mergeBoards(local, remoto);
+    const remoto = board({ dailyFocus: { "2026-09-05": ["t0"], "2026-09-04": ["t2"] } });
+    const r = sincronizarQuadros(local, base, remoto);
     assert.deepEqual(r.dailyFocus["2026-09-05"], ["t1"]);
     assert.deepEqual(r.dailyFocus["2026-09-04"], ["t2"]);
   });
 
   test("mesclar com nuvem vazia não muda nada nem quebra", () => {
     const local = board({ topics: [topic()], tasks: [task({})], schedule: [bloco("1")] });
-    const { board: r } = mergeBoards(local, emptyBoard());
+    const r = sincronizarQuadros(local, null, emptyBoard());
     assert.equal(r.topics.length, 1);
     assert.equal(r.tasks.length, 1);
     assert.equal(r.schedule.length, 1);
@@ -1623,10 +1623,112 @@ describe("mescla automática entre aparelhos", () => {
       tasks: [task({ id: "1", topicId: "a" })],
       schedule: [bloco("b1")],
     });
-    const { board: r } = mergeBoards(emptyBoard(), remoto);
+    const r = sincronizarQuadros(emptyBoard(), null, remoto);
     assert.equal(r.topics.length, 1);
     assert.equal(r.tasks.length, 1);
     assert.equal(r.schedule.length, 1);
+  });
+});
+
+describe("sincronização de três vias entre PC, web e celular", () => {
+  const quadro = (p: Partial<Board> = {}): Board => ({ ...emptyBoard(), ...p });
+  const mentoria = topic({ id: "p1", name: "Mentoria" });
+
+  test("renomear no PC chega no celular — o celular não renomeia de volta", () => {
+    const base = quadro({ topics: [mentoria] });
+    const nuvem = quadro({ topics: [{ ...mentoria, name: "X" }] }); // PC já enviou
+    const celular = quadro({ topics: [mentoria] }); // celular ainda com o velho
+    const r = sincronizarQuadros(celular, base, nuvem);
+    assert.equal(r.topics[0].name, "X");
+  });
+
+  test("renomear no celular sobe mesmo que a nuvem ainda tenha o nome velho", () => {
+    const base = quadro({ topics: [mentoria] });
+    const celular = quadro({ topics: [{ ...mentoria, name: "Mentoria RUMO" }] });
+    const r = sincronizarQuadros(celular, base, base);
+    assert.equal(r.topics[0].name, "Mentoria RUMO");
+  });
+
+  test("editar coisas diferentes nos dois aparelhos junta as duas edições", () => {
+    const outro = topic({ id: "p2", name: "Casa" });
+    const base = quadro({ topics: [mentoria, outro] });
+    const local = quadro({ topics: [{ ...mentoria, name: "X" }, outro] });
+    const nuvem = quadro({ topics: [mentoria, { ...outro, color: "#000000" }] });
+    const r = sincronizarQuadros(local, base, nuvem);
+    assert.equal(r.topics.find((t) => t.id === "p1")!.name, "X");
+    assert.equal(r.topics.find((t) => t.id === "p2")!.color, "#000000");
+  });
+
+  test("grupo renomeado e grupo apagado no outro aparelho também sincronizam", () => {
+    const g1 = { id: "g1", name: "Projetos", order: 0, createdAt: "2026-09-01T00:00:00Z" };
+    const g2 = { id: "g2", name: "Trabalho", order: 1, createdAt: "2026-09-01T00:00:00Z" };
+    const base = quadro({ groups: [g1, g2] });
+    const nuvem = quadro({ groups: [{ ...g1, name: "Meus projetos" }] }); // g2 apagado lá
+    const r = sincronizarQuadros(base, base, nuvem);
+    assert.deepEqual(r.groups.map((g) => g.name), ["Meus projetos"]);
+  });
+
+  test("apagado no outro aparelho não volta — antes a união trazia de volta", () => {
+    const t = task({ id: "k1", topicId: "p1" });
+    const base = quadro({ topics: [mentoria], tasks: [t] });
+    const nuvem = quadro({ topics: [mentoria], tasks: [] }); // lixeira esvaziada no PC
+    assert.equal(sincronizarQuadros(base, base, nuvem).tasks.length, 0);
+  });
+
+  test("apagado lá mas EDITADO aqui: fica, com a edição (perder trabalho é pior)", () => {
+    const t = task({ id: "k1", topicId: "p1" });
+    const base = quadro({ topics: [mentoria], tasks: [t] });
+    const local = quadro({ topics: [mentoria], tasks: [{ ...t, title: "editada agora" }] });
+    const nuvem = quadro({ topics: [mentoria], tasks: [] });
+    assert.equal(sincronizarQuadros(local, base, nuvem).tasks[0].title, "editada agora");
+  });
+
+  test("apagar aqui sobe: a nuvem sem mexer não ressuscita o item", () => {
+    const t = task({ id: "k1", topicId: "p1" });
+    const base = quadro({ topics: [mentoria], tasks: [t] });
+    const local = quadro({ topics: [mentoria], tasks: [] });
+    assert.equal(sincronizarQuadros(local, base, base).tasks.length, 0);
+  });
+
+  test("mudança vinda do outro aparelho não apaga o que foi editado aqui e ainda não subiu", () => {
+    const t = task({ id: "k1", topicId: "p1", title: "A" });
+    const base = quadro({ topics: [mentoria], tasks: [t] });
+    const local = quadro({ topics: [mentoria], tasks: [{ ...t, title: "A editada" }] });
+    const nuvem = quadro({ topics: [{ ...mentoria, name: "X" }], tasks: [t] });
+    const r = sincronizarQuadros(local, base, nuvem);
+    assert.equal(r.tasks[0].title, "A editada");
+    assert.equal(r.topics[0].name, "X");
+  });
+
+  test("tarefa editada nos dois lados: vence a edição mais recente", () => {
+    const t = task({ id: "k1", topicId: "p1", title: "A", updatedAt: "2026-09-20T10:00:00Z" });
+    const base = quadro({ topics: [mentoria], tasks: [t] });
+    const local = quadro({ topics: [mentoria], tasks: [{ ...t, title: "do celular", updatedAt: "2026-09-20T10:05:00Z" }] });
+    const nuvem = quadro({ topics: [mentoria], tasks: [{ ...t, title: "do PC", updatedAt: "2026-09-20T10:09:00Z" }] });
+    assert.equal(sincronizarQuadros(local, base, nuvem).tasks[0].title, "do PC");
+  });
+
+  test("meta: desfazer uma anotação num aparelho vale nos outros", () => {
+    const m = { ...metaDeTeste(), registros: { "2026-09-01": 3 } };
+    const base = quadro({ metas: [m] });
+    const local = quadro({ metas: [{ ...m, registros: {} }] });
+    assert.deepEqual(sincronizarQuadros(local, base, base).metas[0].registros, {});
+  });
+
+  test("meta: anotações de dias diferentes nos dois aparelhos se somam", () => {
+    const m = { ...metaDeTeste(), registros: {} };
+    const base = quadro({ metas: [m] });
+    const local = quadro({ metas: [{ ...m, registros: { "2026-09-01": 2 } }] });
+    const nuvem = quadro({ metas: [{ ...m, registros: { "2026-09-02": 5 } }] });
+    assert.deepEqual(sincronizarQuadros(local, base, nuvem).metas[0].registros, {
+      "2026-09-01": 2,
+      "2026-09-02": 5,
+    });
+  });
+
+  test("os dois lados iguais: nada muda (sem eco nem reenvio à toa)", () => {
+    const b = quadro({ topics: [mentoria], tasks: [task({ id: "k1", topicId: "p1" })] });
+    assert.deepEqual(sincronizarQuadros(b, b, b), b);
   });
 });
 
@@ -1879,10 +1981,12 @@ test("migração preserva a preferência de cronômetros paralelos", () => {
   assert.equal(board.settings.parallelTimers, true);
 });
 
-test("mergeBoards mantém a preferência do aparelho local", () => {
+test("preferência mudada neste aparelho sobe pros outros", () => {
+  const base = { ...emptyBoard(), settings: { parallelTimers: false } };
   const local = { ...emptyBoard(), settings: { parallelTimers: true } };
-  const remote = { ...emptyBoard(), settings: { parallelTimers: false } };
-  assert.equal(mergeBoards(local, remote).board.settings.parallelTimers, true);
+  assert.equal(sincronizarQuadros(local, base, base).settings.parallelTimers, true);
+  // E a mudada no outro aparelho desce pra este.
+  assert.equal(sincronizarQuadros(base, base, local).settings.parallelTimers, true);
 });
 
 test("skipBlock encerra sem virar produtividade e congela o tempo", () => {
@@ -2230,38 +2334,30 @@ describe("sincronizar não desfaz uma retomada feita no outro aparelho", () => {
   });
   const quadro = (schedule: ScheduleBlock[]) => ({ ...emptyBoard(), schedule });
 
-  test("local desatualizado adota o resumedAt do remoto em vez de ressuscitar o bloco", () => {
-    const local = quadro([guardado()]);
+  test("aparelho que não mexeu no bloco adota a retomada do outro, sem ressuscitar", () => {
+    const base = quadro([guardado()]);
     const remoto = quadro([
       guardado({ resumedAt: "2026-09-17T09:00:00.000Z" }),
       bloco({ id: "b", date: "2026-09-17", continuaDe: "a" }),
     ]);
-    const { board } = mergeBoards(local, remoto);
-    const a = board.schedule.find((x) => x.id === "a")!;
+    const r = sincronizarQuadros(base, base, remoto);
+    const a = r.schedule.find((x) => x.id === "a")!;
     assert.equal(a.resumedAt, "2026-09-17T09:00:00.000Z");
     assert.equal(isParked(a), false);
-    assert.equal(board.schedule.length, 2);
+    assert.equal(r.schedule.length, 2);
   });
 
-  test("bloco reaberto e guardado DE NOVO depois da retomada remota continua em espera", () => {
-    // parkedAt local é posterior ao resumedAt remoto: a espera daqui é a mais nova.
+  test("sem base também adota a retomada — a nuvem vence o bloco velho", () => {
+    const r = sincronizarQuadros(quadro([guardado()]), null, quadro([guardado({ resumedAt: "2026-09-17T09:00:00.000Z" })]));
+    assert.equal(isParked(r.schedule[0]), false);
+  });
+
+  test("bloco reaberto e guardado DE NOVO aqui continua em espera", () => {
+    const base = quadro([guardado({ resumedAt: "2026-09-17T09:00:00.000Z" })]);
     const local = quadro([guardado({ parkedAt: "2026-09-19T08:00:00.000Z" })]);
-    const remoto = quadro([guardado({ resumedAt: "2026-09-17T09:00:00.000Z" })]);
-    const a = mergeBoards(local, remoto).board.schedule[0];
+    const a = sincronizarQuadros(local, base, base).schedule[0];
     assert.equal(a.resumedAt, undefined);
     assert.equal(isParked(a), true);
-  });
-
-  test("bloco que o local já retomou não é mexido", () => {
-    const local = quadro([guardado({ resumedAt: "2026-09-16T09:00:00.000Z" })]);
-    const remoto = quadro([guardado({ resumedAt: "2026-09-17T09:00:00.000Z" })]);
-    assert.equal(mergeBoards(local, remoto).board.schedule[0].resumedAt, "2026-09-16T09:00:00.000Z");
-  });
-
-  test("bloco local que não está guardado não ganha carimbo de retomada", () => {
-    const local = quadro([bloco({ id: "a", date: "2026-09-14" })]);
-    const remoto = quadro([guardado({ resumedAt: "2026-09-17T09:00:00.000Z" })]);
-    assert.equal(mergeBoards(local, remoto).board.schedule[0].resumedAt, undefined);
   });
 });
 
@@ -2420,7 +2516,7 @@ test("concluir tarefa ligada marca o dia na meta, e só nas metas dela", () => {
 test("sincronizar une os registros da mesma meta pelo maior valor do dia", () => {
   const local = { ...emptyBoard(), metas: [{ ...metaDeTeste(), registros: { "2026-09-01": 2, "2026-09-02": 1 } }] };
   const remote = { ...emptyBoard(), metas: [{ ...metaDeTeste(), registros: { "2026-09-02": 4, "2026-09-03": 2 } }] };
-  const unida = mergeBoards(local, remote).board.metas[0];
+  const unida = sincronizarQuadros(local, null, remote).metas[0];
   // Nem perde o que foi anotado no outro aparelho, nem soma em dobro.
   assert.deepEqual(unida.registros, { "2026-09-01": 2, "2026-09-02": 4, "2026-09-03": 2 });
 });
@@ -2532,14 +2628,14 @@ test("dois aparelhos gerando o mesmo expediente viram um bloco só na sincroniza
   const hora = local("2026-09-10T09:30:00");
   const pc = materializarProgramacoes(quadroCom(progDeTeste()), "2026-09-10", hora).board;
   const cel = materializarProgramacoes(quadroCom(progDeTeste()), "2026-09-10", hora).board;
-  assert.equal(mergeBoards(pc, cel).board.schedule.length, 1);
+  assert.equal(sincronizarQuadros(pc, null, cel).schedule.length, 1);
 });
 
 test("sincronizar une os dias pulados da mesma programação", () => {
   const pc = quadroCom({ ...progDeTeste(), diasPulados: ["2026-09-07"] });
   const cel = quadroCom({ ...progDeTeste(), diasPulados: ["2026-09-10"] });
   assert.deepEqual(
-    [...mergeBoards(pc, cel).board.programacoes[0].diasPulados!].sort(),
+    [...sincronizarQuadros(pc, null, cel).programacoes[0].diasPulados!].sort(),
     ["2026-09-07", "2026-09-10"]
   );
 });

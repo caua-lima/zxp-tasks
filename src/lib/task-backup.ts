@@ -35,24 +35,6 @@ function unirProgramacoes(
   return { unidas: [...unidas, ...novas], adicionadas: novas.length };
 }
 
-/**
- * Mesmo bloco nos dois lados: uma retomada feita no outro aparelho não pode
- * ser desfeita só porque este aqui ainda mostra o bloco "em espera".
- *
- * Sem isto o lado local vencia o empate por id, o bloco velho voltava pra
- * lista "Em espera", subia de novo pra nuvem — e o bloco novo que a retomada
- * tinha criado ficava do lado dele: o mesmo trabalho listado duas vezes.
- *
- * O carimbo só é adotado se a espera daqui NÃO for mais nova que a retomada
- * de lá. Bloco reaberto e guardado de novo depois tem um `parkedAt` posterior,
- * e essa espera é legítima — aí o local vence, como em qualquer outro campo.
- */
-function unirRetomada(local: ScheduleBlock, remoto: ScheduleBlock): ScheduleBlock {
-  if (local.resumedAt || !remoto.resumedAt || !local.parkedAt) return local;
-  if (local.parkedAt > remoto.resumedAt) return local;
-  return { ...local, resumedAt: remoto.resumedAt };
-}
-
 export interface BackupValidation {
   valid: boolean;
   error?: string;
@@ -184,7 +166,7 @@ export function mergeImportedData(
     newBlocks.push(block);
   }
 
-  // Mesma regra do `mergeBoards`: revisão é por SEMANA, não por id — duas
+  // Mesma regra da sincronização: revisão é por SEMANA, não por id — duas
   // revisões da mesma semana com ids diferentes não deveriam virar duas.
   const semanasAtuais = new Set(current.weeklyReviews.map((w) => w.weekStart));
   const newReviews: WeeklyReviewNote[] = [];
@@ -233,102 +215,6 @@ export function mergeImportedData(
       programacoesAdded,
       dailyFocusAdded: diasNovos.length,
       duplicatesSkipped,
-    },
-  };
-}
-
-export interface SyncMergeReport {
-  topicsAdded: number;
-  tasksAdded: number;
-  blocksAdded: number;
-  reviewsAdded: number;
-  metasAdded: number;
-  programacoesAdded: number;
-}
-
-/**
- * Une dois boards sem perder nada de nenhum lado — é o que roda quando o
- * mesmo login abre num aparelho novo.
- *
- * Diferente de `mergeImportedData` (que só trata tópicos e tarefas, porque
- * nasceu para importar backup), aqui TODAS as coleções entram: cronograma,
- * revisões e foco do dia inclusive. Numa mesclagem automática e silenciosa,
- * deixar uma coleção de fora apagaria o cronograma montado no outro
- * aparelho sem ninguém perceber.
- *
- * Em empate de id, o lado local vence: é o que a pessoa acabou de ver na
- * tela, e sobrescrever isso por trás seria pior do que ficar um instante
- * desatualizado (a próxima escrita reconcilia).
- */
-export function mergeBoards(
-  local: Board,
-  remote: Board
-): { board: Board; report: SyncMergeReport } {
-  const topicIds = new Set(local.topics.map((t) => t.id));
-  const novosTopicos = remote.topics.filter((t) => !topicIds.has(t.id));
-  for (const t of novosTopicos) topicIds.add(t.id);
-
-  // Grupos (seções da barra lateral): por id, local vence em empate — é a
-  // organização que a pessoa está vendo na tela agora.
-  const gruposLocais = local.groups ?? [];
-  const idsGruposLocais = new Set(gruposLocais.map((g) => g.id));
-  const novosGrupos = (remote.groups ?? []).filter((g) => !idsGruposLocais.has(g.id));
-
-  const taskIds = new Set(local.tasks.map((t) => t.id));
-  const novasTarefas = remote.tasks.filter(
-    // Tarefa cujo tópico não existe em lugar nenhum ficaria invisível.
-    (t) => !taskIds.has(t.id) && topicIds.has(t.topicId)
-  );
-
-  const blockIds = new Set(local.schedule.map((b) => b.id));
-  const novosBlocos = remote.schedule.filter((b) => !blockIds.has(b.id));
-  const blocosRemotos = new Map(remote.schedule.map((b) => [b.id, b]));
-  const blocosLocais = local.schedule.map((b) => {
-    const remoto = blocosRemotos.get(b.id);
-    return remoto ? unirRetomada(b, remoto) : b;
-  });
-
-  // Revisão é deduplicada por SEMANA, não por id: os dois aparelhos podem
-  // ter criado a revisão da mesma semana com ids diferentes, e mostrar duas
-  // revisões da mesma semana não faria sentido nenhum.
-  const semanas = new Set(local.weeklyReviews.map((w) => w.weekStart));
-  const novasRevisoes = remote.weeklyReviews.filter((w) => !semanas.has(w.weekStart));
-
-  // Metas (registros unidos pelo maior valor) e programações (dias pulados
-  // unidos) — ver `unirMetas`/`unirProgramacoes` acima.
-  const { unidas: metasUnidas, adicionadas: metasAdicionadas } = unirMetas(
-    local.metas ?? [],
-    remote.metas ?? []
-  );
-  const { unidas: programacoesUnidas, adicionadas: programacoesAdicionadas } = unirProgramacoes(
-    local.programacoes ?? [],
-    remote.programacoes ?? []
-  );
-
-  return {
-    board: {
-      ...local,
-      groups: [...gruposLocais, ...novosGrupos],
-      topics: [...local.topics, ...novosTopicos],
-      tasks: [...local.tasks, ...novasTarefas],
-      schedule: [...blocosLocais, ...novosBlocos],
-      weeklyReviews: [...local.weeklyReviews, ...novasRevisoes],
-      // Foco do dia: dias que só existem do lado remoto entram; dias em
-      // comum ficam com a versão local (o limite de 3 não pode ser furado
-      // por uma união cega).
-      dailyFocus: { ...remote.dailyFocus, ...local.dailyFocus },
-      // Preferência é do aparelho que está na mão da pessoa agora.
-      settings: local.settings,
-      metas: metasUnidas,
-      programacoes: programacoesUnidas,
-    },
-    report: {
-      topicsAdded: novosTopicos.length,
-      tasksAdded: novasTarefas.length,
-      blocksAdded: novosBlocos.length,
-      reviewsAdded: novasRevisoes.length,
-      metasAdded: metasAdicionadas,
-      programacoesAdded: programacoesAdicionadas,
     },
   };
 }

@@ -27,11 +27,18 @@ import {
 import { loadBoard, pushBackup, saveBoard } from "@/lib/storage";
 import { nextTopicColor } from "@/lib/colors";
 import { migrateBoard } from "@/lib/task-migrations";
-import { mergeBoards, mergeImportedData, MergeReport, validateBackup } from "@/lib/task-backup";
+import { mergeImportedData, MergeReport, validateBackup } from "@/lib/task-backup";
+import { sincronizarQuadros } from "@/lib/sync-merge";
 import { skipOccurrence } from "@/lib/recurrence";
 import { todayISO } from "@/lib/date-utils";
 import { useAuth } from "./AuthContext";
-import { fetchCloudBoard, pushBoardToCloud, subscribeToCloudBoard } from "@/lib/cloud-sync";
+import {
+  adotarComoBase,
+  fetchCloudBoard,
+  lerBase,
+  pushBoardToCloud,
+  subscribeToCloudBoard,
+} from "@/lib/cloud-sync";
 import { registrarAparelho } from "@/lib/push";
 import { createTask, NewTaskInput } from "@/lib/task-factory";
 import { concluirTarefaNoBoard } from "@/lib/task-completion";
@@ -220,6 +227,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // todo — era isso que fazia a reconciliação acontecer repetidamente.
   const userId = user?.id ?? null;
 
+  /**
+   * Junta o quadro vindo da nuvem com o deste aparelho.
+   *
+   * A mescla é de três vias: compara com a `base` — a última versão que este
+   * aparelho sabe estar igual à nuvem. Assim uma renomeação feita no PC chega
+   * no celular em vez de o celular, que ainda tinha o nome velho, "renomear de
+   * volta" (era isso que acontecia: o lado local sempre vencia o empate).
+   * Se o resultado difere da nuvem, o efeito de envio abaixo sobe a diferença.
+   */
+  const receberDaNuvem = useCallback((uid: string, cloud: Board) => {
+    const base = lerBase(uid);
+    setBoard((atual) => sincronizarQuadros(atual, base, cloud));
+    adotarComoBase(uid, cloud);
+    setSyncStatus("synced");
+    setLastSyncedAt(new Date().toISOString());
+  }, []);
+
   useEffect(() => {
     if (!userId) {
       // Sincroniza o estado local com o estado externo (login) — o caso que
@@ -234,28 +258,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const unsubscribe = subscribeToCloudBoard(
       userId,
       (cloud) => {
-        if (!initialSyncDone.current) {
-          initialSyncDone.current = true;
-          setBoard((current) => {
-            if (cloud === "empty") {
-              // Conta nova: semeia a nuvem com o que já existe aqui.
+        if (cloud === "empty") {
+          if (!initialSyncDone.current) {
+            initialSyncDone.current = true;
+            // Conta nova: semeia a nuvem com o que já existe aqui.
+            setBoard((current) => {
               pushBoardToCloud(userId, current).catch(() => {});
               return current;
-            }
-            // Une os dois lados sem perguntar e sem descartar nada — o
-            // objetivo é o aparelho novo simplesmente ficar igual aos
-            // outros, não abrir uma negociação a cada login.
-            const merged = mergeBoards(current, cloud).board;
-            pushBoardToCloud(userId, merged).catch(() => {});
-            return merged;
-          });
-          setSyncStatus("synced");
-          setLastSyncedAt(new Date().toISOString());
+            });
+            setSyncStatus("synced");
+            setLastSyncedAt(new Date().toISOString());
+          }
+          // A linha sumir depois do login não apaga o quadro deste aparelho.
           return;
         }
-        setBoard(cloud === "empty" ? emptyBoard() : cloud);
-        setSyncStatus("synced");
-        setLastSyncedAt(new Date().toISOString());
+        // Primeira leitura E cada mudança vinda de outro aparelho passam pela
+        // mesma mescla. Antes, a mudança remota SUBSTITUÍA o quadro inteiro e
+        // levava junto o que foi editado aqui no último segundo, ainda não
+        // enviado.
+        initialSyncDone.current = true;
+        receberDaNuvem(userId, cloud);
       },
       () => setSyncStatus("error")
     );
@@ -264,7 +286,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       unsubscribe();
       initialSyncDone.current = false;
     };
-  }, [userId]);
+  }, [userId, receberDaNuvem]);
 
   /**
    * Inscreve este aparelho no push assim que houver login e permissão.
@@ -339,9 +361,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (document.visibilityState !== "visible") return;
       const cloud = await fetchCloudBoard(userId!);
       if (!cloud) return;
-      setBoard((atual) => mergeBoards(atual, cloud).board);
-      setSyncStatus("synced");
-      setLastSyncedAt(new Date().toISOString());
+      initialSyncDone.current = true;
+      receberDaNuvem(userId!, cloud);
     }
 
     document.addEventListener("visibilitychange", reconciliar);
@@ -352,21 +373,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       window.removeEventListener("focus", reconciliar);
       window.removeEventListener("online", reconciliar);
     };
-  }, [userId]);
+  }, [userId, receberDaNuvem]);
+
+  // Envio que falhou (sem sinal, Supabase fora do ar) tenta de novo sozinho.
+  // Antes só voltava a tentar quando o quadro mudasse de novo — uma edição
+  // feita sem internet podia ficar presa neste aparelho indefinidamente.
+  const [tentativaDeEnvio, setTentativaDeEnvio] = useState(0);
 
   useEffect(() => {
     if (!ready || !userId || !initialSyncDone.current) return;
     setSyncStatus("syncing");
+    let retry: ReturnType<typeof setTimeout> | undefined;
     const timeout = setTimeout(() => {
       pushBoardToCloud(userId, board)
         .then(() => {
           setSyncStatus("synced");
           setLastSyncedAt(new Date().toISOString());
         })
-        .catch(() => setSyncStatus("error"));
+        .catch(() => {
+          setSyncStatus("error");
+          retry = setTimeout(() => setTentativaDeEnvio((n) => n + 1), 15_000);
+        });
     }, 1200);
-    return () => clearTimeout(timeout);
-  }, [board, ready, userId]);
+    return () => {
+      clearTimeout(timeout);
+      clearTimeout(retry);
+    };
+  }, [board, ready, userId, tentativaDeEnvio]);
 
   const addTopic = useCallback(
     (name: string, kind: TopicKind = "project", groupId?: string) => {
