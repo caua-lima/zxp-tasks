@@ -3,7 +3,7 @@
 // dia exista sob esta mesma origem (o Cache API já é isolado por origem,
 // mas nada garante que só este service worker cria caches aqui).
 const PREFIX = "zxp-tasks-";
-const CACHE = PREFIX + "v5";
+const CACHE = PREFIX + "v6";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -109,12 +109,16 @@ self.addEventListener("push", (event) => {
     if (event.data) dados.corpo = event.data.text();
   }
 
+  // Despertador manda a própria etiqueta (uma por programação/dia/aviso) e
+  // pede pra ficar na tela; o resto continua substituindo o aviso do bloco.
   event.waitUntil(
     self.registration.showNotification(dados.titulo, {
       body: dados.corpo,
       icon: "/manifest-icon-192",
       badge: "/manifest-icon-192",
-      tag: "zxp-bloco-rodando",
+      tag: typeof dados.tag === "string" ? dados.tag : "zxp-bloco-rodando",
+      requireInteraction: dados.insistente === true,
+      vibrate: dados.insistente === true ? [400, 150, 400, 150, 400] : undefined,
     })
   );
 });

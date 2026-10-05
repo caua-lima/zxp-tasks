@@ -155,6 +155,24 @@ export function avisarFim(titulo: string, minutos: number): void {
   });
 }
 
+/**
+ * Aviso do despertador de uma programação. O da hora fica na tela até a
+ * pessoa dispensar; o de antecedência some sozinho, como um lembrete.
+ */
+export function avisarDespertador(aviso: {
+  tag: string;
+  tipo: "antes" | "hora";
+  titulo: string;
+  corpo: string;
+}): void {
+  void mostrar(aviso.titulo, {
+    ...BASE,
+    tag: aviso.tag,
+    body: aviso.corpo,
+    requireInteraction: aviso.tipo === "hora",
+  });
+}
+
 /** Aviso de teste, pra pessoa conferir na hora que ativou. */
 export function avisarTeste(permissao?: EstadoNotificacao): void {
   void mostrar(

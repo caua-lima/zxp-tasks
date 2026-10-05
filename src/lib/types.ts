@@ -304,6 +304,17 @@ export interface Programacao {
    * o dia.
    */
   diasPulados?: string[];
+  /**
+   * Despertador: avisa 10 minutos antes e na hora de começar, mesmo com o
+   * app fechado (quem dispara é o servidor, por push).
+   */
+  alarme?: boolean;
+  /**
+   * Fuso (IANA) de quem criou. `startTime` é horário local, e o servidor que
+   * dispara o despertador roda em UTC — sem isto ele não sabe que horas são
+   * "8h" pra essa pessoa.
+   */
+  fuso?: string;
   createdAt: string;
   pausedAt?: string;
 }

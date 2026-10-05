@@ -20,6 +20,9 @@ export interface NovaProgramacaoInput {
   startTime: string;
   endTime: string;
   autoStart: boolean;
+  alarme?: boolean;
+  /** Fuso do aparelho que está criando — ver `Programacao.fuso`. */
+  fuso?: string;
 }
 
 /** Segunda a sexta (0 = domingo, como em `Date.getDay`). */
@@ -70,6 +73,8 @@ export function novaProgramacao(
     startTime: input.startTime,
     endTime: input.endTime,
     autoStart: input.autoStart,
+    alarme: input.alarme ? true : undefined,
+    fuso: input.fuso || undefined,
     diasPulados: [],
     createdAt: nowIso,
   };

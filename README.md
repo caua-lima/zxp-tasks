@@ -42,7 +42,12 @@ versão tem diferenças do Next.js "de sempre", documentadas em
      voltar o foco, não instantaneamente).
    - `supabase/push-subscriptions.sql` — tabela de inscrições de Web Push,
      uma linha por aparelho.
-   Rodar os três de novo não tem problema: cada um confere o que já existe
+   - `supabase/despertador-cron.sql` — opcional: faz o Supabase chamar
+     `/api/despertador` a cada minuto, que é o que dispara o despertador das
+     programações com o app fechado. Exige `DESPERTADOR_SECRET`,
+     `SUPABASE_SERVICE_ROLE_KEY` e as chaves VAPID na Vercel; troque a URL e
+     o segredo dentro do arquivo antes de rodar.
+   Rodar os três primeiros de novo não tem problema: cada um confere o que já existe
    antes de agir.
 4. `npm run dev` e abra `http://localhost:3000`.
 

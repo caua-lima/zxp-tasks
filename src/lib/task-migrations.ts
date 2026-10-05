@@ -303,6 +303,8 @@ function migrateProgramacao(raw: unknown): Programacao | null {
     diasPulados: Array.isArray(r.diasPulados)
       ? [...new Set(r.diasPulados.filter((d): d is string => typeof d === "string" && !!d))]
       : [],
+    alarme: r.alarme === true ? true : undefined,
+    fuso: asString(r.fuso),
     createdAt: asString(r.createdAt) ?? SAFE_FALLBACK_DATE,
     pausedAt: asString(r.pausedAt),
   };

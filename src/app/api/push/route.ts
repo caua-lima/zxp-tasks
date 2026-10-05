@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import webpush from "web-push";
-import { endpointDePushValido } from "@/lib/push-endpoint";
+import { Inscricao, enviarPush } from "@/lib/push-envio";
 
 /**
  * Envia um aviso pros outros aparelhos da mesma conta.
@@ -19,13 +18,6 @@ const URL_SUPABASE = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const CHAVE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const VAPID_PUBLICA = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
 const VAPID_PRIVADA = process.env.VAPID_PRIVATE_KEY;
-const VAPID_ASSUNTO = process.env.VAPID_SUBJECT || "mailto:contato@zxpsolutions.com";
-
-interface Inscricao {
-  endpoint: string;
-  p256dh: string;
-  auth: string;
-}
 
 export async function POST(request: Request) {
   if (!VAPID_PUBLICA || !VAPID_PRIVADA || !URL_SUPABASE || !CHAVE_ANON) {
@@ -69,45 +61,15 @@ export async function POST(request: Request) {
     .select("endpoint, p256dh, auth");
   if (error) return NextResponse.json({ erro: "falha ao ler inscricoes" }, { status: 500 });
 
-  // A defesa de verdade contra SSRF: o RLS garante que cada pessoa só grava
-  // na PRÓPRIA linha, mas não impede ela de gravar um destino qualquer —
-  // este servidor é quem faz a requisição de saída de verdade, então é aqui
-  // que o destino precisa ser validado, não só no formulário do cliente.
-  const inscricoes = ((data ?? []) as Inscricao[]).filter(
-    (i) => i.endpoint !== exceto && endpointDePushValido(i.endpoint)
-  );
-  if (inscricoes.length === 0) return NextResponse.json({ enviados: 0 });
-
-  webpush.setVapidDetails(VAPID_ASSUNTO, VAPID_PUBLICA, VAPID_PRIVADA);
-  const carga = JSON.stringify({ titulo, corpo });
-
-  const resultados = await Promise.allSettled(
-    inscricoes.map((i) =>
-      webpush.sendNotification(
-        { endpoint: i.endpoint, keys: { p256dh: i.p256dh, auth: i.auth } },
-        carga
-      )
-    )
-  );
-
-  // Inscrição que o serviço de push recusa (404/410) é aparelho que
-  // desinstalou o app ou limpou os dados. Guardar pra sempre faria toda
-  // notificação futura tentar entregar num endereço morto.
-  const mortas = inscricoes
-    .filter((_, i) => {
-      const r = resultados[i];
-      if (r.status !== "rejected") return false;
-      const status = (r.reason as { statusCode?: number } | undefined)?.statusCode;
-      return status === 404 || status === 410;
-    })
-    .map((i) => i.endpoint);
+  // O destino de cada inscrição é validado dentro de `enviarPush` — o RLS
+  // garante que cada pessoa só grava na PRÓPRIA linha, mas não impede ela de
+  // gravar um destino qualquer.
+  const inscricoes = ((data ?? []) as Inscricao[]).filter((i) => i.endpoint !== exceto);
+  const { enviados, mortas } = await enviarPush(inscricoes, { titulo, corpo });
 
   if (mortas.length > 0) {
     await supabase.from("push_subscriptions").delete().in("endpoint", mortas);
   }
 
-  return NextResponse.json({
-    enviados: resultados.filter((r) => r.status === "fulfilled").length,
-    removidos: mortas.length,
-  });
+  return NextResponse.json({ enviados, removidos: mortas.length });
 }

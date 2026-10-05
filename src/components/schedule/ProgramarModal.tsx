@@ -8,6 +8,9 @@ import {
   duracaoDaProgramacao,
   problemaDaProgramacao,
 } from "@/lib/programacao";
+import { ANTECEDENCIA_MIN } from "@/lib/despertador";
+import { EstadoNotificacao, pedirPermissao, permissaoAtual } from "@/lib/notifications";
+import { registrarAparelho } from "@/lib/push";
 import { topicKind } from "@/lib/wishlist";
 import { Modal } from "../shared/Modal";
 
@@ -38,8 +41,14 @@ function duracaoLegivel(min: number): string {
  * se cria uma nova: é aqui que a pessoa vem quando o horário muda.
  */
 export function ProgramarModal({ onClose }: { onClose: () => void }) {
-  const { programacoes, topics, addProgramacao, alternarProgramacao, removerProgramacao } =
-    useApp();
+  const {
+    programacoes,
+    topics,
+    addProgramacao,
+    alternarProgramacao,
+    alternarDespertador,
+    removerProgramacao,
+  } = useApp();
 
   const [title, setTitle] = useState("");
   const [topicId, setTopicId] = useState("");
@@ -47,6 +56,19 @@ export function ProgramarModal({ onClose }: { onClose: () => void }) {
   const [startTime, setStartTime] = useState("08:00");
   const [endTime, setEndTime] = useState("18:00");
   const [autoStart, setAutoStart] = useState(true);
+  const [alarme, setAlarme] = useState(false);
+  const [permissao, setPermissao] = useState<EstadoNotificacao>(() => permissaoAtual());
+
+  /**
+   * Ligar o despertador é o momento de pedir a permissão de notificação e
+   * inscrever este aparelho no push: o pedido só é aceito num gesto da
+   * pessoa, e sem a inscrição o servidor não tem pra onde mandar o aviso.
+   */
+  async function garantirAvisos() {
+    const resultado = permissaoAtual() === "default" ? await pedirPermissao() : permissaoAtual();
+    setPermissao(resultado);
+    if (resultado === "granted") void registrarAparelho();
+  }
   const [erro, setErro] = useState("");
 
   const projetos = useMemo(
@@ -58,7 +80,16 @@ export function ProgramarModal({ onClose }: { onClose: () => void }) {
 
   function salvar(e: FormEvent) {
     e.preventDefault();
-    const input = { title, topicId: topicId || undefined, weekdays, startTime, endTime, autoStart };
+    const input = {
+      title,
+      topicId: topicId || undefined,
+      weekdays,
+      startTime,
+      endTime,
+      autoStart,
+      alarme,
+      fuso: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    };
     const problema = problemaDaProgramacao(input);
     if (problema) {
       setErro(problema);
@@ -196,6 +227,36 @@ export function ProgramarModal({ onClose }: { onClose: () => void }) {
           </span>
         </label>
 
+        <label className="flex cursor-pointer items-start gap-2 text-xs text-[var(--muted)]">
+          <input
+            type="checkbox"
+            checked={alarme}
+            onChange={(e) => {
+              setAlarme(e.target.checked);
+              if (e.target.checked) void garantirAvisos();
+            }}
+            className="mt-0.5 accent-[var(--accent)]"
+          />
+          <span>
+            Ativar despertador.
+            <span className="block text-[11px]">
+              Avisa {ANTECEDENCIA_MIN} minutos antes (&ldquo;em {ANTECEDENCIA_MIN} minutos:{" "}
+              {title.trim() || "sua tarefa"}&rdquo;) e de novo às {startTime}, mesmo com o app
+              fechado.
+            </span>
+          </span>
+        </label>
+
+        {alarme && permissao !== "granted" && (
+          <p role="alert" className="rounded-md border border-[var(--warning)] p-2 text-[11px] text-[var(--foreground)]">
+            {permissao === "denied"
+              ? "As notificações estão bloqueadas neste aparelho — o despertador não vai tocar aqui até você liberar nos ajustes do navegador/celular."
+              : permissao === "indisponivel"
+                ? "Este navegador não mostra notificações. No iPhone, abra o app pelo ícone da tela de início."
+                : "Permita as notificações pra o despertador conseguir avisar."}
+          </p>
+        )}
+
         {erro && (
           <p role="alert" className="text-xs text-[var(--danger)]">
             {erro}
@@ -226,9 +287,27 @@ export function ProgramarModal({ onClose }: { onClose: () => void }) {
                   <p className="text-[11px] tabular-nums text-[var(--muted)]">
                     {descreverDias(p.weekdays)} · {p.startTime}–{p.endTime}
                     {nomeDoProjeto(p.topicId) && ` · ${nomeDoProjeto(p.topicId)}`}
+                    {p.alarme && " · ⏰ despertador"}
                     {p.pausedAt && " · pausada"}
                   </p>
                 </div>
+                <button
+                  type="button"
+                  aria-pressed={!!p.alarme}
+                  aria-label={`${p.alarme ? "Desativar" : "Ativar"} despertador de ${p.title}`}
+                  title={p.alarme ? "Despertador ligado" : "Ativar despertador"}
+                  onClick={() => {
+                    if (!p.alarme) void garantirAvisos();
+                    alternarDespertador(p.id);
+                  }}
+                  className={`min-h-[36px] shrink-0 rounded-md border px-2 text-sm ${
+                    p.alarme
+                      ? "border-[var(--accent)] bg-[var(--accent)]"
+                      : "border-[var(--border)] opacity-60 hover:bg-[var(--surface)]"
+                  }`}
+                >
+                  ⏰
+                </button>
                 <button
                   type="button"
                   onClick={() => alternarProgramacao(p.id)}

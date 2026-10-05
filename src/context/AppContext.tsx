@@ -29,6 +29,8 @@ import { nextTopicColor } from "@/lib/colors";
 import { migrateBoard } from "@/lib/task-migrations";
 import { mergeImportedData, MergeReport, validateBackup } from "@/lib/task-backup";
 import { sincronizarQuadros } from "@/lib/sync-merge";
+import { avisosRestantesDoDia } from "@/lib/despertador";
+import { avisarDespertador } from "@/lib/notifications";
 import { skipOccurrence } from "@/lib/recurrence";
 import { todayISO } from "@/lib/date-utils";
 import { useAuth } from "./AuthContext";
@@ -149,6 +151,7 @@ interface AppContextValue {
   /** Blocos que se repetem sozinhos, como o expediente do trabalho. */
   programacoes: Programacao[];
   addProgramacao: (input: NovaProgramacaoInput) => Programacao;
+  alternarDespertador: (id: string) => void;
   /** Pausa ou retoma uma programação sem apagá-la. */
   alternarProgramacao: (id: string) => void;
   removerProgramacao: (id: string) => void;
@@ -341,6 +344,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       document.removeEventListener("visibilitychange", aplicar);
     };
   }, [ready]);
+
+  /**
+   * Despertador com o app ABERTO: agenda os avisos que ainda faltam hoje no
+   * relógio deste aparelho.
+   *
+   * Com o app fechado quem avisa é o servidor, por push — um site não acorda
+   * sozinho. Este caminho cobre o app aberto (inclusive sem o servidor
+   * configurado) e chega no segundo certo. Os dois usam a mesma etiqueta, então
+   * quando ambos disparam fica um cartão só.
+   */
+  useEffect(() => {
+    if (!ready) return;
+    const timers = avisosRestantesDoDia(board.programacoes ?? [], today, Date.now()).map((aviso) =>
+      setTimeout(() => avisarDespertador(aviso), aviso.instanteMs - Date.now())
+    );
+    return () => timers.forEach(clearTimeout);
+  }, [ready, board.programacoes, today]);
 
   /**
    * Rede de segurança do Realtime: ao voltar pro app, relê a nuvem.
@@ -1096,6 +1116,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
+  /**
+   * Liga ou desliga o despertador de uma programação que já existe. Ao ligar
+   * grava o fuso deste aparelho: é ele que diz ao servidor que horas são "8h".
+   */
+  const alternarDespertador = useCallback((id: string) => {
+    const fuso = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    setBoard((b) => ({
+      ...b,
+      programacoes: (b.programacoes ?? []).map((p) =>
+        p.id === id ? { ...p, alarme: p.alarme ? undefined : true, fuso: p.fuso ?? fuso } : p
+      ),
+    }));
+  }, []);
+
   /** Para de gerar blocos novos; os dias que já aconteceram ficam no histórico. */
   const removerProgramacao = useCallback((id: string) => {
     setBoard((b) => ({
@@ -1239,6 +1273,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       programacoes: board.programacoes ?? [],
       addProgramacao,
       alternarProgramacao,
+      alternarDespertador,
       removerProgramacao,
       syncStatus,
       lastSyncedAt,
@@ -1293,6 +1328,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       arquivarMeta,
       addProgramacao,
       alternarProgramacao,
+      alternarDespertador,
       removerProgramacao,
       syncStatus,
       lastSyncedAt,
