@@ -4,13 +4,14 @@ import { FormEvent, useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import {
   DIAS_UTEIS,
-  descreverDias,
+  descreverQuando,
   duracaoDaProgramacao,
   problemaDaProgramacao,
 } from "@/lib/programacao";
 import { ANTECEDENCIA_MIN } from "@/lib/despertador";
 import { EstadoNotificacao, pedirPermissao, permissaoAtual } from "@/lib/notifications";
 import { registrarAparelho } from "@/lib/push";
+import { todayISO } from "@/lib/date-utils";
 import { topicKind } from "@/lib/wishlist";
 import { Modal } from "../shared/Modal";
 
@@ -53,6 +54,8 @@ export function ProgramarModal({ onClose }: { onClose: () => void }) {
   const [title, setTitle] = useState("");
   const [topicId, setTopicId] = useState("");
   const [weekdays, setWeekdays] = useState<number[]>(DIAS_UTEIS);
+  const [repete, setRepete] = useState(true);
+  const [dataUnica, setDataUnica] = useState(() => todayISO());
   const [startTime, setStartTime] = useState("08:00");
   const [endTime, setEndTime] = useState("18:00");
   const [autoStart, setAutoStart] = useState(true);
@@ -88,6 +91,7 @@ export function ProgramarModal({ onClose }: { onClose: () => void }) {
       endTime,
       autoStart,
       alarme,
+      dataUnica: repete ? undefined : dataUnica,
       fuso: Intl.DateTimeFormat().resolvedOptions().timeZone,
     };
     const problema = problemaDaProgramacao(input);
@@ -134,6 +138,34 @@ export function ProgramarModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div>
+          <span className={rotulo}>Repetição</span>
+          <div className="flex gap-1.5" role="group" aria-label="Repetição">
+            {[
+              { valor: true, texto: "Repetir toda semana" },
+              { valor: false, texto: "Só uma vez" },
+            ].map((o) => (
+              <button
+                key={o.texto}
+                type="button"
+                aria-pressed={repete === o.valor}
+                onClick={() => {
+                  setRepete(o.valor);
+                  setErro("");
+                }}
+                className={`min-h-[40px] flex-1 rounded-md border px-2 text-xs font-semibold transition ${
+                  repete === o.valor
+                    ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-ink)]"
+                    : "border-[var(--border)] text-[var(--muted)] hover:bg-[var(--surface)]"
+                }`}
+              >
+                {o.texto}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {repete ? (
+        <div>
           <span className={rotulo}>Dias</span>
           <div className="flex gap-1.5">
             {DIAS.map(({ d, curto, nome }) => {
@@ -162,6 +194,24 @@ export function ProgramarModal({ onClose }: { onClose: () => void }) {
             })}
           </div>
         </div>
+        ) : (
+          <div>
+            <label htmlFor="prog-data" className={rotulo}>
+              Dia
+            </label>
+            <input
+              id="prog-data"
+              type="date"
+              value={dataUnica}
+              min={todayISO()}
+              onChange={(e) => {
+                setDataUnica(e.target.value);
+                setErro("");
+              }}
+              className={`${campo} tabular-nums`}
+            />
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-2">
           <div>
@@ -267,7 +317,8 @@ export function ProgramarModal({ onClose }: { onClose: () => void }) {
           type="submit"
           className="min-h-[42px] w-full rounded-md bg-[var(--accent)] text-sm font-semibold text-[var(--accent-ink)] hover:bg-[var(--accent-dark)]"
         >
-          Programar{duracao > 0 ? ` · ${duracaoLegivel(duracao)} por dia` : ""}
+          Programar
+          {duracao > 0 ? ` · ${duracaoLegivel(duracao)}${repete ? " por dia" : ""}` : ""}
         </button>
       </form>
 
@@ -285,7 +336,8 @@ export function ProgramarModal({ onClose }: { onClose: () => void }) {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm text-[var(--foreground)]">{p.title}</p>
                   <p className="text-[11px] tabular-nums text-[var(--muted)]">
-                    {descreverDias(p.weekdays)} · {p.startTime}–{p.endTime}
+                    {descreverQuando(p)} · {p.startTime}–{p.endTime}
+                    {p.dataUnica && p.dataUnica < todayISO() && " · já passou"}
                     {nomeDoProjeto(p.topicId) && ` · ${nomeDoProjeto(p.topicId)}`}
                     {p.alarme && " · ⏰ despertador"}
                     {p.pausedAt && " · pausada"}
