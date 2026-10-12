@@ -22,6 +22,7 @@ import {
   wallClockMs,
 } from "@/lib/schedule";
 import { addDaysISO, todayISO } from "@/lib/date-utils";
+import { instanteLocal } from "@/lib/programacao";
 import { topicKind } from "@/lib/wishlist";
 import {
   agendarFim,
@@ -43,6 +44,7 @@ import { ConfirmDialog } from "../shared/ConfirmDialog";
 function BlockRow({
   block,
   projeto,
+  inicioProgramadoMs,
   onEdit,
   onExtend,
   now,
@@ -58,6 +60,8 @@ function BlockRow({
   block: ScheduleBlock;
   now: number;
   projeto?: string;
+  /** Horário de início da programação que gerou o bloco, quando houver. */
+  inicioProgramadoMs?: number;
   onStart: () => void;
   onEdit: () => void;
   onExtend: () => void;
@@ -80,6 +84,14 @@ function BlockRow({
   const over = isOvertime(block, now);
   const remaining = remainingMs(block, now);
   const spent = elapsedMs(block, now);
+  // Ocorrência programada fala a língua de compromisso, não de tarefa: antes
+  // do horário ela "não vai acontecer"; depois, "não aconteceu".
+  const programado = !!block.programacaoId;
+  const rotuloNaoFeito = !programado
+    ? "Não fiz"
+    : inicioProgramadoMs !== undefined && now < inicioProgramadoMs
+      ? "Não vai acontecer"
+      : "Não aconteceu";
 
   const timeColor = naoFeito
     ? "var(--muted)"
@@ -176,7 +188,9 @@ function BlockRow({
                 : formatDuration(Math.max(0, remaining))}
           </p>
           {naoFeito && (
-            <p className="text-[10px] font-medium text-[var(--muted)]">não fiz</p>
+            <p className="text-[10px] font-medium text-[var(--muted)]">
+              {programado ? "não aconteceu" : "não fiz"}
+            </p>
           )}
           {emEspera && (
             <p className="text-[10px] font-medium text-[var(--accent)]">
@@ -241,10 +255,14 @@ function BlockRow({
             </button>
             <button
               onClick={onSkip}
-              title="Encerra o bloco sem ter feito"
+              title={
+                programado
+                  ? "Encerra a ocorrência de hoje sem contar tempo nenhum"
+                  : "Encerra o bloco sem ter feito"
+              }
               className="min-h-[44px] rounded-md border border-[var(--border)] px-3 text-sm font-medium text-[var(--muted)] hover:bg-[var(--surface2)]"
             >
-              Não fiz
+              {rotuloNaoFeito}
             </button>
             {spent > 0 && (
               <button
@@ -295,6 +313,7 @@ export function ScheduleView() {
     topics,
     tasks,
     metas,
+    programacoes,
     setTaskStatus,
     addBlock,
     addBreak,
@@ -426,6 +445,10 @@ export function ScheduleView() {
     [blocks, now]
   );
   const isToday = date === todayISO();
+  const inicioProgramado = (b: ScheduleBlock) => {
+    const p = b.programacaoId ? programacoes.find((x) => x.id === b.programacaoId) : undefined;
+    return p ? instanteLocal(b.date, p.startTime) : undefined;
+  };
 
   /**
    * Começar o bloco também avisa na central de notificações do aparelho.
@@ -927,6 +950,7 @@ export function ScheduleView() {
               block={block}
               now={now}
               projeto={nomeDoProjeto(block.topicId)}
+              inicioProgramadoMs={inicioProgramado(block)}
               onEdit={() => setEditando(block)}
               onExtend={() => extendPlanned(block.id, EXTEND_MINUTES)}
               onStart={() => iniciarComAviso(block)}
@@ -958,7 +982,12 @@ export function ScheduleView() {
                 skipBlockToday(block.id);
                 cancelarFim(block.id);
                 limparAvisoDeInicio();
-                showToast("Marcado como não feito.", () => reopenTimer(block.id));
+                showToast(
+                  block.programacaoId
+                    ? "Marcado como não aconteceu — nenhum tempo contado."
+                    : "Marcado como não feito.",
+                  () => reopenTimer(block.id)
+                );
               }}
               onPark={() => {
                 parkBlockLater(block.id);
