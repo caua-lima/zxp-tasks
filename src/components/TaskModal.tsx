@@ -78,7 +78,13 @@ export function TaskModal({ task, defaultTopicId, defaultStatus, onClose }: Task
   const [mostrarDescricao, setMostrarDescricao] = useState((task?.description ?? "") !== "");
   const [mostrarPassos, setMostrarPassos] = useState((task?.checklist ?? []).length > 0);
   const [extras, setExtras] = useState<string[]>(task?.extraTopicIds ?? []);
-  const [mostrarExtras, setMostrarExtras] = useState((task?.extraTopicIds ?? []).length > 0);
+  // Ao CRIAR, a lista de outros projetos já vem aberta: escondida atrás de um
+  // link pequeno, quem cria a tarefa de dentro de um projeto nem ficava
+  // sabendo que dava pra colocá-la em mais de um. Ao editar, só abre sozinha
+  // se a tarefa já está em outros — senão é ruído em toda edição.
+  const [mostrarExtras, setMostrarExtras] = useState(
+    !task || (task.extraTopicIds ?? []).length > 0
+  );
   const [metasLigadas, setMetasLigadas] = useState<string[]>(task?.metaIds ?? []);
   const [mostrarMetas, setMostrarMetas] = useState((task?.metaIds ?? []).length > 0);
   const [confirmTrash, setConfirmTrash] = useState(false);
