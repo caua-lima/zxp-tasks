@@ -39,6 +39,7 @@ import {
   isParked,
   jaFoiRetomado,
   listarBlocosEmEspera,
+  marcarNaoAconteceu,
   ordenarParaExibicao,
   parkBlock,
   plannedMs,
@@ -2358,6 +2359,52 @@ describe("sincronizar não desfaz uma retomada feita no outro aparelho", () => {
     const a = sincronizarQuadros(local, base, base).schedule[0];
     assert.equal(a.resumedAt, undefined);
     assert.equal(isParked(a), true);
+  });
+});
+
+describe("ocorrência programada que não aconteceu", () => {
+  const inicio = "2026-09-10T11:00:00.000Z"; // 8h em Brasília
+  const expediente = (): ScheduleBlock => ({
+    ...bloco({ id: "prog-p1-2026-09-10", date: "2026-09-10", plannedMinutes: 600 }),
+    programacaoId: "p1",
+    startedAt: inicio,
+  });
+
+  test("zera o tempo que o cronômetro contou sozinho e encerra como não feito", () => {
+    const b = marcarNaoAconteceu(expediente(), "2026-09-10T14:00:00.000Z");
+    assert.equal(b.accumulatedMs, 0);
+    assert.equal(b.sessions, undefined);
+    assert.equal(b.startedAt, undefined);
+    assert.equal(b.skippedAt, "2026-09-10T14:00:00.000Z");
+    assert.equal(b.completedAt, undefined);
+  });
+
+  test("some do relatório: nem tempo trabalhado, nem bloco concluído", () => {
+    const board = { ...emptyBoard(), schedule: [marcarNaoAconteceu(expediente(), "2026-09-10T14:00:00.000Z")] };
+    const r = montarRelatorio(board, "2026-09-10", "2026-09-10");
+    assert.equal(r.totalRelogioMs, 0);
+    assert.equal(r.totalTrabalhadoMs, 0);
+    assert.equal(r.blocosFeitos, 0);
+    assert.equal(r.blocosNaoFeitos, 1);
+  });
+
+  test("a programação não religa sozinha o que foi marcado como não aconteceu", () => {
+    const p = progDeTeste();
+    const marcado = { ...marcarNaoAconteceu(expediente(), "2026-09-10T14:00:00.000Z"), id: idDoBlocoProgramado(p.id, "2026-09-10"), programacaoId: p.id };
+    const board = { ...quadroCom(p), schedule: [marcado] };
+    const r = materializarProgramacoes(board, "2026-09-10", local("2026-09-10T12:00:00"));
+    assert.equal(r.mudou, false);
+    assert.equal(r.board.schedule[0].startedAt, undefined);
+  });
+
+  test("antes do horário (ainda nem ligou) também vale: fica marcado e não liga depois", () => {
+    const p = progDeTeste();
+    const id = idDoBlocoProgramado(p.id, "2026-09-10");
+    const parado = { ...bloco({ id, date: "2026-09-10" }), programacaoId: p.id };
+    const board = { ...quadroCom(p), schedule: [marcarNaoAconteceu(parado, "2026-09-10T09:00:00.000Z")] };
+    const r = materializarProgramacoes(board, "2026-09-10", local("2026-09-10T09:30:00"));
+    assert.equal(r.board.schedule[0].startedAt, undefined);
+    assert.equal(r.board.schedule[0].accumulatedMs, 0);
   });
 });
 

@@ -61,6 +61,7 @@ import {
   completedBlockData,
   extendBlock,
   jaFoiRetomado,
+  marcarNaoAconteceu,
   parkBlock,
   pauseBlock,
   reopenBlock,
@@ -1017,7 +1018,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const nowIso = new Date().toISOString();
     setBoard((b) => ({
       ...b,
-      schedule: b.schedule.map((x) => (x.id === id ? skipBlock(x, nowIso) : x)),
+      // Bloco gerado por programação pode ter ligado sozinho: "não aconteceu"
+      // também zera esse tempo que ninguém trabalhou.
+      schedule: b.schedule.map((x) =>
+        x.id !== id ? x : x.programacaoId ? marcarNaoAconteceu(x, nowIso) : skipBlock(x, nowIso)
+      ),
     }));
   }, []);
 

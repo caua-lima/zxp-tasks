@@ -152,6 +152,22 @@ export function skipBlock(
 }
 
 /**
+ * Ocorrência programada que não aconteceu (ou não vai acontecer): encerra o
+ * bloco E zera o tempo.
+ *
+ * Diferente do "não fiz" comum, que guarda o tempo já gasto. Um expediente
+ * programado liga o cronômetro sozinho no horário — num feriado, às 11h ele
+ * já "tem" 3h que ninguém trabalhou. Marcar como não feito e deixar essas 3h
+ * no relatório seria registrar trabalho que não existiu.
+ */
+export function marcarNaoAconteceu(
+  block: ScheduleBlock,
+  nowIso: string = new Date().toISOString()
+): ScheduleBlock {
+  return { ...skipBlock(block, nowIso), accumulatedMs: 0, sessions: undefined };
+}
+
+/**
  * Guarda o bloco pra depois. Congela o cronômetro como concluir e "não fiz"
  * fazem: o tempo já gasto é trabalho real e fica registrado neste dia.
  */
