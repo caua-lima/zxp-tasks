@@ -21,6 +21,8 @@ export interface NovaProgramacaoInput {
   endTime: string;
   autoStart: boolean;
   alarme?: boolean;
+  /** Preenchida = não repete; vale só neste dia. Ver `Programacao.dataUnica`. */
+  dataUnica?: string;
   /** Fuso do aparelho que está criando — ver `Programacao.fuso`. */
   fuso?: string;
 }
@@ -29,6 +31,10 @@ export interface NovaProgramacaoInput {
 export const DIAS_UTEIS = [1, 2, 3, 4, 5];
 
 const NOMES_CURTOS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+export function dataValida(d: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(new Date(`${d}T00:00:00`).getTime());
+}
 
 export function horarioValido(h: string): boolean {
   return /^([01]\d|2[0-3]):[0-5]\d$/.test(h);
@@ -52,7 +58,11 @@ export function duracaoDaProgramacao(p: Pick<Programacao, "startTime" | "endTime
 /** Mensagem do que está errado, ou `null` se dá pra salvar. */
 export function problemaDaProgramacao(input: NovaProgramacaoInput): string | null {
   if (!input.title.trim()) return "Dê um nome — ex: SDR Pronix.";
-  if (input.weekdays.length === 0) return "Escolha pelo menos um dia da semana.";
+  if (input.dataUnica !== undefined) {
+    if (!dataValida(input.dataUnica)) return "Escolha o dia em que vai acontecer.";
+  } else if (input.weekdays.length === 0) {
+    return "Escolha pelo menos um dia da semana.";
+  }
   if (!horarioValido(input.startTime) || !horarioValido(input.endTime)) {
     return "Horário inválido.";
   }
@@ -69,7 +79,10 @@ export function novaProgramacao(
     id,
     title: input.title.trim(),
     topicId: input.topicId || undefined,
-    weekdays: [...new Set(input.weekdays)].filter((d) => d >= 0 && d <= 6).sort(),
+    weekdays: input.dataUnica
+      ? [new Date(`${input.dataUnica}T00:00:00`).getDay()]
+      : [...new Set(input.weekdays)].filter((d) => d >= 0 && d <= 6).sort(),
+    dataUnica: input.dataUnica || undefined,
     startTime: input.startTime,
     endTime: input.endTime,
     autoStart: input.autoStart,
@@ -90,6 +103,13 @@ export function descreverDias(weekdays: number[]): string {
     .sort()
     .map((d) => NOMES_CURTOS[d])
     .join(", ");
+}
+
+/** "Seg a Sex" pra quem repete; "Só em 15/10" pra quem vale num dia só. */
+export function descreverQuando(p: Pick<Programacao, "weekdays" | "dataUnica">): string {
+  if (!p.dataUnica) return descreverDias(p.weekdays);
+  const [, mes, dia] = p.dataUnica.split("-");
+  return `Só em ${dia}/${mes}`;
 }
 
 /**
@@ -115,6 +135,8 @@ export function valeNoDia(p: Programacao, dia: string): boolean {
   if ((p.diasPulados ?? []).includes(dia)) return false;
   // Não cria expediente em dias anteriores à própria programação.
   if (dia < localDayOf(p.createdAt)) return false;
+  // Sem repetição: só o dia marcado, e nunca mais.
+  if (p.dataUnica) return dia === p.dataUnica;
   return p.weekdays.includes(new Date(`${dia}T00:00:00`).getDay());
 }
 

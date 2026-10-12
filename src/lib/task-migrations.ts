@@ -297,6 +297,7 @@ function migrateProgramacao(raw: unknown): Programacao | null {
     title,
     topicId: asString(r.topicId),
     weekdays,
+    dataUnica: /^\d{4}-\d{2}-\d{2}$/.test(asString(r.dataUnica) ?? "") ? asString(r.dataUnica) : undefined,
     startTime,
     endTime,
     autoStart: r.autoStart !== false,

@@ -293,6 +293,12 @@ export interface Programacao {
   topicId?: string;
   /** Dias da semana em que vale: 0 = domingo … 6 = sábado. */
   weekdays: number[];
+  /**
+   * Presente = NÃO repete: vale só neste dia local "AAAA-MM-DD" (uma consulta,
+   * uma reunião). `weekdays` continua preenchido com o dia da semana dessa
+   * data, só pra versão antiga do app em outro aparelho não descartar o item.
+   */
+  dataUnica?: string;
   /** Horário local "HH:MM". */
   startTime: string;
   endTime: string;
